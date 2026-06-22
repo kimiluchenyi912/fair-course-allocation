@@ -1,0 +1,6 @@
+course_id,course_name,prerequisites,is_graduation_course
+STATS,AP Statistics,ALG2,yes
+ENG12,English 12,ENG11,yes
+GOV,Government,US_HISTORY,yes
+CS,Computer Science,ALG1,no
+ART,Digital Art,,no

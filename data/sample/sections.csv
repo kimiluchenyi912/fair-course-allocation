@@ -1,0 +1,7 @@
+section_id,course_id,period,capacity
+SEC_STATS_1,STATS,1,2
+SEC_ENG12_1,ENG12,1,2
+SEC_GOV_1,GOV,2,2
+SEC_CS_1,CS,2,2
+SEC_ART_1,ART,1,2
+SEC_ART_2,ART,2,2

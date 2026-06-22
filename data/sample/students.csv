@@ -1,0 +1,9 @@
+student_id,name,grade,course_load,graduation_needs,completed_courses,submission_order
+S001,Alice,12,2,ENG12;GOV,ALG2;ENG11;US_HISTORY,1
+S002,Brian,11,2,,ALG2;CHEM;ENG10,2
+S003,Chloe,12,2,STATS,ALG2;PRECALC;ENG11,3
+S004,David,10,2,,ALG1;BIO;ENG9,4
+S005,Ella,11,2,,ALG2;BIO;WORLD_HISTORY,5
+S006,Frank,12,2,ENG12,ALG2;ENG11;CHEM,6
+S007,Grace,10,2,,ALG1;BIO;ENG9,7
+S008,Henry,11,2,,ALG2;PRECALC;CHEM,8
