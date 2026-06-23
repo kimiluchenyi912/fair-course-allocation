@@ -1,0 +1,3 @@
+student_id,section_id,course_id,request_type,period_1,period_2,assignment_reason
+STU_0001,SEC_ENG9_01,ENG9,primary,P2,,solver
+STU_0002,SEC_GOV_APMACRO_01,GOV_APMACRO,primary,P6,,solver

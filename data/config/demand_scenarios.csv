@@ -1,0 +1,5 @@
+scenario_id,scenario_name,random_seed,core_multiplier,mainstream_multiplier,popular_multiplier,niche_multiplier,fixed_limited_multiplier,capacity_risk_course_multiplier,affected_capacity_risk_courses,notes
+stable_year,Stable year,1001,1.00,1.00,1.00,1.00,1.00,1.00,COMPUTER_PROGRAMMING;AP_CSP;AP_CSA;AP_STATS;AP_PHYSC;CALC_D_LINALG,Demand close to baseline assumptions.
+competitive_growth,Competitive-growth year,2001,1.00,1.05,1.15,1.05,1.10,1.20,COMPUTER_PROGRAMMING;AP_CSP;AP_CSA;AP_STATS;AP_PHYSC;CALC_D_LINALG,AP CS advanced math and advanced science demand grow.
+stress_year,Stress year,3001,1.00,1.10,1.30,1.10,1.15,1.35,COMPUTER_PROGRAMMING;AP_CSP;AP_CSA;AP_STATS;AP_PHYSC;CALC_D_LINALG,Several popular and capacity-risk courses rise simultaneously.
+robustness_randomized,Randomized robustness runs,4001,1.00,1.00,1.00,1.00,1.00,1.00,COMPUTER_PROGRAMMING;AP_CSP;AP_CSA;AP_STATS;AP_PHYSC;CALC_D_LINALG,Repeat many recorded seeds around the configured baseline.

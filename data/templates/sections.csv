@@ -1,0 +1,5 @@
+section_id,course_id,period_1,period_2,semester,capacity,block_id,teacher_resource_id,room_resource_id
+SEC_ENG9_01,ENG9,P2,,full_year,40,,,
+SEC_MATH2_3_HA_01,MATH2_3_HA,P3,P4,full_year,40,,,
+SEC_GOV_APMACRO_01,GOV_APMACRO,P6,,paired,40,GOV_APMACRO_01,,
+SEC_AP_PHYSC_01,AP_PHYSC,P5,,paired,40,AP_PHYSC_01,,

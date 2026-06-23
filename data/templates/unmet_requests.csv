@@ -1,0 +1,4 @@
+student_id,course_id,request_type,reason_code,candidate_sections
+STU_0001,COMPUTER_PROGRAMMING,alternate,capacity,2
+STU_0002,AP_STATS,primary,period_conflict,3
+STU_0002,AP_CSA,alternate,section_not_opened,0

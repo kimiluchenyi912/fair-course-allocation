@@ -13,7 +13,11 @@ Version 1 assigns students to course sections that already have:
 - fixed course offerings,
 - fixed periods,
 - fixed capacities,
-- and fixed prerequisite requirements.
+- and counselor-approved course requests.
+
+The solver does not decide prerequisites, honors eligibility, AP eligibility,
+or graduation eligibility. Those decisions happen before requests become
+solver input.
 
 Do not add teacher scheduling, classroom scheduling, or master-schedule generation unless explicitly requested.
 

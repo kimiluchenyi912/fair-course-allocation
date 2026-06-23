@@ -1,0 +1,39 @@
+course_id,course_name,department,course_category,eligible_grades,periods_required,occupies_school_period,schedule_structure,capacity_override,max_sections_override,demand_tier,protected_core,known_capacity_risk,source_type,confidence,notes
+ENG9,English 9,English,normal_academic,9,1,true,standard,,,core,true,false,model_assumption,medium,Counselor-approved requests only; no eligibility check in solver.
+ENG9_H,English 9 Honors,English,normal_academic,9,1,true,standard,,,core,true,false,model_assumption,medium,Counselor-approved requests only; no eligibility check in solver.
+MATH1,Integrated Math 1,Mathematics,normal_academic,9,1,true,standard,,,core,true,false,model_assumption,medium,Typical Grade 9 math option.
+MATH2,Integrated Math 2,Mathematics,normal_academic,9;10,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 math usually begins at Math 2 or above.
+MATH2_3_HA,Integrated Math 2/3 Honors Accelerated,Mathematics,normal_academic,9;10,2,true,double_period,,,core,true,false,model_assumption,medium,Double-period course; consecutiveness remains configurable.
+MATH3,Integrated Math 3,Mathematics,normal_academic,10;11,1,true,standard,,,core,true,false,model_assumption,medium,Grade 11 math usually begins at Math 3 or above.
+MATH3_H,Integrated Math 3 Honors,Mathematics,normal_academic,10;11,1,true,standard,,,core,true,false,model_assumption,medium,Not normally generated for ordinary Grade 12 students.
+INTRO_CALC,Introduction to Calculus,Mathematics,normal_academic,11;12,1,true,standard,,,mainstream,false,false,model_assumption,medium,Grade 12 in-school math usually begins at Introduction to Calculus or above.
+AP_CALC_AB,AP Calculus AB,Mathematics,most_ap,10;11;12,1,true,standard,,,mainstream,false,false,student_estimate,medium,Grade 10 demand base is small.
+AP_CALC_BC,AP Calculus BC,Mathematics,most_ap,10;11;12,1,true,standard,,,mainstream,false,false,student_estimate,medium,Grade 10 demand base is about 20 students.
+AP_STATS,AP Statistics,Mathematics,most_ap,11;12,1,true,standard,,,popular,false,true,student_estimate,medium,Known capacity-risk course.
+CALC_D_LINALG,Calc D + Linear Algebra,Mathematics,dual_enrollment,11;12,1,true,semester_block,40,1,fixed_limited,false,true,student_estimate,medium,TPHS daytime dual-enrollment bottleneck; occupies one normal period; normal capacity 40 with possible exception overload to 45 and about five unmet requests.
+BIO,Biology,Science,normal_academic,9,1,true,standard,,,core,true,false,model_assumption,medium,Typical Grade 9 science.
+CHEM,Chemistry,Science,normal_academic,10;11;12,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 chemistry option.
+CHEM_H,Honors Chemistry,Science,normal_academic,10;11;12,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 honors chemistry option.
+AP_PHYSC,AP Physics C,Science,most_ap,11;12,1,true,semester_block,,,fixed_limited,false,true,student_estimate,medium,Full-year one-period course with Mechanics and E&M by semester.
+PE,Physical Education,Physical Education,pe,9;10;11;12,1,true,standard,50,,core,true,false,model_assumption,medium,PE capacity uses 50 base and 40 to 60 configurable range.
+ENG10,English 10,English,normal_academic,10,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 English option.
+ENG10_H,English 10 Honors,English,normal_academic,10,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 honors English option.
+ENG11,English 11,English,normal_academic,11,1,true,standard,,,core,true,false,model_assumption,medium,Grade 11 English option.
+AP_LANG,AP English Language,English,most_ap,11,1,true,standard,,,core,true,false,model_assumption,medium,Grade 11 AP English option.
+ENG12,English 12,English,normal_academic,12,1,true,standard,,,core,true,false,model_assumption,medium,Grade 12 English option.
+AP_LIT,AP English Literature,English,most_ap,12,1,true,standard,,,core,true,false,model_assumption,medium,Grade 12 AP English option.
+WORLD_HISTORY,World History,Social Science,normal_academic,10,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 social science option.
+AP_WORLD_HISTORY,AP World History,Social Science,most_ap,10,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 AP social science option.
+US_HISTORY,U.S. History,Social Science,normal_academic,11,1,true,standard,,,core,true,false,model_assumption,medium,Grade 11 social science option.
+AP_US_HISTORY,AP U.S. History,Social Science,most_ap,11,1,true,standard,,,core,true,false,model_assumption,medium,Grade 11 AP social science option.
+GOV_ECON_REG,Government + Economics,Social Science,normal_academic,12,1,true,semester_block,,,core,true,false,model_assumption,medium,Shared-period Grade 12 Government/Economics block.
+GOV_APMACRO,Government + AP Macroeconomics,Social Science,most_ap,12,1,true,semester_block,,,core,true,false,model_assumption,medium,Shared-period Grade 12 mixed regular/AP block.
+APGOV_ECON,AP Government + Economics,Social Science,most_ap,12,1,true,semester_block,,,core,true,false,model_assumption,medium,Shared-period Grade 12 mixed AP/regular block.
+APGOV_APMACRO,AP Government + AP Macroeconomics,Social Science,most_ap,12,1,true,semester_block,,,core,true,false,model_assumption,medium,Shared-period Grade 12 AP/AP block.
+COMPUTER_PROGRAMMING,Computer Programming,Computer Science,niche,9;10;11;12,1,true,standard,,2,popular,false,true,student_estimate,medium,Known Grade 9 capacity-risk elective.
+AP_CSP,AP Computer Science Principles,Computer Science,most_ap,10;11;12,1,true,standard,,,popular,false,true,student_estimate,medium,Known capacity risk especially without prior Computer Programming.
+AP_CSA,AP Computer Science A,Computer Science,ap_csa,10;11;12,1,true,standard,25,,popular,false,true,student_estimate,medium,Known capacity-risk course with 25-seat default.
+AP_SEMINAR,AP Seminar,Elective,most_ap,11;12,1,true,standard,,,mainstream,false,false,model_assumption,medium,Available before AP Research.
+AP_RESEARCH,AP Research,Elective,most_ap,12,1,true,standard,,,mainstream,false,false,model_assumption,medium,Grade 12 course.
+AP_EURO,AP European History,Social Science,most_ap,12,1,true,standard,,,niche,false,false,model_assumption,medium,Generated for Grade 12 only.
+AP_ART_HISTORY,AP Art History,Visual Arts,most_ap,11;12,1,true,standard,,,niche,false,false,model_assumption,medium,Available to Grades 11 and 12.

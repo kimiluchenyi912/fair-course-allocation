@@ -1,0 +1,6 @@
+student_id,course_id,request_type,request_rank,request_group,must_share_block_id
+STU_0001,ENG9,primary,,,
+STU_0001,BIO,primary,,,
+STU_0001,COMPUTER_PROGRAMMING,alternate,1,elective_choice,
+STU_0002,GOV_APMACRO,primary,,,GOV_APMACRO
+STU_0002,AP_STATS,primary,,,

@@ -1,0 +1,3 @@
+student_id,grade,target_course_count,unscheduled_preference,random_seed_group
+STU_0001,9,7,either,A
+STU_0002,12,6,morning,B

@@ -1,0 +1,7 @@
+block_template_id,course_id,block_type,semester_1_content,semester_2_content,period_sharing_rule,allowed_level_mix,source_type,notes
+GOV_ECON_REG,GOV_ECON_REG,shared_semester_period,Government,Economics,same_period,regular_regular,model_assumption,Semester order is section-specific.
+GOV_APMACRO,GOV_APMACRO,shared_semester_period,Government,AP Macroeconomics,same_period,regular_ap,model_assumption,Regular Government may pair with AP Macroeconomics.
+APGOV_ECON,APGOV_ECON,shared_semester_period,AP Government,Economics,same_period,ap_regular,model_assumption,AP Government may pair with regular Economics.
+APGOV_APMACRO,APGOV_APMACRO,shared_semester_period,AP Government,AP Macroeconomics,same_period,ap_ap,model_assumption,AP Government may pair with AP Macroeconomics.
+AP_PHYSC,AP_PHYSC,shared_semester_period,Mechanics,Electricity and Magnetism,same_period,ap_sequence,student_estimate,Full-year one-period AP Physics C sequence.
+CALC_D_LINALG,CALC_D_LINALG,shared_semester_period,Calculus D,Linear Algebra,same_period,dual_enrollment_sequence,student_estimate,Dual-enrollment sequence; not ordinary local course.

@@ -1,0 +1,5 @@
+grade,student_count,share_5_classes,share_6_classes,share_7_classes,allowed_free_periods,source_type,notes
+9,700,0.00,0.10,0.90,P1;P6;P7,model_assumption,Grade 9 usually carries seven scheduled classes.
+10,650,0.00,0.20,0.80,P1;P6;P7,model_assumption,Grade 10 usually carries six or seven scheduled classes.
+11,640,0.05,0.35,0.60,P1;P6;P7,model_assumption,Grade 11 includes a small five-class schedule group.
+12,640,0.20,0.47,0.33,P1;P6;P7,model_assumption,Grade 12 has the widest range of target course counts.
