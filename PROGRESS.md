@@ -13,6 +13,9 @@
 - Completed whole-school size, target course-load, and capacity assumptions.
 - Adopted the new request, section, assignment, and metrics data structure.
 - Added initial configuration and template CSVs for the new simulation model.
+- Implemented the Version 1 configuration validator and pytest coverage.
+- Split structural/model validation errors from current TPHS baseline policy
+  warnings, with an optional strict-policy mode.
 
 ## Current Direction
 
@@ -32,4 +35,5 @@ authoritative input model for new development.
 
 ## Next Step
 
-Build the configuration validator, then the synthetic request generator.
+Build the synthetic request generator after the configuration validator remains
+green on the current data.
