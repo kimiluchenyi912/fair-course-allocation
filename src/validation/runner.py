@@ -14,6 +14,7 @@ from .generation_config_checks import validate_generation_config_tables
 from .io import load_tables, validate_generic_tables
 from .models import ValidationReport
 from .policy_checks import validate_baseline_policy
+from .section_planning_config_checks import validate_section_planning_config
 from .template_checks import validate_templates
 
 
@@ -39,6 +40,7 @@ def validate_configuration(
     validate_linked_course_blocks(config, report)
     validate_demand_scenarios(config, report)
     validate_generation_config_tables(config, report)
+    validate_section_planning_config(config, report)
     validate_templates(config, templates, report)
     validate_baseline_policy(config, report, strict_policy=strict_policy)
 

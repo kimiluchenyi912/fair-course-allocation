@@ -22,6 +22,10 @@
 - Added stable-year fixed demand targets for AP Statistics and Calc D + Linear
   Algebra, brought generator-specific config into validation, and defined
   one-year priority protection / alternate replacement data interfaces.
+- Implemented the Version 1 synthetic section-count and period-layout planner,
+  including uniform 50% waitlist expansion, stable-year Calc D capacity
+  override, Math 2/3 consecutive-period layout, Gov/Econ linked semester rows,
+  planner diagnostics, CLI output, and pytest coverage.
 
 ## Current Direction
 
@@ -41,5 +45,6 @@ authoritative input model for new development.
 
 ## Next Step
 
-Review and tune the synthetic request probability assumptions, then build the
-baseline allocation checks before implementing the CP-SAT fixed-section solver.
+Review section-planning diagnostics and request probability assumptions, then
+build baseline allocation checks before implementing the CP-SAT fixed-section
+solver.

@@ -117,6 +117,35 @@ Examples:
 - AP Physics C Mechanics/E&M;
 - Calculus D/Linear Algebra.
 
+### `section_capacity_overrides.csv`
+
+Scenario-specific capacity overrides used by the section planner.
+
+| Column | Meaning |
+|---|---|
+| scenario_id | scenario receiving the override |
+| course_id | course receiving the override |
+| capacity | positive integer section capacity |
+| source_type | student estimate or model assumption |
+| notes | clarification |
+
+The stable-year configuration uses this table to model `CALC_D_LINALG` with
+capacity 45 while keeping its normal configured capacity at 40.
+
+### `section_planning_rules.csv`
+
+Small set of planner model assumptions.
+
+| Column | Meaning |
+|---|---|
+| rule_id | unique rule name |
+| rule_value | scalar value or semicolon-separated structured value |
+| source_type | estimate or model assumption |
+| notes | clarification |
+
+Current V1 rules include positive-demand minimum sections and the allowed
+consecutive pairs for double-period Math 2/3 sections.
+
 ### Waitlist expansion rule
 
 Future section planning uses one expansion rule for all courses: if the
@@ -176,6 +205,7 @@ Concrete offerings used by the fixed-section solver.
 
 | Column | Meaning |
 |---|---|
+| scenario_id | scenario used to plan the section |
 | section_id | unique section |
 | course_id | offered course |
 | period_1 | first occupied period |
@@ -183,8 +213,15 @@ Concrete offerings used by the fixed-section solver.
 | semester | full_year, semester_1, semester_2, or paired |
 | capacity | seat limit |
 | block_id | linked semester block if relevant |
+| linked_section_group_id | shared group ID for paired semester rows or logical section |
+| logical_block_id | logical course/block used for request counting |
+| semester_content | content label for semester-block rows |
+| planning_source | source of this section row, such as section_planner |
 | teacher_resource_id | optional future staffing constraint |
 | room_resource_id | optional future room constraint |
+
+Section planning rows are not student assignments. A planned section only says
+that a course is offered in a period with a capacity.
 
 ## Output tables
 
@@ -268,6 +305,56 @@ Summary rows emitted by the synthetic generator.
 
 Run metadata emitted by the synthetic generator, including scenario ID, random
 seed, total students, request row counts, and summary row count.
+
+### `course_demand_summary.csv`
+
+Summary emitted by the section planner.
+
+| Column | Meaning |
+|---|---|
+| scenario_id | scenario ID |
+| course_id | course or logical block ID |
+| logical_block_id | logical course/block ID |
+| primary_demand | primary logical requests counted for section planning |
+| section_capacity | capacity used for this course |
+| expansion_threshold | integer waitlist threshold for another section |
+| planned_sections | logical sections planned |
+| planned_seats | planned_sections × section_capacity |
+| remaining_waitlist | demand left below the expansion threshold |
+| source_capacity_rule | rule or override source |
+| capacity_override_used | true if course/scenario capacity override was used |
+
+### `period_layout_summary.csv`
+
+Summary emitted by the section planner.
+
+| Column | Meaning |
+|---|---|
+| period | P1 through P7 |
+| logical_section_count | logical section groups touching this period |
+| section_row_count | CSV section rows touching this period |
+| occupied_period_slot_count | logical occupied slots in this period |
+| planned_seats | capacity counted once per logical section |
+| yearlong_logical_sections | yearlong logical sections touching this period |
+| semester_rows | semester rows touching this period |
+| linked_logical_sections | linked semester logical sections touching this period |
+| double_period_logical_sections | double-period logical sections touching this period |
+
+### `section_planning_metadata.json`
+
+Run metadata emitted by the section planner, including input file hashes,
+planner/rule versions, total sections, total planned seats, total remaining
+waitlist, period balance warnings, conflict diagnostics, and unmodeled
+real-world constraints.
+
+Conflict diagnostics include:
+
+- `raw_period_overlap_score`: weighted overlap of co-requested course pairs
+  across planned section periods;
+- `unavoidable_course_pair_conflict_score`: weighted co-request pairs for which
+  no non-overlapping section option exists.
+
+These are layout diagnostics only, not student assignment results.
 
 ## Legacy sample data
 

@@ -28,3 +28,20 @@ python -m src.generation --scenario stable_year --seed 2026 --output-dir data/ge
 The generator writes `students.csv`, `requests.csv`,
 `generation_summary.csv`, and `generation_metadata.json`. Generated datasets
 under `data/generated/` are ignored by Git except for `.gitkeep`.
+
+## Synthetic section planning
+
+Plan section counts and deterministic period layouts from generated students
+and requests:
+
+```bash
+python -m src.section_planning \
+  --input-dir data/generated/stable_2026 \
+  --scenario stable_year \
+  --seed 2026 \
+  --output-dir data/generated/stable_2026_sections
+```
+
+The planner writes `sections.csv`, `course_demand_summary.csv`,
+`period_layout_summary.csv`, and `section_planning_metadata.json`. It does not
+assign students to sections.

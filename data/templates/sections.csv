@@ -1,6 +1,7 @@
-section_id,course_id,period_1,period_2,semester,capacity,block_id,teacher_resource_id,room_resource_id
-SEC_ENG9_01,ENG9,P2,,full_year,40,,,
-SEC_MATH2_3_HA_01,MATH2_3_HA,P3,P4,full_year,40,,,
-SEC_GOV_APMACRO_01,GOV_APMACRO,P6,,paired,40,GOV_APMACRO_01,,
-SEC_AP_PHYSC_01,AP_PHYSC,P5,,paired,40,AP_PHYSC_01,,
-SEC_AP_CSA_01,AP_CSA,P4,,full_year,25,,,
+scenario_id,section_id,course_id,period_1,period_2,semester,capacity,block_id,linked_section_group_id,logical_block_id,semester_content,planning_source,teacher_resource_id,room_resource_id
+stable_year,SEC_ENG9_01,ENG9,P2,,full_year,40,,ENG9,ENG9,,section_planner,,
+stable_year,SEC_MATH2_3_HA_01,MATH2_3_HA,P3,P4,full_year,40,,MATH2_3_HA,MATH2_3_HA,,section_planner,,
+stable_year,SEC_GOV_APMACRO_01,GOV_APMACRO,P6,,semester_1,40,GOV_APMACRO_01,GOV_APMACRO_01,GOV_APMACRO,Government,section_planner,,
+stable_year,SEC_GOV_APMACRO_02,GOV_APMACRO,P6,,semester_2,40,GOV_APMACRO_01,GOV_APMACRO_01,GOV_APMACRO,AP Macroeconomics,section_planner,,
+stable_year,SEC_AP_PHYSC_01,AP_PHYSC,P5,,paired,40,AP_PHYSC_01,AP_PHYSC_01,AP_PHYSC,Mechanics / Electricity and Magnetism,section_planner,,
+stable_year,SEC_AP_CSA_01,AP_CSA,P4,,full_year,25,,AP_CSA,AP_CSA,,section_planner,,

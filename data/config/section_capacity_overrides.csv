@@ -1,0 +1,2 @@
+scenario_id,course_id,capacity,source_type,notes
+stable_year,CALC_D_LINALG,45,student_estimate,Stable-year exception capacity to model 50 demand 45 seats and about 5 remaining waitlist.

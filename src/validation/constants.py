@@ -92,6 +92,19 @@ CONFIG_COLUMNS = {
         "source_type",
         "notes",
     ],
+    "section_capacity_overrides.csv": [
+        "scenario_id",
+        "course_id",
+        "capacity",
+        "source_type",
+        "notes",
+    ],
+    "section_planning_rules.csv": [
+        "rule_id",
+        "rule_value",
+        "source_type",
+        "notes",
+    ],
 }
 
 TEMPLATE_COLUMNS = {
@@ -114,6 +127,7 @@ TEMPLATE_COLUMNS = {
         "must_share_block_id",
     ],
     "sections.csv": [
+        "scenario_id",
         "section_id",
         "course_id",
         "period_1",
@@ -121,6 +135,10 @@ TEMPLATE_COLUMNS = {
         "semester",
         "capacity",
         "block_id",
+        "linked_section_group_id",
+        "logical_block_id",
+        "semester_content",
+        "planning_source",
         "teacher_resource_id",
         "room_resource_id",
     ],

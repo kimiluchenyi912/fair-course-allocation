@@ -137,3 +137,19 @@ must return infeasibility diagnostics rather than silently relaxing the rule.
 Logical primary counting follows course/block meaning rather than request rows:
 Government/Economics linked blocks count once, and Math 2/3 Honors Accelerated
 counts once even though it occupies two periods.
+
+## 11. Synthetic Section Planner Boundary
+
+The section planner consumes generated students and approved requests, counts
+primary logical demand, chooses section counts, and assigns section periods. It
+does not assign students to sections and does not decide who is unmet.
+
+For V1, positive primary demand opens at least one section as a model
+assumption. Additional sections use the uniform 50% waitlist rule with integer
+threshold `ceil(0.5 * section capacity)`.
+
+Math 2/3 Honors Accelerated sections are modeled as consecutive double-period
+sections using configured adjacent period pairs. Government/Economics linked
+blocks produce two semester section rows sharing one linked group and one
+period. Teacher, classroom, lab, and teacher-course qualification constraints
+remain unmodeled until reliable data exists.

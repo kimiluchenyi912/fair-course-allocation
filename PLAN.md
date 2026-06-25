@@ -44,8 +44,9 @@ Version 1 will not:
 - recommend courses to students,
 - or automatically determine how many sections the school should offer.
 
-Section planning and the uniform 50% waitlist expansion analysis are planned
-as a later stage after the fixed-section allocator and metrics are tested.
+Synthetic section-count and period-layout planning is available before the
+fixed-section allocator. The planner does not assign students to sections; it
+prepares fixed section inputs for baselines and the solver.
 
 ## 4. Inputs
 
@@ -157,11 +158,12 @@ The next stages are:
 
 1. Configuration validator
 2. Synthetic request generator
-3. Baseline allocation algorithms
-4. Fixed-section CP-SAT solver
-5. Fairness and schedule-completeness metrics
-6. Section planning and uniform 50% waitlist expansion analysis
-7. Lightweight website only after the model and metrics are tested
+3. Synthetic section-count and period-layout planner
+4. Baseline allocation algorithms
+5. Fixed-section CP-SAT solver
+6. Fairness and schedule-completeness metrics
+7. Section-planning diagnostics and scenario comparison
+8. Lightweight website only after the model and metrics are tested
 
 ## 11. Version 1 Completion Criteria
 

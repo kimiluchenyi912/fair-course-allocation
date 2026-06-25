@@ -197,13 +197,17 @@ Some athletic credit or external dual-enrollment arrangements may satisfy a requ
 
 These are default simulation values. Individual courses may override them.
 
-## 9. Section-generation policy
+## 9. Section planning policy
 
-### Protected core courses
+The section planner converts synthetic primary request demand into section
+counts and period layout. It does not decide which students receive which
+section.
 
-Required core courses should open enough sections to serve essentially all approved requests. Their section count is driven by demand and capacity, not by a waitlist lottery.
+V1 uses the model assumption that any course with positive primary logical
+demand opens at least one section before the waitlist expansion rule is applied.
+Courses with zero primary demand open zero sections.
 
-### Elective and advanced courses
+### Uniform expansion rule
 
 For any course with standard section capacity `C`, after currently planned
 sections are filled, an additional section may open when the remaining waitlist
@@ -230,8 +234,8 @@ and niche electives. It may be applied repeatedly: after adding a section, if
 the remaining waitlist still reaches the same threshold, another section may be
 considered.
 
-This is a future section-planning rule, not a section-generation
-implementation in the current generator. It does not guarantee that every
+This is a section-planning rule, not a student-assignment rule. It does not
+guarantee that every
 student can be scheduled. Remaining unmet demand should come from threshold
 rounding, period-layout conflicts, full-schedule feasibility, or fairness
 constraints, not from artificial course-specific hard section caps.
@@ -241,6 +245,28 @@ constraints, not from artificial course-specific hard section caps.
 Low-demand niche electives often result in one section, and sometimes two, as
 a normal consequence of low synthetic demand and the 50% waitlist threshold.
 This is descriptive, not a hard maximum.
+
+### Period layout
+
+The V1 section planner places planned sections into P1–P7 using a deterministic
+heuristic seeded by scenario and random seed. The heuristic uses primary
+co-request conflicts to reduce obvious period conflicts, spreads multiple
+sections of the same course when feasible, and balances section counts across
+periods. It is not a proof of student-level schedule feasibility.
+
+Math 2/3 Honors Accelerated is modeled as a consecutive double-period section
+using the configurable pairs P1-P2 through P6-P7. This is a V1 model
+assumption until more precise master-schedule information is available.
+
+Government/Economics linked blocks generate two semester rows that share the
+same linked section group and period. Semester order is assigned by the
+planner seed and is not determined by student requests.
+
+### Not modeled in section planning
+
+The current planner does not model teacher availability, teacher load, room
+inventory, room type, lab availability, or which teachers can teach which
+courses.
 
 ## 10. Known bottleneck courses
 
@@ -314,8 +340,9 @@ Compare against:
 1. Replace the old prerequisite-centered schema with the new scheduling schema.
 2. Validate all configuration files.
 3. Generate synthetic students and approved primary/alternate requests.
-4. Implement simple baselines.
-5. Implement the fixed-section CP-SAT allocator.
-6. Add fairness and robustness metrics.
-7. Add section planning and 50% waitlist expansion analysis.
+4. Plan synthetic section counts and period layouts.
+5. Implement simple baselines.
+6. Implement the fixed-section CP-SAT allocator.
+7. Add fairness and robustness metrics.
+8. Add section-planning diagnostics and scenario comparisons.
 9. Build a lightweight website only after the solver is tested.

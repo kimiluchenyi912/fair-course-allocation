@@ -44,7 +44,7 @@ def validate_templates(
 
     section_ids = set()
     if has_columns(sections, TEMPLATE_COLUMNS["sections.csv"]):
-        section_ids = _validate_sections(sections, course_ids, report)
+        section_ids = _validate_sections(sections, course_ids, scenario_ids, report)
 
     if has_columns(assignments, TEMPLATE_COLUMNS["assignments.csv"]):
         _validate_assignments(assignments, sections, student_ids, section_ids, course_ids, report)
@@ -126,12 +126,19 @@ def _validate_requests(
         )
 
 
-def _validate_sections(df: pd.DataFrame, course_ids: set[str], report: ValidationReport) -> set[str]:
+def _validate_sections(
+    df: pd.DataFrame,
+    course_ids: set[str],
+    scenario_ids: set[str],
+    report: ValidationReport,
+) -> set[str]:
     filename = "sections.csv"
     require_nonempty_unique(df, filename, "section_id", "DUPLICATE_SECTION_ID", report)
     for idx, row in df.iterrows():
         line = line_number(idx)
         section_id = text(row["section_id"])
+        if text(row["scenario_id"]) not in scenario_ids:
+            report.add_error("UNKNOWN_SECTION_SCENARIO", filename, "Section references an unknown scenario_id.", line, section_id)
         if text(row["course_id"]) not in course_ids:
             report.add_error("UNKNOWN_SECTION_COURSE", filename, "Section references an unknown course_id.", line, section_id)
         for col in ["period_1", "period_2"]:
