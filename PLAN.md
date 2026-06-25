@@ -44,8 +44,8 @@ Version 1 will not:
 - recommend courses to students,
 - or automatically determine how many sections the school should offer.
 
-Section planning and the 50% waitlist expansion analysis are planned as a
-later stage after the fixed-section allocator and metrics are tested.
+Section planning and the uniform 50% waitlist expansion analysis are planned
+as a later stage after the fixed-section allocator and metrics are tested.
 
 ## 4. Inputs
 
@@ -83,6 +83,12 @@ Every valid fixed-section allocation must satisfy:
    by their section or linked block.
 7. The system must clearly report incomplete schedules and infeasible
    allocation problems.
+8. If a primary request is unmet, the solver must use ranked alternates where
+   possible to keep the schedule complete.
+9. Ordinary students may have at most one unmet logical primary course/block.
+10. One-year protected students with a prior-year involuntary unmet primary
+    must have zero unmet logical primaries, or the solver must report
+    infeasibility diagnostics.
 
 `target_course_count` is both the student's desired load and an upper bound.
 An allocation remains valid when a student receives fewer courses, but the
@@ -101,6 +107,10 @@ The fair algorithm will optimize goals in this order:
 6. Balance section utilization only after the higher priorities.
 
 Students with equal priority should be treated using a reproducible lottery.
+
+Logical primary counts are not simple request-row counts. A Grade 12
+Government/Economics linked block counts once, and Math 2/3 Honors Accelerated
+counts once even though it consumes two periods.
 
 ## 7. Baseline Algorithms
 
@@ -150,7 +160,7 @@ The next stages are:
 3. Baseline allocation algorithms
 4. Fixed-section CP-SAT solver
 5. Fairness and schedule-completeness metrics
-6. Section planning and 50% waitlist expansion analysis
+6. Section planning and uniform 50% waitlist expansion analysis
 7. Lightweight website only after the model and metrics are tested
 
 ## 11. Version 1 Completion Criteria

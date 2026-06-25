@@ -16,6 +16,12 @@
 - Implemented the Version 1 configuration validator and pytest coverage.
 - Split structural/model validation errors from current TPHS baseline policy
   warnings, with an optional strict-policy mode.
+- Implemented the Version 1 synthetic student and course-request generator,
+  including deterministic load apportionment, grade rules, elective weights,
+  fixed Grade 10 AP Calculus targets, and generation pytest coverage.
+- Added stable-year fixed demand targets for AP Statistics and Calc D + Linear
+  Algebra, brought generator-specific config into validation, and defined
+  one-year priority protection / alternate replacement data interfaces.
 
 ## Current Direction
 
@@ -35,5 +41,5 @@ authoritative input model for new development.
 
 ## Next Step
 
-Build the synthetic request generator after the configuration validator remains
-green on the current data.
+Review and tune the synthetic request probability assumptions, then build the
+baseline allocation checks before implementing the CP-SAT fixed-section solver.

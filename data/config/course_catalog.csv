@@ -1,39 +1,123 @@
 course_id,course_name,department,course_category,eligible_grades,periods_required,occupies_school_period,schedule_structure,capacity_override,max_sections_override,demand_tier,protected_core,known_capacity_risk,source_type,confidence,notes
-ENG9,English 9,English,normal_academic,9,1,true,standard,,,core,true,false,model_assumption,medium,Counselor-approved requests only; no eligibility check in solver.
-ENG9_H,English 9 Honors,English,normal_academic,9,1,true,standard,,,core,true,false,model_assumption,medium,Counselor-approved requests only; no eligibility check in solver.
-MATH1,Integrated Math 1,Mathematics,normal_academic,9,1,true,standard,,,core,true,false,model_assumption,medium,Typical Grade 9 math option.
-MATH2,Integrated Math 2,Mathematics,normal_academic,9;10,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 math usually begins at Math 2 or above.
-MATH2_3_HA,Integrated Math 2/3 Honors Accelerated,Mathematics,normal_academic,9;10,2,true,double_period,,,core,true,false,model_assumption,medium,Double-period course; consecutiveness remains configurable.
-MATH3,Integrated Math 3,Mathematics,normal_academic,10;11,1,true,standard,,,core,true,false,model_assumption,medium,Grade 11 math usually begins at Math 3 or above.
-MATH3_H,Integrated Math 3 Honors,Mathematics,normal_academic,10;11,1,true,standard,,,core,true,false,model_assumption,medium,Not normally generated for ordinary Grade 12 students.
-INTRO_CALC,Introduction to Calculus,Mathematics,normal_academic,11;12,1,true,standard,,,mainstream,false,false,model_assumption,medium,Grade 12 in-school math usually begins at Introduction to Calculus or above.
-AP_CALC_AB,AP Calculus AB,Mathematics,most_ap,10;11;12,1,true,standard,,,mainstream,false,false,student_estimate,medium,Grade 10 demand base is small.
-AP_CALC_BC,AP Calculus BC,Mathematics,most_ap,10;11;12,1,true,standard,,,mainstream,false,false,student_estimate,medium,Grade 10 demand base is about 20 students.
-AP_STATS,AP Statistics,Mathematics,most_ap,11;12,1,true,standard,,,popular,false,true,student_estimate,medium,Known capacity-risk course.
-CALC_D_LINALG,Calc D + Linear Algebra,Mathematics,dual_enrollment,11;12,1,true,semester_block,40,1,fixed_limited,false,true,student_estimate,medium,TPHS daytime dual-enrollment bottleneck; occupies one normal period; normal capacity 40 with possible exception overload to 45 and about five unmet requests.
-BIO,Biology,Science,normal_academic,9,1,true,standard,,,core,true,false,model_assumption,medium,Typical Grade 9 science.
-CHEM,Chemistry,Science,normal_academic,10;11;12,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 chemistry option.
-CHEM_H,Honors Chemistry,Science,normal_academic,10;11;12,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 honors chemistry option.
-AP_PHYSC,AP Physics C,Science,most_ap,11;12,1,true,semester_block,,,fixed_limited,false,true,student_estimate,medium,Full-year one-period course with Mechanics and E&M by semester.
-PE,Physical Education,Physical Education,pe,9;10;11;12,1,true,standard,50,,core,true,false,model_assumption,medium,PE capacity uses 50 base and 40 to 60 configurable range.
-ENG10,English 10,English,normal_academic,10,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 English option.
-ENG10_H,English 10 Honors,English,normal_academic,10,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 honors English option.
-ENG11,English 11,English,normal_academic,11,1,true,standard,,,core,true,false,model_assumption,medium,Grade 11 English option.
-AP_LANG,AP English Language,English,most_ap,11,1,true,standard,,,core,true,false,model_assumption,medium,Grade 11 AP English option.
-ENG12,English 12,English,normal_academic,12,1,true,standard,,,core,true,false,model_assumption,medium,Grade 12 English option.
-AP_LIT,AP English Literature,English,most_ap,12,1,true,standard,,,core,true,false,model_assumption,medium,Grade 12 AP English option.
-WORLD_HISTORY,World History,Social Science,normal_academic,10,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 social science option.
-AP_WORLD_HISTORY,AP World History,Social Science,most_ap,10,1,true,standard,,,core,true,false,model_assumption,medium,Grade 10 AP social science option.
-US_HISTORY,U.S. History,Social Science,normal_academic,11,1,true,standard,,,core,true,false,model_assumption,medium,Grade 11 social science option.
-AP_US_HISTORY,AP U.S. History,Social Science,most_ap,11,1,true,standard,,,core,true,false,model_assumption,medium,Grade 11 AP social science option.
-GOV_ECON_REG,Government + Economics,Social Science,normal_academic,12,1,true,semester_block,,,core,true,false,model_assumption,medium,Shared-period Grade 12 Government/Economics block.
-GOV_APMACRO,Government + AP Macroeconomics,Social Science,most_ap,12,1,true,semester_block,,,core,true,false,model_assumption,medium,Shared-period Grade 12 mixed regular/AP block.
-APGOV_ECON,AP Government + Economics,Social Science,most_ap,12,1,true,semester_block,,,core,true,false,model_assumption,medium,Shared-period Grade 12 mixed AP/regular block.
-APGOV_APMACRO,AP Government + AP Macroeconomics,Social Science,most_ap,12,1,true,semester_block,,,core,true,false,model_assumption,medium,Shared-period Grade 12 AP/AP block.
-COMPUTER_PROGRAMMING,Computer Programming,Computer Science,niche,9;10;11;12,1,true,standard,,2,popular,false,true,student_estimate,medium,Known Grade 9 capacity-risk elective.
-AP_CSP,AP Computer Science Principles,Computer Science,most_ap,10;11;12,1,true,standard,,,popular,false,true,student_estimate,medium,Known capacity risk especially without prior Computer Programming.
-AP_CSA,AP Computer Science A,Computer Science,ap_csa,10;11;12,1,true,standard,25,,popular,false,true,student_estimate,medium,Known capacity-risk course with 25-seat default.
-AP_SEMINAR,AP Seminar,Elective,most_ap,11;12,1,true,standard,,,mainstream,false,false,model_assumption,medium,Available before AP Research.
-AP_RESEARCH,AP Research,Elective,most_ap,12,1,true,standard,,,mainstream,false,false,model_assumption,medium,Grade 12 course.
-AP_EURO,AP European History,Social Science,most_ap,12,1,true,standard,,,niche,false,false,model_assumption,medium,Generated for Grade 12 only.
-AP_ART_HISTORY,AP Art History,Visual Arts,most_ap,11;12,1,true,standard,,,niche,false,false,model_assumption,medium,Available to Grades 11 and 12.
+ENG9,English 9,English,normal_academic,9,1,True,standard,,,core,True,False,model_assumption,medium,Counselor-approved requests only; no eligibility check in solver.
+ENG9_H,English 9 Honors,English,normal_academic,9,1,True,standard,,,core,True,False,model_assumption,medium,Counselor-approved requests only; no eligibility check in solver.
+MATH1,Integrated Math 1,Mathematics,normal_academic,9,1,True,standard,,,core,True,False,model_assumption,medium,Typical Grade 9 math option.
+MATH2,Integrated Math 2,Mathematics,normal_academic,9;10,1,True,standard,,,core,True,False,model_assumption,medium,Grade 10 math usually begins at Math 2 or above.
+MATH2_3_HA,Integrated Math 2/3 Honors Accelerated,Mathematics,normal_academic,9;10,2,True,double_period,,,core,True,False,model_assumption,medium,Double-period course; consecutiveness remains configurable.
+MATH3,Integrated Math 3,Mathematics,normal_academic,10;11,1,True,standard,,,core,True,False,model_assumption,medium,Grade 11 math usually begins at Math 3 or above.
+MATH3_H,Integrated Math 3 Honors,Mathematics,normal_academic,10;11,1,True,standard,,,core,True,False,model_assumption,medium,Not normally generated for ordinary Grade 12 students.
+INTRO_CALC,Introduction to Calculus,Mathematics,normal_academic,11;12,1,True,standard,,,mainstream,False,False,model_assumption,medium,Grade 12 in-school math usually begins at Introduction to Calculus or above.
+AP_CALC_AB,AP Calculus AB,Mathematics,most_ap,10;11;12,1,True,standard,,,mainstream,False,False,student_estimate,medium,Grade 10 demand base is small.
+AP_CALC_BC,AP Calculus BC,Mathematics,most_ap,10;11;12,1,True,standard,,,mainstream,False,False,student_estimate,medium,Grade 10 demand base is about 20 students.
+AP_STATS,AP Statistics,Mathematics,most_ap,11;12,1,True,standard,,,popular,False,True,student_estimate,medium,Known capacity-risk course.
+CALC_D_LINALG,Calc D + Linear Algebra,Mathematics,dual_enrollment,11;12,1,True,semester_block,40,,fixed_limited,False,True,student_estimate,medium,TPHS daytime dual-enrollment bottleneck; occupies one normal period; normal capacity 40 with possible exception overload to 45 and about five unmet requests.
+BIO,Biology: The Living Earth,Science,normal_academic,9,1,True,standard,,,core,True,False,student_provided_form,medium,Typical Grade 9 science; course name from confirmed course list.
+CHEM,Chemistry,Science,normal_academic,10;11;12,1,True,standard,,,core,True,False,model_assumption,medium,Grade 10 chemistry option.
+CHEM_H,Honors Chemistry,Science,normal_academic,10;11;12,1,True,standard,,,core,True,False,model_assumption,medium,Grade 10 honors chemistry option.
+AP_PHYSC,AP Physics C,Science,most_ap,11;12,1,True,semester_block,,,fixed_limited,False,True,student_estimate,medium,Full-year one-period course with Mechanics and E&M by semester.
+PE,Physical Education,Physical Education,pe,9;10;11;12,1,True,standard,50,,core,True,False,model_assumption,medium,PE capacity uses 50 base and 40 to 60 configurable range.
+ENG10,English 10,English,normal_academic,10,1,True,standard,,,core,True,False,model_assumption,medium,Grade 10 English option.
+ENG10_H,English 10 Honors,English,normal_academic,10,1,True,standard,,,core,True,False,model_assumption,medium,Grade 10 honors English option.
+ENG11,English 11,English,normal_academic,11,1,True,standard,,,core,True,False,model_assumption,medium,Grade 11 English option.
+AP_LANG,AP English Language,English,most_ap,11,1,True,standard,,,core,True,False,model_assumption,medium,Grade 11 AP English option.
+ENG12,English 12,English,normal_academic,12,1,True,standard,,,core,True,False,model_assumption,medium,Grade 12 English option.
+AP_LIT,AP English Literature,English,most_ap,12,1,True,standard,,,core,True,False,model_assumption,medium,Grade 12 AP English option.
+WORLD_HISTORY,World History,Social Science,normal_academic,10,1,True,standard,,,core,True,False,model_assumption,medium,Grade 10 social science option.
+AP_WORLD_HISTORY,AP World History,Social Science,most_ap,10,1,True,standard,,,core,True,False,model_assumption,medium,Grade 10 AP social science option.
+US_HISTORY,U.S. History,Social Science,normal_academic,11,1,True,standard,,,core,True,False,model_assumption,medium,Grade 11 social science option.
+AP_US_HISTORY,AP U.S. History,Social Science,most_ap,11,1,True,standard,,,core,True,False,model_assumption,medium,Grade 11 AP social science option.
+GOV_ECON_REG,Government + Economics,Social Science,normal_academic,12,1,True,semester_block,,,core,True,False,model_assumption,medium,Shared-period Grade 12 Government/Economics block.
+GOV_APMACRO,Government + AP Macroeconomics,Social Science,most_ap,12,1,True,semester_block,,,core,True,False,model_assumption,medium,Shared-period Grade 12 mixed regular/AP block.
+APGOV_ECON,AP Government + Economics,Social Science,most_ap,12,1,True,semester_block,,,core,True,False,model_assumption,medium,Shared-period Grade 12 mixed AP/regular block.
+APGOV_APMACRO,AP Government + AP Macroeconomics,Social Science,most_ap,12,1,True,semester_block,,,core,True,False,model_assumption,medium,Shared-period Grade 12 AP/AP block.
+COMPUTER_PROGRAMMING,Computer Programming,Computer Science,niche,9;10;11;12,1,True,standard,,,popular,False,True,student_estimate,medium,Known Grade 9 capacity-risk elective.
+AP_CSP,AP Computer Science Principles,Computer Science,most_ap,10;11;12,1,True,standard,,,popular,False,True,student_estimate,medium,Known capacity risk especially without prior Computer Programming.
+AP_CSA,AP Computer Science A,Computer Science,ap_csa,10;11;12,1,True,standard,25,,popular,False,True,student_estimate,medium,Known capacity-risk course with 25-seat default.
+AP_SEMINAR,AP Seminar,Elective,most_ap,11,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Grade 11 course; demand weight is a model assumption.
+AP_RESEARCH,AP Research,Elective,most_ap,12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Grade 12 course; demand weight is a model assumption.
+AP_EURO,AP European History,Social Science,most_ap,12,1,True,standard,,,niche,False,False,student_provided_form,medium,Grade 12 only; demand weight is a model assumption.
+AP_ART_HISTORY,AP Art History,Visual Arts,most_ap,11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Grades 11-12; demand weight is a model assumption.
+SPANISH1,Spanish 1,World Languages,normal_academic,9;10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,No honors language level assumed; demand weight is a model assumption.
+SPANISH2,Spanish 2,World Languages,normal_academic,9;10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,No honors language level assumed; demand weight is a model assumption.
+SPANISH3,Spanish 3,World Languages,normal_academic,10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,No honors language level assumed; demand weight is a model assumption.
+SPANISH4,Spanish 4,World Languages,normal_academic,11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,No honors language level assumed; demand weight is a model assumption.
+AP_SPANISH_LANG,AP Spanish Language,World Languages,most_ap,11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,AP language course; demand weight is a model assumption.
+CHINESE1,Chinese 1,World Languages,normal_academic,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,low,No honors language level assumed; demand weight is a model assumption.
+CHINESE2,Chinese 2,World Languages,normal_academic,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,low,No honors language level assumed; demand weight is a model assumption.
+CHINESE3,Chinese 3,World Languages,normal_academic,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,low,No honors language level assumed; demand weight is a model assumption.
+CHINESE4,Chinese 4,World Languages,normal_academic,11;12,1,True,standard,,,niche,False,False,student_provided_form,low,No honors language level assumed; demand weight is a model assumption.
+AP_CHINESE_LANG,AP Chinese Language,World Languages,most_ap,11;12,1,True,standard,,,niche,False,False,student_provided_form,low,AP language course; demand weight is a model assumption.
+FRENCH1,French 1,World Languages,normal_academic,9;10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,No honors language level assumed; demand weight is a model assumption.
+FRENCH2,French 2,World Languages,normal_academic,9;10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,No honors language level assumed; demand weight is a model assumption.
+FRENCH3,French 3,World Languages,normal_academic,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,No honors language level assumed; demand weight is a model assumption.
+FRENCH4,French 4,World Languages,normal_academic,11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,No honors language level assumed; demand weight is a model assumption.
+AP_FRENCH_LANG,AP French Language,World Languages,most_ap,11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,AP language course; demand weight is a model assumption.
+JAPANESE1,Japanese 1,World Languages,normal_academic,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,low,No honors language level assumed; demand weight is a model assumption.
+JAPANESE2,Japanese 2,World Languages,normal_academic,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,low,No honors language level assumed; demand weight is a model assumption.
+JAPANESE3,Japanese 3,World Languages,normal_academic,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,low,No honors language level assumed; demand weight is a model assumption.
+AP_JAPANESE_LANG,AP Japanese Language,World Languages,most_ap,11;12,1,True,standard,,,niche,False,False,student_provided_form,low,AP language course; demand weight is a model assumption.
+ACTING1,Acting I,Performing Arts,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+INTERMEDIATE_ACTING,Intermediate Acting,Performing Arts,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+DRAMA_PRODUCTION,Drama Production,Performing Arts,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+HONORS_ADV_DRAMA,Honors Advanced Drama,Performing Arts,niche,11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Approval handled before solver input; demand weight is a model assumption.
+COSTUME_DESIGN,Costume Design,Performing Arts,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+DRAWING_DESIGN,Drawing & Design,Visual Arts,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+AP_DRAWING,AP Drawing,Visual Arts,most_ap,11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+AP_2D_ART_DESIGN,AP 2D Art & Design,Visual Arts,most_ap,11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+AP_3D_ART_DESIGN,AP 3D Art & Design,Visual Arts,most_ap,11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+CERAMICS,Ceramics,Visual Arts,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+ADV_CERAMICS,Advanced Ceramics,Visual Arts,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+SCULPTURE,Sculpture,Visual Arts,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+PAINTING,Painting,Visual Arts,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+DIGITAL_ART_DESIGN,Digital Art & Design,Visual Arts,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+DIGITAL_PHOTOGRAPHY,Digital Photography,Visual Arts,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+ADV_DIGITAL_ART_DESIGN,Advanced Digital Art & Design,Visual Arts,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+INTERMEDIATE_DANCE,Intermediate Dance,Performing Arts,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+ADVANCED_DANCE,Advanced Dance,Performing Arts,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+VIDEO_FILM,Video Film,Journalism Film,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+ADV_VIDEO_FILM,Advanced Video Film,Journalism Film,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+TV_PRODUCTION,TV Production,Journalism Film,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+INTERMEDIATE_ORCHESTRA,Intermediate Orchestra,Music,normal_academic,9;10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Audition or approval handled before solver input; demand weight is a model assumption.
+CHAMBER_ORCHESTRA,Chamber Orchestra,Music,normal_academic,10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Audition or approval handled before solver input; demand weight is a model assumption.
+SYMPHONIC_BAND,Symphonic Band,Music,normal_academic,9;10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Audition or approval handled before solver input; demand weight is a model assumption.
+WIND_ENSEMBLE,Wind Ensemble,Music,normal_academic,10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Audition or approval handled before solver input; demand weight is a model assumption.
+JAZZ_BAND,Jazz Band,Music,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Audition or approval handled before solver input; demand weight is a model assumption.
+BEGINNING_JOURNALISM,Beginning Journalism,Journalism Film,normal_academic,9;10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Demand weight is a model assumption.
+ADVANCED_JOURNALISM,Advanced Journalism,Journalism Film,normal_academic,10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Demand weight is a model assumption.
+YEARBOOK,Yearbook,Journalism Film,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+LEADERSHIP,Leadership,Leadership CTE,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Approval handled before solver input; demand weight is a model assumption.
+ASB,ASB,Leadership CTE,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Approval handled before solver input; demand weight is a model assumption.
+ACCOUNTING1,Accounting I,Business,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+INTRO_LAW,Introduction to Law,Business,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+INTRO_BUSINESS,Introduction to Business,Business,normal_academic,9;10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Demand weight is a model assumption.
+MARKETING,Marketing,Business,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+WOOD_TECH1,Wood Tech 1,CTE Practical Arts,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+WOOD_TECH2,Wood Tech 2,CTE Practical Arts,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+AUTO_TECH,Auto Technology,CTE Practical Arts,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+CULINARY_ARTS1,Culinary Arts I,CTE Practical Arts,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+INTRO_ENGINEERING,Introduction to Engineering,Engineering,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+CAD_FABRICATION,CAD / Fabrication,Engineering,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+CREATIVE_WRITING,Creative Writing,English,niche,9;10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+MARINE_BIOLOGY,Marine Biology,Science,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+PHYSICS_UNIVERSE,Physics: Of the Universe,Science,normal_academic,10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Demand weight is a model assumption.
+AP_CHEM,AP Chemistry,Science,most_ap,11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Demand weight is a model assumption.
+AP_PHYSICS1,AP Physics 1,Science,most_ap,10;11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Demand weight is a model assumption.
+INTRO_BIOTECH,Introduction to Biotechnology,Science,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+ANATOMY_PHYSIOLOGY,Anatomy / Physiology,Science,normal_academic,11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Demand weight is a model assumption.
+AP_BIO,AP Biology,Science,most_ap,11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Demand weight is a model assumption.
+AP_ENVIRONMENTAL_SCIENCE,AP Environmental Science,Science,most_ap,11;12,1,True,standard,,,mainstream,False,False,student_provided_form,medium,Demand weight is a model assumption.
+AP_PHYSICS2,AP Physics 2,Science,most_ap,11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+FILM_SOCIETY,Film and Society,Social Science,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+SOCIAL_JUSTICE,Social Justice,Social Science,niche,10;11;12,1,True,standard,,,niche,False,False,student_provided_form,medium,Demand weight is a model assumption.
+AP_PSYCHOLOGY,AP Psychology,Social Science,most_ap,11;12,1,True,standard,,,popular,False,False,student_provided_form,medium,Demand weight is a model assumption.
+SOCIOLOGY,Sociology,Social Science,niche,11;12,1,True,standard,,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+ROCK_N_ROLL_HISTORY,Socio-Political History of Rock-N-Roll,Social Science,niche,11;12,1,True,standard,,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+PERSONAL_FITNESS,Personal Fitness,Physical Education,pe,9;10;11;12,1,True,standard,50,,mainstream,False,False,student_provided_form,medium,Demand weight is a model assumption.
+WEIGHT_TRAINING,Weight Training,Physical Education,pe,9;10;11;12,1,True,standard,50,,mainstream,False,False,student_provided_form,medium,Demand weight is a model assumption.
+SOCCER,Soccer,Physical Education,pe,9;10;11;12,1,True,standard,50,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+SURF,Surf,Physical Education,pe,9;10;11;12,1,True,standard,50,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+PE_DANCE,Dance,Physical Education,pe,9;10;11;12,1,True,standard,50,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+FOOTBALL,Football,Physical Education,pe,9;10;11;12,1,True,standard,50,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+BASKETBALL,Basketball,Physical Education,pe,9;10;11;12,1,True,standard,50,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+PEP_SQUAD,Pep Squad,Physical Education,pe,9;10;11;12,1,True,standard,50,,niche,False,False,student_provided_form,low,Demand weight is a model assumption.
+TEAM_SPORTS,Team Sports,Physical Education,pe,9;10;11;12,1,True,standard,50,,mainstream,False,False,student_provided_form,medium,Demand weight is a model assumption.

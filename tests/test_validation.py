@@ -47,6 +47,30 @@ def test_current_real_configuration_passes(tmp_path: Path) -> None:
     assert report.warnings == []
 
 
+def test_current_config_has_no_hard_max_section_policy(tmp_path: Path) -> None:
+    config_dir, _ = copy_validation_inputs(tmp_path)
+    capacity_rules = read_csv(config_dir / "capacity_rules.csv")
+    catalog = read_csv(config_dir / "course_catalog.csv")
+
+    assert set(capacity_rules["expansion_allowed"].map(lambda value: str(value).lower())) == {"true"}
+    assert capacity_rules["default_max_sections"].map(str).str.strip().eq("").all()
+    assert capacity_rules["expansion_threshold_ratio"].astype(float).eq(0.50).all()
+    assert catalog["max_sections_override"].map(str).str.strip().eq("").all()
+
+
+def test_capacity_rules_must_allow_uniform_expansion(tmp_path: Path) -> None:
+    config_dir, templates_dir = copy_validation_inputs(tmp_path)
+    path = config_dir / "capacity_rules.csv"
+    capacity_rules = read_csv(path)
+    capacity_rules["expansion_allowed"] = capacity_rules["expansion_allowed"].astype(str)
+    capacity_rules.loc[capacity_rules["rule_id"] == "ap_csa", "expansion_allowed"] = "false"
+    write_csv(path, capacity_rules)
+
+    report = validate_configuration(config_dir, templates_dir)
+
+    assert "EXPANSION_MUST_BE_UNIFORM" in issue_codes(report)
+
+
 def test_grade_load_shares_must_sum_to_one(tmp_path: Path) -> None:
     config_dir, templates_dir = copy_validation_inputs(tmp_path)
     path = config_dir / "grade_profiles.csv"

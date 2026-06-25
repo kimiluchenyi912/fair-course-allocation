@@ -205,18 +205,42 @@ Required core courses should open enough sections to serve essentially all appro
 
 ### Elective and advanced courses
 
-For a course with capacity `C`, after currently planned sections are filled, an additional section may open when the remaining waitlist reaches approximately `0.5 × C`, subject to teacher, room, and course-specific limits.
+For any course with standard section capacity `C`, after currently planned
+sections are filled, an additional section may open when the remaining waitlist
+reaches `ceil(0.5 × C)`, subject to staffing, rooms, period layout, complete
+schedule feasibility, and fairness constraints.
 
 Illustration for a 40-seat course:
 
-- 5–19 remaining students: no new section;
+- 19 remaining students: no new section;
 - 20 or more remaining students: consider one additional section.
 
-This is a planning rule, not an unlimited guarantee. Every course has a configurable `max_sections` or expansion policy.
+Illustration for AP CSA with a 25-seat course capacity:
+
+- 12 remaining students: no new section;
+- 13 or more remaining students: consider one additional section.
+
+Illustration for a 50-seat PE course:
+
+- 24 remaining students: no new section;
+- 25 or more remaining students: consider one additional section.
+
+The rule applies uniformly to core courses, AP courses, CS courses, arts, PE,
+and niche electives. It may be applied repeatedly: after adding a section, if
+the remaining waitlist still reaches the same threshold, another section may be
+considered.
+
+This is a future section-planning rule, not a section-generation
+implementation in the current generator. It does not guarantee that every
+student can be scheduled. Remaining unmet demand should come from threshold
+rounding, period-layout conflicts, full-schedule feasibility, or fairness
+constraints, not from artificial course-specific hard section caps.
 
 ### Niche electives
 
-Low-demand niche electives should normally have one section and a practical maximum of two in synthetic data. The generator must not create implausible outcomes such as six sections of a small course merely because of uncontrolled randomness.
+Low-demand niche electives often result in one section, and sometimes two, as
+a normal consequence of low synthetic demand and the 50% waitlist threshold.
+This is descriptive, not a hard maximum.
 
 ## 10. Known bottleneck courses
 
@@ -239,7 +263,7 @@ Unknown elective demand is not filled with fake precision. Each course receives:
 - a base participation rate or expected demand;
 - a yearly random multiplier;
 - a trend multiplier for increasingly competitive course selection;
-- a minimum and maximum section policy.
+- initial planning hints and the uniform waitlist expansion policy.
 
 Recommended test scenarios:
 

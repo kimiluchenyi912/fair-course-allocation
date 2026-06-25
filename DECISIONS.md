@@ -84,9 +84,15 @@ Free periods may only be placed in Period 1, Period 6, or Period 7 in V1.
 Normal academic courses default to 40 seats. AP Computer Science A defaults
 to 25 seats. PE defaults to 50 seats, with a configurable range of 40 to 60.
 
-When a course's remaining waitlist reaches about 50% of normal capacity, a
-later section-planning pass may consider adding a section. Niche courses
-usually have one section and a practical maximum of two.
+All courses use the same 50% waitlist expansion rule in future section
+planning. If a course's remaining waitlist reaches `ceil(0.5 * standard
+section capacity)`, a later section-planning pass may consider adding another
+section. The rule can apply repeatedly after each added section.
+
+Niche courses often have one section, and sometimes two, because demand is
+usually low. That is descriptive, not a hard cap. V1 should not impose
+course-specific hard maximum section counts for AP CSA, AP Statistics, AP
+Physics C, Calc D + Linear Algebra, or niche electives.
 
 This is not part of the fixed-section V1 solver; it is a later planning
 analysis.
@@ -111,3 +117,23 @@ as ordinary TPHS in-school courses.
 
 Known capacity-risk courses include Computer Programming, AP CSP, AP CSA, AP
 Statistics, AP Physics C, and Calc D + Linear Algebra.
+
+## 10. One-Year Fairness Protection Boundary
+
+The generator only creates synthetic students and counselor-approved requests.
+It does not decide which students lose access to a course.
+
+A future section generator will use demand, capacities, and the uniform 50%
+waitlist expansion threshold to decide section counts. A future solver will
+assign students to fixed sections and must use ranked alternates to keep
+schedules complete when a primary request is unmet.
+
+For ordinary students, future solver policy is at most one unmet logical
+primary course. A protected student, meaning a student with a prior-year
+involuntary unmet primary, must have zero unmet logical primaries in the
+protected year. If fixed sections and periods make that impossible, the solver
+must return infeasibility diagnostics rather than silently relaxing the rule.
+
+Logical primary counting follows course/block meaning rather than request rows:
+Government/Economics linked blocks count once, and Math 2/3 Honors Accelerated
+counts once even though it occupies two periods.

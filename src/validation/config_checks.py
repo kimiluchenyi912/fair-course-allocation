@@ -102,6 +102,7 @@ def validate_capacity_rules(df: pd.DataFrame | None, report: ValidationReport) -
         min_sections = parse_int(row["default_min_sections"])
         max_sections = parse_optional_int(row["default_max_sections"])
         threshold = parse_float(row["expansion_threshold_ratio"])
+        expansion_allowed = parse_bool(row["expansion_allowed"])
 
         for col, value in {
             "default_capacity": default_capacity,
@@ -114,6 +115,14 @@ def validate_capacity_rules(df: pd.DataFrame | None, report: ValidationReport) -
 
         if max_sections is not None and max_sections < 0:
             report.add_error("INVALID_NONNEGATIVE_INTEGER", filename, "default_max_sections must be blank or nonnegative.", line, rule_id)
+        if expansion_allowed is not True:
+            report.add_error(
+                "EXPANSION_MUST_BE_UNIFORM",
+                filename,
+                "All V1 course categories must allow the unified 50% waitlist expansion rule.",
+                line,
+                rule_id,
+            )
         if threshold is None or threshold < 0 or threshold > 1:
             report.add_error("INVALID_EXPANSION_THRESHOLD", filename, "expansion_threshold_ratio must be between 0 and 1.", line, rule_id)
         if None not in (capacity_min, default_capacity, capacity_max) and not capacity_min <= default_capacity <= capacity_max:

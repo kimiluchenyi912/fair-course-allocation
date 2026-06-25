@@ -1,3 +1,4 @@
-student_id,section_id,course_id,request_type,period_1,period_2,assignment_reason
-STU_0001,SEC_ENG9_01,ENG9,primary,P2,,solver
-STU_0002,SEC_GOV_APMACRO_01,GOV_APMACRO,primary,P6,,solver
+student_id,section_id,course_id,request_type,assignment_source,replaced_primary_course_id,replaced_primary_block_id,period_1,period_2,assignment_reason
+STU_0001,SEC_ENG9_01,ENG9,primary,primary,,,P2,,solver
+STU_0002,SEC_GOV_APMACRO_01,GOV_APMACRO,primary,primary,,,P6,,solver
+STU_0002,SEC_AP_CSA_01,AP_CSA,alternate,alternate,AP_STATS,,P4,,alternate_substitution

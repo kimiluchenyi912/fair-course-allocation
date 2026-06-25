@@ -1,0 +1,30 @@
+grade,rule_key,rule_value,source_type,notes
+9,english_weights,ENG9:0.70;ENG9_H:0.30,model_assumption,English 9 versus honors split for synthetic requests.
+9,math_weights,MATH1:0.72;MATH2:0.20;MATH2_3_HA:0.08,model_assumption,Grade 9 math pathway mix; Math 2/3 HA consumes two periods.
+9,science_weights,BIO:1.00,student_provided_form,Grade 9 science uses Biology: The Living Earth.
+9,pe_probability,1.00,model_assumption,Grade 9 normally includes PE or PE-equivalent school-period credit in V1.
+9,language_probability,0.78,model_assumption,Most Grade 9 students request a world language.
+9,language_start_weights,SPANISH1:0.42;SPANISH2:0.12;FRENCH1:0.18;FRENCH2:0.06;CHINESE1:0.08;CHINESE2:0.04;JAPANESE1:0.08;JAPANESE2:0.02,model_assumption,Language demand weights; no honors language levels.
+10,english_weights,ENG10:0.50;ENG10_H:0.50,student_estimate,Grade 10 English split from confirmed planning notes.
+10,social_studies_weights,WORLD_HISTORY:0.50;AP_WORLD_HISTORY:0.50,student_estimate,World History versus AP World History split from confirmed planning notes.
+10,science_weights,CHEM:0.3333;CHEM_H:0.6667,student_estimate,Chemistry versus Honors Chemistry split from confirmed planning notes.
+10,math_weights,MATH2:0.45;MATH2_3_HA:0.12;MATH3:0.28;MATH3_H:0.15,model_assumption,Non-fixed Grade 10 math requests; AP Calc targets are configured separately.
+10,pe_probability,0.45,model_assumption,Grade 10 PE request probability for synthetic data.
+10,language_probability,0.55,model_assumption,Grade 10 world language request probability.
+10,language_weights,SPANISH2:0.28;SPANISH3:0.20;FRENCH2:0.15;FRENCH3:0.08;CHINESE2:0.08;CHINESE3:0.05;JAPANESE2:0.08;JAPANESE3:0.04;SPANISH1:0.03;FRENCH1:0.01,model_assumption,Continuing language distribution; no honors language levels.
+11,english_weights,ENG11:0.58;AP_LANG:0.42,model_assumption,Grade 11 English versus AP Language synthetic split.
+11,social_studies_weights,US_HISTORY:0.58;AP_US_HISTORY:0.42,model_assumption,Grade 11 US History versus AP US History synthetic split.
+11,math_probability,0.88,model_assumption,Most Grade 11 students request math.
+11,math_weights,MATH3:0.25;MATH3_H:0.20;INTRO_CALC:0.20;AP_CALC_AB:0.15;AP_CALC_BC:0.10;AP_STATS:0.07;CALC_D_LINALG:0.03,model_assumption,Grade 11 math normally starts at Math 3 or higher.
+11,science_units_weights,0:0.18;1:0.74;2:0.08,model_assumption,Grade 11 science can be 0 1 or a small number with 2 courses.
+11,science_weights,CHEM:0.12;CHEM_H:0.08;PHYSICS_UNIVERSE:0.19;AP_PHYSICS1:0.15;AP_CHEM:0.12;AP_BIO:0.12;AP_ENVIRONMENTAL_SCIENCE:0.10;AP_PHYSC:0.04;ANATOMY_PHYSIOLOGY:0.05;MARINE_BIOLOGY:0.03,model_assumption,Science request weights; AP Physics C remains a single one-period course.
+11,language_probability,0.32,model_assumption,Grade 11 language request probability.
+11,language_weights,SPANISH3:0.24;SPANISH4:0.18;AP_SPANISH_LANG:0.15;FRENCH3:0.12;FRENCH4:0.08;AP_FRENCH_LANG:0.06;CHINESE3:0.06;CHINESE4:0.04;AP_CHINESE_LANG:0.03;JAPANESE3:0.03;AP_JAPANESE_LANG:0.01,model_assumption,Upper-level language distribution.
+12,english_weights,ENG12:0.62;AP_LIT:0.38,model_assumption,Grade 12 English versus AP Literature synthetic split.
+12,gov_econ_weights,GOV_ECON_REG:0.34;GOV_APMACRO:0.22;APGOV_ECON:0.20;APGOV_APMACRO:0.24,model_assumption,Four Government/Economics regular/AP combinations; section decides semester order later.
+12,math_probability,0.58,model_assumption,Grade 12 math is optional in the generator.
+12,math_weights,INTRO_CALC:0.35;AP_CALC_AB:0.20;AP_CALC_BC:0.15;AP_STATS:0.20;CALC_D_LINALG:0.10,model_assumption,Grade 12 in-school math begins at Introduction to Calculus or higher.
+12,science_units_weights,0:0.42;1:0.54;2:0.04,model_assumption,Grade 12 science is optional with a small two-science group.
+12,science_weights,PHYSICS_UNIVERSE:0.115;AP_PHYSICS1:0.12;AP_PHYSICS2:0.07;AP_CHEM:0.12;AP_BIO:0.14;AP_ENVIRONMENTAL_SCIENCE:0.13;AP_PHYSC:0.065;ANATOMY_PHYSIOLOGY:0.12;MARINE_BIOLOGY:0.06;INTRO_BIOTECH:0.06,model_assumption,Grade 12 science elective weights.
+12,language_probability,0.20,model_assumption,Grade 12 language request probability.
+12,language_weights,SPANISH4:0.22;AP_SPANISH_LANG:0.24;FRENCH4:0.13;AP_FRENCH_LANG:0.10;CHINESE4:0.08;AP_CHINESE_LANG:0.08;JAPANESE3:0.07;AP_JAPANESE_LANG:0.08,model_assumption,Upper-level Grade 12 language distribution.

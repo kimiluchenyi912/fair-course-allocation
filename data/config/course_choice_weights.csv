@@ -1,0 +1,104 @@
+scenario_id,grade,scope_type,scope_id,weight,source_type,notes
+stable_year,9,demand_tier,core,0.00,model_assumption,Core courses are selected by grade rules rather than elective fill.
+stable_year,10,demand_tier,core,0.00,model_assumption,Core courses are selected by grade rules rather than elective fill.
+stable_year,11,demand_tier,core,0.00,model_assumption,Core courses are selected by grade rules rather than elective fill.
+stable_year,12,demand_tier,core,0.00,model_assumption,Core courses are selected by grade rules rather than elective fill.
+stable_year,9,demand_tier,mainstream,3.00,model_assumption,Default medium elective demand weight.
+stable_year,10,demand_tier,mainstream,3.00,model_assumption,Default medium elective demand weight.
+stable_year,11,demand_tier,mainstream,3.00,model_assumption,Default medium elective demand weight.
+stable_year,12,demand_tier,mainstream,3.00,model_assumption,Default medium elective demand weight.
+stable_year,9,demand_tier,popular,5.00,model_assumption,Default high-demand elective weight.
+stable_year,10,demand_tier,popular,5.00,model_assumption,Default high-demand elective weight.
+stable_year,11,demand_tier,popular,5.00,model_assumption,Default high-demand elective weight.
+stable_year,12,demand_tier,popular,5.00,model_assumption,Default high-demand elective weight.
+stable_year,9,demand_tier,niche,0.80,model_assumption,Default low-demand niche elective weight.
+stable_year,10,demand_tier,niche,0.80,model_assumption,Default low-demand niche elective weight.
+stable_year,11,demand_tier,niche,0.80,model_assumption,Default low-demand niche elective weight.
+stable_year,12,demand_tier,niche,0.80,model_assumption,Default low-demand niche elective weight.
+stable_year,9,demand_tier,fixed_limited,0.35,model_assumption,Fixed-limited bottleneck courses should remain possible but constrained.
+stable_year,10,demand_tier,fixed_limited,0.35,model_assumption,Fixed-limited bottleneck courses should remain possible but constrained.
+stable_year,11,demand_tier,fixed_limited,0.35,model_assumption,Fixed-limited bottleneck courses should remain possible but constrained.
+stable_year,12,demand_tier,fixed_limited,0.35,model_assumption,Fixed-limited bottleneck courses should remain possible but constrained.
+stable_year,9,department,World Languages,1.05,model_assumption,Languages are primarily selected by grade rules; elective fallback remains possible.
+stable_year,10,department,World Languages,1.05,model_assumption,Languages are primarily selected by grade rules; elective fallback remains possible.
+stable_year,11,department,World Languages,1.05,model_assumption,Languages are primarily selected by grade rules; elective fallback remains possible.
+stable_year,12,department,World Languages,1.05,model_assumption,Languages are primarily selected by grade rules; elective fallback remains possible.
+stable_year,9,department,Visual Arts,0.95,model_assumption,Visual arts elective pool multiplier.
+stable_year,10,department,Visual Arts,0.95,model_assumption,Visual arts elective pool multiplier.
+stable_year,11,department,Visual Arts,0.95,model_assumption,Visual arts elective pool multiplier.
+stable_year,12,department,Visual Arts,0.95,model_assumption,Visual arts elective pool multiplier.
+stable_year,9,department,Performing Arts,0.80,model_assumption,Performing arts elective pool multiplier.
+stable_year,10,department,Performing Arts,0.80,model_assumption,Performing arts elective pool multiplier.
+stable_year,11,department,Performing Arts,0.80,model_assumption,Performing arts elective pool multiplier.
+stable_year,12,department,Performing Arts,0.80,model_assumption,Performing arts elective pool multiplier.
+stable_year,9,department,Music,0.85,model_assumption,Music elective pool multiplier; audition approval happens before solver input.
+stable_year,10,department,Music,0.85,model_assumption,Music elective pool multiplier; audition approval happens before solver input.
+stable_year,11,department,Music,0.85,model_assumption,Music elective pool multiplier; audition approval happens before solver input.
+stable_year,12,department,Music,0.85,model_assumption,Music elective pool multiplier; audition approval happens before solver input.
+stable_year,9,department,Computer Science,1.35,model_assumption,CS demand is somewhat elevated in synthetic data.
+stable_year,10,department,Computer Science,1.35,model_assumption,CS demand is somewhat elevated in synthetic data.
+stable_year,11,department,Computer Science,1.35,model_assumption,CS demand is somewhat elevated in synthetic data.
+stable_year,12,department,Computer Science,1.35,model_assumption,CS demand is somewhat elevated in synthetic data.
+stable_year,9,department,Engineering,1.10,model_assumption,Engineering demand is moderately elevated.
+stable_year,10,department,Engineering,1.10,model_assumption,Engineering demand is moderately elevated.
+stable_year,11,department,Engineering,1.10,model_assumption,Engineering demand is moderately elevated.
+stable_year,12,department,Engineering,1.10,model_assumption,Engineering demand is moderately elevated.
+stable_year,9,department,CTE Practical Arts,0.70,model_assumption,Practical arts use lower synthetic weight.
+stable_year,10,department,CTE Practical Arts,0.70,model_assumption,Practical arts use lower synthetic weight.
+stable_year,11,department,CTE Practical Arts,0.70,model_assumption,Practical arts use lower synthetic weight.
+stable_year,12,department,CTE Practical Arts,0.70,model_assumption,Practical arts use lower synthetic weight.
+stable_year,9,department,Business,0.85,model_assumption,Business elective pool multiplier.
+stable_year,10,department,Business,0.85,model_assumption,Business elective pool multiplier.
+stable_year,11,department,Business,0.85,model_assumption,Business elective pool multiplier.
+stable_year,12,department,Business,0.85,model_assumption,Business elective pool multiplier.
+stable_year,9,department,Journalism Film,0.75,model_assumption,Journalism and film elective pool multiplier.
+stable_year,10,department,Journalism Film,0.75,model_assumption,Journalism and film elective pool multiplier.
+stable_year,11,department,Journalism Film,0.75,model_assumption,Journalism and film elective pool multiplier.
+stable_year,12,department,Journalism Film,0.75,model_assumption,Journalism and film elective pool multiplier.
+stable_year,9,department,Science,1.10,model_assumption,Science electives are moderately common.
+stable_year,10,department,Science,1.10,model_assumption,Science electives are moderately common.
+stable_year,11,department,Science,1.10,model_assumption,Science electives are moderately common.
+stable_year,12,department,Science,1.10,model_assumption,Science electives are moderately common.
+stable_year,9,department,Social Science,0.90,model_assumption,Social science elective pool multiplier.
+stable_year,10,department,Social Science,0.90,model_assumption,Social science elective pool multiplier.
+stable_year,11,department,Social Science,0.90,model_assumption,Social science elective pool multiplier.
+stable_year,12,department,Social Science,0.90,model_assumption,Social science elective pool multiplier.
+stable_year,9,department,Physical Education,0.70,model_assumption,PE electives outside required PE use lower fallback weight.
+stable_year,10,department,Physical Education,0.70,model_assumption,PE electives outside required PE use lower fallback weight.
+stable_year,11,department,Physical Education,0.70,model_assumption,PE electives outside required PE use lower fallback weight.
+stable_year,12,department,Physical Education,0.70,model_assumption,PE electives outside required PE use lower fallback weight.
+stable_year,9,department,Leadership CTE,0.45,model_assumption,Leadership and ASB require prior approval and should stay low in synthetic fallback.
+stable_year,10,department,Leadership CTE,0.45,model_assumption,Leadership and ASB require prior approval and should stay low in synthetic fallback.
+stable_year,11,department,Leadership CTE,0.45,model_assumption,Leadership and ASB require prior approval and should stay low in synthetic fallback.
+stable_year,12,department,Leadership CTE,0.45,model_assumption,Leadership and ASB require prior approval and should stay low in synthetic fallback.
+stable_year,9,course,COMPUTER_PROGRAMMING,0.35,student_estimate,Known capacity-risk course should appear without dominating elective demand.
+stable_year,10,course,COMPUTER_PROGRAMMING,0.35,student_estimate,Known capacity-risk course should appear without dominating elective demand.
+stable_year,11,course,COMPUTER_PROGRAMMING,0.35,student_estimate,Known capacity-risk course should appear without dominating elective demand.
+stable_year,12,course,COMPUTER_PROGRAMMING,0.35,student_estimate,Known capacity-risk course should appear without dominating elective demand.
+stable_year,10,course,AP_CSP,0.35,student_estimate,Known Grade 10 CS bottleneck candidate without implausible mass demand.
+stable_year,11,course,AP_CSP,0.35,student_estimate,Known Grade 10 CS bottleneck candidate without implausible mass demand.
+stable_year,12,course,AP_CSP,0.35,student_estimate,Known Grade 10 CS bottleneck candidate without implausible mass demand.
+stable_year,10,course,AP_CSA,0.35,student_estimate,Known AP CSA capacity-risk course without implausible mass demand.
+stable_year,11,course,AP_CSA,0.35,student_estimate,Known AP CSA capacity-risk course without implausible mass demand.
+stable_year,12,course,AP_CSA,0.35,student_estimate,Known AP CSA capacity-risk course without implausible mass demand.
+stable_year,11,course,AP_STATS,0.00,student_estimate,Stable-year AP Statistics demand is controlled by fixed_course_targets.
+stable_year,12,course,AP_STATS,0.00,student_estimate,Stable-year AP Statistics demand is controlled by fixed_course_targets.
+stable_year,11,course,AP_PHYSC,0.90,student_estimate,AP Physics C capacity pressure; still not guaranteed failure.
+stable_year,12,course,AP_PHYSC,0.90,student_estimate,AP Physics C capacity pressure; still not guaranteed failure.
+stable_year,11,course,CALC_D_LINALG,0.00,student_estimate,Stable-year Calc D + Linear Algebra demand is controlled by fixed_course_targets.
+stable_year,12,course,CALC_D_LINALG,0.00,student_estimate,Stable-year Calc D + Linear Algebra demand is controlled by fixed_course_targets.
+stable_year,11,course,ROCK_N_ROLL_HISTORY,0.25,model_assumption,Small social science elective should not create unrealistic mass demand.
+stable_year,12,course,ROCK_N_ROLL_HISTORY,0.25,model_assumption,Small social science elective should not create unrealistic mass demand.
+stable_year,10,course,FILM_SOCIETY,0.35,model_assumption,Small social science elective should remain low demand.
+stable_year,11,course,FILM_SOCIETY,0.35,model_assumption,Small social science elective should remain low demand.
+stable_year,12,course,FILM_SOCIETY,0.35,model_assumption,Small social science elective should remain low demand.
+stable_year,11,course,SOCIOLOGY,0.35,model_assumption,Small social science elective should remain low demand.
+stable_year,12,course,SOCIOLOGY,0.35,model_assumption,Small social science elective should remain low demand.
+stable_year,9,course,ASB,0.25,model_assumption,Approval-based leadership course should remain low in fallback choices.
+stable_year,10,course,ASB,0.25,model_assumption,Approval-based leadership course should remain low in fallback choices.
+stable_year,11,course,ASB,0.25,model_assumption,Approval-based leadership course should remain low in fallback choices.
+stable_year,12,course,ASB,0.25,model_assumption,Approval-based leadership course should remain low in fallback choices.
+stable_year,9,course,LEADERSHIP,0.35,model_assumption,Approval-based leadership course should remain low in fallback choices.
+stable_year,10,course,LEADERSHIP,0.35,model_assumption,Approval-based leadership course should remain low in fallback choices.
+stable_year,11,course,LEADERSHIP,0.35,model_assumption,Approval-based leadership course should remain low in fallback choices.
+stable_year,12,course,LEADERSHIP,0.35,model_assumption,Approval-based leadership course should remain low in fallback choices.

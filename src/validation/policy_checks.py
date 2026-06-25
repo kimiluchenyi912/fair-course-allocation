@@ -5,6 +5,7 @@ import pandas as pd
 from .constants import (
     BASELINE_CAPACITY_RULES,
     BASELINE_COURSE_GRADES,
+    BASELINE_FIXED_TARGETS,
     BASELINE_GRADE_PROFILES,
     CONFIG_COLUMNS,
 )
@@ -21,6 +22,7 @@ def validate_baseline_policy(
     _check_grade_profile_baseline(config.get("grade_profiles.csv"), report, strict_policy)
     _check_capacity_rule_baseline(config.get("capacity_rules.csv"), report, strict_policy)
     _check_course_grade_baseline(config.get("course_catalog.csv"), report, strict_policy)
+    _check_fixed_target_baseline(config.get("fixed_course_targets.csv"), report, strict_policy)
 
 
 def _check_grade_profile_baseline(
@@ -112,4 +114,43 @@ def _check_course_grade_baseline(
                 f"{course_id} baseline grades are {';'.join(expected_grades)}, found {';'.join(actual)}.",
                 strict_policy,
                 identifier=course_id,
+            )
+
+
+def _check_fixed_target_baseline(
+    df: pd.DataFrame | None,
+    report: ValidationReport,
+    strict_policy: bool,
+) -> None:
+    filename = "fixed_course_targets.csv"
+    if not has_columns(df, CONFIG_COLUMNS[filename]):
+        return
+    indexed = {
+        (text(row["scenario_id"]), parse_int(row["grade"]), text(row["course_id"])): row
+        for _, row in df.iterrows()
+    }
+    for key, expected in BASELINE_FIXED_TARGETS.items():
+        row = indexed.get(key)
+        identifier = f"{key[0]}:{key[1]}:{key[2]}"
+        if row is None:
+            report.add_policy_issue(
+                "BASELINE_FIXED_TARGET_MISSING",
+                filename,
+                f"Current TPHS baseline includes fixed target {identifier}.",
+                strict_policy,
+                identifier=identifier,
+            )
+            continue
+        actual = (
+            parse_int(row["min_count"]),
+            parse_int(row["target_count"]),
+            parse_int(row["max_count"]),
+        )
+        if actual != expected:
+            report.add_policy_issue(
+                "BASELINE_FIXED_TARGET_MISMATCH",
+                filename,
+                f"{identifier} baseline min/target/max is {expected}, found {actual}.",
+                strict_policy,
+                identifier=identifier,
             )

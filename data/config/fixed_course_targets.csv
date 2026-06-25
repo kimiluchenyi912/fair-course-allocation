@@ -1,0 +1,7 @@
+scenario_id,grade,course_id,target_count,min_count,max_count,source_type,notes
+stable_year,10,AP_CALC_AB,6,4,8,student_estimate,Grade 10 AP Calculus AB target from confirmed planning notes.
+stable_year,10,AP_CALC_BC,20,20,20,student_estimate,Grade 10 AP Calculus BC target from confirmed planning notes.
+stable_year,11,AP_STATS,50,50,50,student_estimate,Stable-year AP Statistics target contributes to total demand of 125.
+stable_year,12,AP_STATS,75,75,75,student_estimate,Stable-year AP Statistics target contributes to total demand of 125.
+stable_year,11,CALC_D_LINALG,20,20,20,student_estimate,Stable-year Calc D + Linear Algebra target contributes to total demand of 50.
+stable_year,12,CALC_D_LINALG,30,30,30,student_estimate,Stable-year Calc D + Linear Algebra target contributes to total demand of 50.

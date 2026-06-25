@@ -1,0 +1,3 @@
+student_id,primary_unmet_count,alternate_assigned_count,schedule_complete,earns_next_year_priority
+STU_0001,0,0,true,false
+STU_0002,1,1,true,true

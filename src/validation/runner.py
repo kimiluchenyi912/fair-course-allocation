@@ -10,6 +10,7 @@ from .config_checks import (
     validate_linked_course_blocks,
 )
 from .constants import CONFIG_COLUMNS, TEMPLATE_COLUMNS
+from .generation_config_checks import validate_generation_config_tables
 from .io import load_tables, validate_generic_tables
 from .models import ValidationReport
 from .policy_checks import validate_baseline_policy
@@ -37,6 +38,7 @@ def validate_configuration(
     validate_course_catalog(config, report)
     validate_linked_course_blocks(config, report)
     validate_demand_scenarios(config, report)
+    validate_generation_config_tables(config, report)
     validate_templates(config, templates, report)
     validate_baseline_policy(config, report, strict_policy=strict_policy)
 

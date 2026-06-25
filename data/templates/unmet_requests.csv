@@ -1,4 +1,5 @@
-student_id,course_id,request_type,reason_code,candidate_sections
-STU_0001,COMPUTER_PROGRAMMING,alternate,capacity,2
-STU_0002,AP_STATS,primary,period_conflict,3
-STU_0002,AP_CSA,alternate,section_not_opened,0
+student_id,course_id,logical_block_id,request_type,reason_code,candidate_sections,replacement_course_id,replacement_alternate_rank,replacement_period_units,earns_next_year_priority
+STU_0001,COMPUTER_PROGRAMMING,COMPUTER_PROGRAMMING,alternate,capacity,2,,,,false
+STU_0002,AP_STATS,AP_STATS,primary,period_conflict,3,AP_CSA,1,1,true
+STU_0001,MATH2_3_HA,MATH2_3_HA,primary,capacity,1,ACTING1,2,1,true
+STU_0001,MATH2_3_HA,MATH2_3_HA,primary,capacity,1,DRAWING_DESIGN,3,1,true

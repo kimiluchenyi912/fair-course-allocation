@@ -66,6 +66,32 @@ CONFIG_COLUMNS = {
         "source_type",
         "notes",
     ],
+    "grade_request_rules.csv": [
+        "grade",
+        "rule_key",
+        "rule_value",
+        "source_type",
+        "notes",
+    ],
+    "course_choice_weights.csv": [
+        "scenario_id",
+        "grade",
+        "scope_type",
+        "scope_id",
+        "weight",
+        "source_type",
+        "notes",
+    ],
+    "fixed_course_targets.csv": [
+        "scenario_id",
+        "grade",
+        "course_id",
+        "target_count",
+        "min_count",
+        "max_count",
+        "source_type",
+        "notes",
+    ],
 }
 
 TEMPLATE_COLUMNS = {
@@ -75,6 +101,9 @@ TEMPLATE_COLUMNS = {
         "target_course_count",
         "unscheduled_preference",
         "random_seed_group",
+        "priority_protected",
+        "priority_reason",
+        "priority_valid_school_year",
     ],
     "requests.csv": [
         "student_id",
@@ -100,6 +129,9 @@ TEMPLATE_COLUMNS = {
         "section_id",
         "course_id",
         "request_type",
+        "assignment_source",
+        "replaced_primary_course_id",
+        "replaced_primary_block_id",
         "period_1",
         "period_2",
         "assignment_reason",
@@ -119,9 +151,21 @@ TEMPLATE_COLUMNS = {
     "unmet_requests.csv": [
         "student_id",
         "course_id",
+        "logical_block_id",
         "request_type",
         "reason_code",
         "candidate_sections",
+        "replacement_course_id",
+        "replacement_alternate_rank",
+        "replacement_period_units",
+        "earns_next_year_priority",
+    ],
+    "student_outcomes.csv": [
+        "student_id",
+        "primary_unmet_count",
+        "alternate_assigned_count",
+        "schedule_complete",
+        "earns_next_year_priority",
     ],
 }
 
@@ -143,10 +187,10 @@ BASELINE_CAPACITY_RULES = {
     },
     "niche": {
         "default_min_sections": 1,
-        "default_max_sections": 2,
         "expansion_threshold_ratio": 0.50,
     },
-    "dual_enrollment": {"default_capacity": 40, "capacity_max": 45},
+    "fixed_limited": {"expansion_threshold_ratio": 0.50},
+    "dual_enrollment": {"default_capacity": 40, "capacity_max": 45, "expansion_threshold_ratio": 0.50},
 }
 
 BASELINE_COURSE_GRADES = {
@@ -167,4 +211,15 @@ VALID_UNMET_REASON_CODES = {
     "section_not_opened",
     "load_limit",
     "other",
+}
+VALID_ASSIGNMENT_SOURCES = {"primary", "alternate"}
+VALID_PRIORITY_REASONS = {"", "prior_year_unmet_primary"}
+VALID_WEIGHT_SCOPES = {"demand_tier", "department", "course"}
+BASELINE_FIXED_TARGETS = {
+    ("stable_year", 10, "AP_CALC_AB"): (4, 6, 8),
+    ("stable_year", 10, "AP_CALC_BC"): (20, 20, 20),
+    ("stable_year", 11, "AP_STATS"): (50, 50, 50),
+    ("stable_year", 12, "AP_STATS"): (75, 75, 75),
+    ("stable_year", 11, "CALC_D_LINALG"): (20, 20, 20),
+    ("stable_year", 12, "CALC_D_LINALG"): (30, 30, 30),
 }
