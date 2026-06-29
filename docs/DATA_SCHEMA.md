@@ -318,9 +318,14 @@ Summary emitted by the section planner.
 | primary_demand | primary logical requests counted for section planning |
 | section_capacity | capacity used for this course |
 | expansion_threshold | integer waitlist threshold for another section |
+| existing_policy_sections | logical sections from the uniform 50% waitlist policy alone |
+| full_coverage_floor | minimum logical sections required by the demand >120 full-coverage rule, or 0 when not triggered |
+| high_demand_guarantee_triggered | true when primary_demand > 120 |
 | planned_sections | logical sections planned |
 | planned_seats | planned_sections × section_capacity |
+| final_planned_capacity | final logical capacity; same value as planned_seats |
 | remaining_waitlist | demand left below the expansion threshold |
+| uncovered_approved_demand | approved logical primary demand not covered by final planned capacity |
 | source_capacity_rule | rule or override source |
 | capacity_override_used | true if course/scenario capacity override was used |
 

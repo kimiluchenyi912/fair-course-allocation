@@ -234,11 +234,25 @@ and niche electives. It may be applied repeatedly: after adding a section, if
 the remaining waitlist still reaches the same threshold, another section may be
 considered.
 
+### High-demand full-capacity floor
+
+When approved logical primary demand is greater than 120, the section planner
+also applies a full-capacity floor. The final logical section count must be at
+least `ceil(logical_primary_demand / effective_section_capacity)`, using the
+same effective capacity that will appear on the generated section rows.
+
+The final section count is the larger of the uniform 50% waitlist result and
+this high-demand full-capacity floor. Demand of exactly 120 does not trigger
+the floor; demand of 121 does. This policy is based only on approved logical
+primary demand, not course name, department, or a separate required-course list.
+
 This is a section-planning rule, not a student-assignment rule. It does not
 guarantee that every
-student can be scheduled. Remaining unmet demand should come from threshold
-rounding, period-layout conflicts, full-schedule feasibility, or fairness
-constraints, not from artificial course-specific hard section caps.
+student can be scheduled. For courses at or below 120 demand, remaining unmet
+demand may come from threshold rounding. For courses above 120 demand, planned
+logical capacity should cover all approved logical primary demand, but later
+student-level allocation can still fail because of period-layout conflicts,
+full-schedule feasibility, or fairness constraints.
 
 ### Niche electives
 

@@ -4,6 +4,8 @@ from itertools import combinations
 
 import pandas as pd
 
+from src.validation.helpers import text
+
 from .models import SectionPlanningError
 
 
@@ -29,7 +31,7 @@ def validate_inputs(students: pd.DataFrame, requests: pd.DataFrame, catalog: pd.
 
 def logical_primary_requests(requests: pd.DataFrame) -> pd.DataFrame:
     primary = requests[requests["request_type"] == "primary"].copy()
-    primary["logical_block_id"] = primary.apply(_logical_block_id, axis=1)
+    primary["logical_block_id"] = primary.apply(logical_block_id_from_request, axis=1)
     return primary.drop_duplicates(["student_id", "logical_block_id"])
 
 
@@ -50,9 +52,10 @@ def conflict_graph(requests: pd.DataFrame) -> dict[tuple[str, str], int]:
     return weights
 
 
-def _logical_block_id(row: pd.Series) -> str:
-    course_id = str(row["course_id"])
-    block_id = str(row.get("must_share_block_id", ""))
+def logical_block_id_from_request(row: pd.Series) -> str:
+    """Return the shared logical key used for planner and allocation inputs."""
+    course_id = text(row["course_id"])
+    block_id = text(row.get("must_share_block_id", ""))
     if course_id in GOV_ECON_COURSES:
         return block_id or course_id
     return block_id or course_id

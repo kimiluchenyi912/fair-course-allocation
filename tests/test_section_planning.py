@@ -11,6 +11,8 @@ import pytest
 
 from src.generation import generate_synthetic_dataset
 from src.section_planning import plan_sections
+from src.section_planning.models import SectionPlanningConfig
+from src.section_planning.section_counts import build_course_demand_summary
 from src.validation import validate_configuration
 
 
@@ -52,6 +54,92 @@ def expected_sections(demand: int, capacity: int, threshold: int) -> int:
     return sections
 
 
+def mini_section_config(
+    course_id: str = "TEST_COURSE",
+    category: str = "normal_academic",
+    capacity: int = 40,
+    course_name: str = "Test Course",
+    department: str = "Electives",
+) -> SectionPlanningConfig:
+    return SectionPlanningConfig(
+        config_dir="",
+        scenario_id="stable_year",
+        catalog=pd.DataFrame(
+            [
+                {
+                    "course_id": course_id,
+                    "course_name": course_name,
+                    "department": department,
+                    "course_category": category,
+                    "capacity_override": "",
+                }
+            ]
+        ),
+        capacity_rules=pd.DataFrame(
+            [
+                {
+                    "course_category": category,
+                    "default_capacity": capacity,
+                    "expansion_threshold_ratio": 0.50,
+                }
+            ]
+        ),
+        capacity_overrides=pd.DataFrame(columns=["scenario_id", "course_id", "capacity"]),
+        planning_rules=pd.DataFrame(),
+        linked_blocks=pd.DataFrame(),
+    )
+
+
+def summary_for_demand(
+    demand: int,
+    capacity: int = 40,
+    course_id: str = "TEST_COURSE",
+    course_name: str = "Test Course",
+    department: str = "Electives",
+) -> pd.Series:
+    config = mini_section_config(
+        course_id=course_id,
+        capacity=capacity,
+        course_name=course_name,
+        department=department,
+    )
+    return build_course_demand_summary(config, pd.Series({course_id: demand})).iloc[0]
+
+
+def synthetic_students(count: int) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "student_id": [f"STU_{index:03d}" for index in range(1, count + 1)],
+            "grade": [12] * count,
+            "target_course_count": [7] * count,
+        }
+    )
+
+
+def synthetic_requests(
+    count: int,
+    course_id: str,
+    rows_per_student: int = 1,
+    request_group: str = "",
+    block_id: str = "",
+) -> pd.DataFrame:
+    rows = []
+    for student_id in synthetic_students(count)["student_id"]:
+        for _ in range(rows_per_student):
+            rows.append((student_id, course_id, "primary", "", request_group, block_id))
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "student_id",
+            "course_id",
+            "request_type",
+            "request_rank",
+            "request_group",
+            "must_share_block_id",
+        ],
+    )
+
+
 def test_current_generated_data_can_be_planned(planned_result) -> None:
     _, planned, _ = planned_result
 
@@ -71,6 +159,20 @@ def test_same_seed_section_plan_is_deterministic(tmp_path: Path) -> None:
     pd.testing.assert_frame_equal(first.course_demand_summary, second.course_demand_summary)
     pd.testing.assert_frame_equal(first.period_layout_summary, second.period_layout_summary)
     assert first.metadata == second.metadata
+
+
+def test_equivalent_input_row_order_does_not_change_section_counts_or_layout(tmp_path: Path) -> None:
+    config_dir, _ = copy_inputs(tmp_path)
+    generated = generate_synthetic_dataset(config_dir, "stable_year", 2026)
+
+    first = plan_sections(generated.students, generated.requests, config_dir, "stable_year", 2026)
+    shuffled_students = generated.students.sample(frac=1, random_state=17).reset_index(drop=True)
+    shuffled_requests = generated.requests.sample(frac=1, random_state=18).reset_index(drop=True)
+    second = plan_sections(shuffled_students, shuffled_requests, config_dir, "stable_year", 2026)
+
+    pd.testing.assert_frame_equal(first.course_demand_summary, second.course_demand_summary)
+    pd.testing.assert_frame_equal(first.sections, second.sections)
+    pd.testing.assert_frame_equal(first.period_layout_summary, second.period_layout_summary)
 
 
 def test_different_seed_changes_some_period_layout(tmp_path: Path) -> None:
@@ -138,15 +240,106 @@ def test_section_count_boundaries(demand: int, capacity: int, threshold: int, se
     assert max(demand - planned * capacity, 0) == remaining
 
 
+def test_capacity_40_demand_120_does_not_trigger_high_demand_floor() -> None:
+    row = summary_for_demand(120, 40)
+
+    assert int(row["existing_policy_sections"]) == 3
+    assert int(row["full_coverage_floor"]) == 0
+    assert str(row["high_demand_guarantee_triggered"]) == "false"
+    assert int(row["planned_sections"]) == 3
+    assert int(row["uncovered_approved_demand"]) == 0
+
+
+@pytest.mark.parametrize(
+    ("demand", "expected"),
+    [
+        (121, 4),
+        (160, 4),
+        (161, 5),
+    ],
+)
+def test_capacity_40_demand_above_120_applies_full_coverage_floor(demand: int, expected: int) -> None:
+    row = summary_for_demand(demand, 40)
+
+    assert int(row["full_coverage_floor"]) == expected
+    assert str(row["high_demand_guarantee_triggered"]) == "true"
+    assert int(row["planned_sections"]) == expected
+    assert int(row["final_planned_capacity"]) >= demand
+    assert int(row["uncovered_approved_demand"]) == 0
+
+
+def test_capacity_25_demand_121_uses_effective_capacity_for_full_coverage_floor() -> None:
+    row = summary_for_demand(121, 25)
+
+    assert int(row["section_capacity"]) == 25
+    assert int(row["full_coverage_floor"]) == 5
+    assert int(row["planned_sections"]) == 5
+    assert int(row["final_planned_capacity"]) == 125
+    assert int(row["uncovered_approved_demand"]) == 0
+
+
+def test_demand_above_120_final_capacity_covers_logical_demand() -> None:
+    row = summary_for_demand(277, 40)
+
+    assert int(row["planned_seats"]) >= int(row["primary_demand"])
+    assert int(row["uncovered_approved_demand"]) == 0
+
+
+def test_demand_at_or_below_120_keeps_waitlist_policy_result() -> None:
+    row = summary_for_demand(99, 40)
+
+    assert int(row["existing_policy_sections"]) == expected_sections(99, 40, 20)
+    assert int(row["full_coverage_floor"]) == 0
+    assert int(row["planned_sections"]) == int(row["existing_policy_sections"])
+    assert int(row["remaining_waitlist"]) == 19
+
+
+def test_final_section_count_is_max_of_waitlist_policy_and_full_coverage_floor() -> None:
+    row = summary_for_demand(121, 40)
+
+    assert int(row["planned_sections"]) == max(
+        int(row["existing_policy_sections"]),
+        int(row["full_coverage_floor"]),
+    )
+    assert int(row["existing_policy_sections"]) == 3
+    assert int(row["full_coverage_floor"]) == 4
+
+
+def test_course_name_and_department_do_not_control_high_demand_trigger() -> None:
+    core_named_low = summary_for_demand(
+        120,
+        40,
+        course_id="REQUIRED_SOUNDING_CORE",
+        course_name="Required Core Seminar",
+        department="Graduation Requirements",
+    )
+    elective_high = summary_for_demand(
+        121,
+        40,
+        course_id="POPULAR_ELECTIVE",
+        course_name="Popular Elective",
+        department="Visual and Performing Arts",
+    )
+
+    assert str(core_named_low["high_demand_guarantee_triggered"]) == "false"
+    assert int(core_named_low["planned_sections"]) == 3
+    assert str(elective_high["high_demand_guarantee_triggered"]) == "true"
+    assert int(elective_high["planned_sections"]) == 4
+
+
 def test_ap_stats_expected_count(planned_result) -> None:
     _, planned, _ = planned_result
     row = planned.course_demand_summary.set_index("course_id").loc["AP_STATS"]
 
     assert int(row["primary_demand"]) == 125
     assert int(row["section_capacity"]) == 40
-    assert int(row["planned_sections"]) == 3
-    assert int(row["planned_seats"]) == 120
-    assert int(row["remaining_waitlist"]) == 5
+    assert int(row["existing_policy_sections"]) == 3
+    assert int(row["full_coverage_floor"]) == 4
+    assert str(row["high_demand_guarantee_triggered"]) == "true"
+    assert int(row["planned_sections"]) == 4
+    assert int(row["planned_seats"]) == 160
+    assert int(row["remaining_waitlist"]) == 0
+    assert int(row["uncovered_approved_demand"]) == 0
 
 
 def test_calc_d_linalg_uses_stable_year_capacity_override(planned_result) -> None:
@@ -198,6 +391,23 @@ def test_gov_econ_demand_is_not_double_counted(planned_result) -> None:
         assert int(summary.loc[course_id, "primary_demand"]) * 2 == request_rows
 
 
+def test_high_demand_gov_econ_raw_semester_rows_are_not_double_counted(tmp_path: Path) -> None:
+    config_dir, _ = copy_inputs(tmp_path)
+    planned = plan_sections(
+        synthetic_students(121),
+        synthetic_requests(121, "GOV_ECON_REG", rows_per_student=2, request_group="gov_econ_block", block_id="GOV_ECON_REG"),
+        config_dir,
+        "stable_year",
+        2026,
+    )
+    row = planned.course_demand_summary.set_index("course_id").loc["GOV_ECON_REG"]
+
+    assert int(row["primary_demand"]) == 121
+    assert int(row["planned_sections"]) == 4
+    assert int(row["planned_seats"]) == 160
+    assert int(row["uncovered_approved_demand"]) == 0
+
+
 def test_gov_econ_semester_rows_share_period_and_group(planned_result) -> None:
     _, planned, _ = planned_result
     gov = planned.sections[planned.sections["course_id"].isin(GOV_ECON_COURSES)]
@@ -207,6 +417,24 @@ def test_gov_econ_semester_rows_share_period_and_group(planned_result) -> None:
         assert group["period_1"].nunique() == 1
         assert group["period_2"].eq("").all()
         assert group["capacity"].nunique() == 1
+
+
+def test_high_demand_gov_econ_sections_expand_to_two_semester_rows(tmp_path: Path) -> None:
+    config_dir, _ = copy_inputs(tmp_path)
+    planned = plan_sections(
+        synthetic_students(121),
+        synthetic_requests(121, "GOV_ECON_REG", rows_per_student=2, request_group="gov_econ_block", block_id="GOV_ECON_REG"),
+        config_dir,
+        "stable_year",
+        2026,
+    )
+    gov = planned.sections[planned.sections["course_id"] == "GOV_ECON_REG"]
+
+    assert gov["linked_section_group_id"].nunique() == 4
+    assert len(gov) == 8
+    for _, group in gov.groupby("linked_section_group_id"):
+        assert set(group["semester"]) == {"semester_1", "semester_2"}
+        assert group["period_1"].nunique() == 1
 
 
 def test_gov_econ_semester_content_is_complementary(planned_result) -> None:
@@ -228,11 +456,61 @@ def test_math2_3_sections_use_consecutive_double_periods(planned_result) -> None
         assert int(row.period_2[1:]) - int(row.period_1[1:]) == 1
 
 
+def test_high_demand_math2_3_counts_logical_requests_once(tmp_path: Path) -> None:
+    config_dir, _ = copy_inputs(tmp_path)
+    planned = plan_sections(
+        synthetic_students(121),
+        synthetic_requests(121, "MATH2_3_HA"),
+        config_dir,
+        "stable_year",
+        2026,
+    )
+    row = planned.course_demand_summary.set_index("course_id").loc["MATH2_3_HA"]
+
+    assert int(row["primary_demand"]) == 121
+    assert int(row["planned_sections"]) == 4
+    assert int(row["planned_seats"]) == 160
+    assert int(row["uncovered_approved_demand"]) == 0
+
+
+def test_high_demand_math2_3_sections_remain_one_double_period_row(tmp_path: Path) -> None:
+    config_dir, _ = copy_inputs(tmp_path)
+    planned = plan_sections(
+        synthetic_students(121),
+        synthetic_requests(121, "MATH2_3_HA"),
+        config_dir,
+        "stable_year",
+        2026,
+    )
+    math23 = planned.sections[planned.sections["course_id"] == "MATH2_3_HA"]
+
+    assert len(math23) == 4
+    assert math23["linked_section_group_id"].nunique() == 4
+    assert math23["period_2"].ne("").all()
+
+
 def test_ap_physics_c_sections_use_one_period(planned_result) -> None:
     _, planned, _ = planned_result
     ap_physc = planned.sections[planned.sections["course_id"] == "AP_PHYSC"]
 
     assert not ap_physc.empty
+    assert ap_physc["period_1"].isin(VALID_PERIODS).all()
+    assert ap_physc["period_2"].eq("").all()
+
+
+def test_high_demand_ap_physics_c_sections_remain_single_period_rows(tmp_path: Path) -> None:
+    config_dir, _ = copy_inputs(tmp_path)
+    planned = plan_sections(
+        synthetic_students(121),
+        synthetic_requests(121, "AP_PHYSC"),
+        config_dir,
+        "stable_year",
+        2026,
+    )
+    ap_physc = planned.sections[planned.sections["course_id"] == "AP_PHYSC"]
+
+    assert len(ap_physc) == 4
+    assert ap_physc["semester"].eq("paired").all()
     assert ap_physc["period_1"].isin(VALID_PERIODS).all()
     assert ap_physc["period_2"].eq("").all()
 
@@ -266,10 +544,10 @@ def test_multi_section_courses_cover_multiple_periods(planned_result) -> None:
 
 def test_three_section_single_period_course_covers_three_periods(planned_result) -> None:
     _, planned, _ = planned_result
-    ap_stats = planned.sections[planned.sections["course_id"] == "AP_STATS"]
+    ap_chem = planned.sections[planned.sections["course_id"] == "AP_CHEM"]
 
-    assert len(ap_stats) == 3
-    assert ap_stats["period_1"].nunique() == 3
+    assert len(ap_chem) == 3
+    assert ap_chem["period_1"].nunique() == 3
 
 
 def test_five_section_single_period_course_covers_five_periods(planned_result) -> None:

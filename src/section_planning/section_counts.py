@@ -7,6 +7,9 @@ from src.expansion_policy import waitlist_expansion_threshold
 from .models import SectionPlanningConfig, SectionPlanningError
 
 
+HIGH_DEMAND_FULL_COVERAGE_THRESHOLD = 120
+
+
 def build_course_demand_summary(
     config: SectionPlanningConfig,
     demands: pd.Series,
@@ -23,9 +26,13 @@ def build_course_demand_summary(
         capacity, source_rule, override_used = _capacity_for_course(course, capacity_rules, override_key)
         ratio = _expansion_ratio(course, capacity_rules)
         threshold = waitlist_expansion_threshold(capacity, ratio)
-        planned_sections = _planned_section_count(demand, capacity, threshold)
+        existing_policy_sections = _waitlist_policy_section_count(demand, capacity, threshold)
+        full_coverage_floor = _full_coverage_section_floor(demand, capacity)
+        high_demand_triggered = demand > HIGH_DEMAND_FULL_COVERAGE_THRESHOLD
+        planned_sections = max(existing_policy_sections, full_coverage_floor)
         planned_seats = planned_sections * capacity
         remaining_waitlist = max(demand - planned_seats, 0)
+        uncovered_approved_demand = max(demand - planned_seats, 0)
         rows.append(
             {
                 "scenario_id": config.scenario_id,
@@ -34,9 +41,14 @@ def build_course_demand_summary(
                 "primary_demand": demand,
                 "section_capacity": capacity,
                 "expansion_threshold": threshold,
+                "existing_policy_sections": existing_policy_sections,
+                "full_coverage_floor": full_coverage_floor,
+                "high_demand_guarantee_triggered": str(high_demand_triggered).lower(),
                 "planned_sections": planned_sections,
                 "planned_seats": planned_seats,
+                "final_planned_capacity": planned_seats,
                 "remaining_waitlist": remaining_waitlist,
+                "uncovered_approved_demand": uncovered_approved_demand,
                 "source_capacity_rule": source_rule,
                 "capacity_override_used": str(override_used).lower(),
             }
@@ -67,10 +79,16 @@ def _expansion_ratio(course, capacity_rules: pd.DataFrame) -> float:
     return float(capacity_rules.loc[category, "expansion_threshold_ratio"])
 
 
-def _planned_section_count(demand: int, capacity: int, threshold: int) -> int:
+def _waitlist_policy_section_count(demand: int, capacity: int, threshold: int) -> int:
     if demand <= 0:
         return 0
     sections = 1
     while max(demand - sections * capacity, 0) >= threshold:
         sections += 1
     return sections
+
+
+def _full_coverage_section_floor(demand: int, capacity: int) -> int:
+    if demand <= HIGH_DEMAND_FULL_COVERAGE_THRESHOLD:
+        return 0
+    return -(-demand // capacity)

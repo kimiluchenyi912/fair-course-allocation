@@ -16,7 +16,7 @@ from .section_counts import build_course_demand_summary
 
 
 PLANNER_VERSION = "v1"
-RULE_VERSION = "uniform_waitlist_expansion_v1"
+RULE_VERSION = "uniform_waitlist_expansion_with_high_demand_floor_v1"
 UNMODELED_CONSTRAINTS = [
     "teacher availability by period",
     "teacher daily section load",
