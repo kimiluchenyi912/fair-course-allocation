@@ -17,6 +17,7 @@ from .baseline_models import (
     PrimaryRequestStatus,
     RequestOutcome,
     SectionRosterSummary,
+    StudentDifficultyProfile,
     StudentOutcome,
 )
 from .input_models import CanonicalAllocationInput, LogicalRequest, SourceRequestRow
@@ -83,26 +84,14 @@ def run_seeded_random_baseline(
         for request in sorted(student.alternate_requests, key=lambda item: item.request_rank or 0):
             outcomes.append(_try_alternate_request(state, allocation_input, request, rng))
 
-    consistency_issues = state.validate_internal_consistency()
-    if consistency_issues:
-        raise BaselineInternalConsistencyError(consistency_issues)
-
-    assignments = state.all_assignments()
-    request_outcomes = tuple(sorted(outcomes, key=_outcome_sort_key))
-    policy_report = _build_policy_report(allocation_input, request_outcomes)
-    student_outcomes = _build_student_outcomes(allocation_input, state, request_outcomes, mandatory_fallback_outcomes, policy_report)
-    section_summary = _build_section_roster_summary(allocation_input, state)
-    return BaselineResult(
-        algorithm_name=ALGORITHM_NAME,
-        seed=int(seed),
-        student_processing_order=student_order,
-        assignments=assignments,
-        mandatory_fallback_outcomes=tuple(sorted(mandatory_fallback_outcomes, key=_fallback_outcome_sort_key)),
-        request_outcomes=request_outcomes,
-        student_outcomes=student_outcomes,
-        policy_report=policy_report,
-        section_roster_summary=section_summary,
-        consistency_issues=consistency_issues,
+    return _finalize_baseline_result(
+        ALGORITHM_NAME,
+        allocation_input,
+        seed,
+        student_order,
+        state,
+        tuple(outcomes),
+        mandatory_fallback_outcomes,
     )
 
 
@@ -572,6 +561,41 @@ def _build_section_roster_summary(
             )
         )
     return tuple(sorted(rows, key=lambda item: item.linked_section_group_id))
+
+
+def _finalize_baseline_result(
+    algorithm_name: str,
+    allocation_input: CanonicalAllocationInput,
+    seed: int,
+    student_order: tuple[str, ...],
+    state: AllocationState,
+    outcomes: tuple[RequestOutcome, ...],
+    mandatory_fallback_outcomes: tuple[MandatoryFallbackOutcome, ...],
+    student_difficulty_profiles: tuple[StudentDifficultyProfile, ...] = (),
+) -> BaselineResult:
+    consistency_issues = state.validate_internal_consistency()
+    if consistency_issues:
+        raise BaselineInternalConsistencyError(consistency_issues)
+
+    assignments = state.all_assignments()
+    request_outcomes = tuple(sorted(outcomes, key=_outcome_sort_key))
+    fallback_outcomes = tuple(sorted(mandatory_fallback_outcomes, key=_fallback_outcome_sort_key))
+    policy_report = _build_policy_report(allocation_input, request_outcomes)
+    student_outcomes = _build_student_outcomes(allocation_input, state, request_outcomes, fallback_outcomes, policy_report)
+    section_summary = _build_section_roster_summary(allocation_input, state)
+    return BaselineResult(
+        algorithm_name=algorithm_name,
+        seed=int(seed),
+        student_processing_order=student_order,
+        assignments=assignments,
+        mandatory_fallback_outcomes=fallback_outcomes,
+        request_outcomes=request_outcomes,
+        student_outcomes=student_outcomes,
+        policy_report=policy_report,
+        section_roster_summary=section_summary,
+        consistency_issues=consistency_issues,
+        student_difficulty_profiles=tuple(sorted(student_difficulty_profiles, key=lambda item: item.ordering_rank)),
+    )
 
 
 def _outcome_sort_key(outcome: RequestOutcome) -> tuple[str, int, int, str]:

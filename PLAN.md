@@ -117,11 +117,14 @@ counts once even though it consumes two periods.
 
 The fair algorithm will be compared with:
 
-1. Random lottery
-2. First-come, first-served
-3. Grade-priority allocation
+1. Seeded random greedy allocation
+2. Constrained-first greedy allocation
+3. First-come, first-served
+4. Grade-priority allocation
 
-All algorithms must use the same input data and hard constraints.
+All algorithms must use the same input data and hard constraints. Greedy
+baselines may use policy fields for ordering, but they do not backtrack,
+repair, displace students, or prove global infeasibility.
 
 ## 8. Evaluation Metrics
 

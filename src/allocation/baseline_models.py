@@ -127,6 +127,22 @@ class SectionRosterSummary:
 
 
 @dataclass(frozen=True)
+class StudentDifficultyProfile:
+    student_id: str
+    protected: bool
+    math_risk_score: int
+    high_demand_primary_count: int
+    scarce_primary_count_le_1: int
+    scarce_primary_count_le_2: int
+    total_candidate_flexibility: float
+    average_candidate_flexibility: float
+    double_period_primary_count: int
+    target_period_units: int
+    seeded_tie_break: float
+    ordering_rank: int
+
+
+@dataclass(frozen=True)
 class BaselineResult:
     algorithm_name: str
     seed: int
@@ -138,6 +154,7 @@ class BaselineResult:
     policy_report: PolicyReport
     section_roster_summary: tuple[SectionRosterSummary, ...]
     consistency_issues: tuple[StateConsistencyIssue, ...]
+    student_difficulty_profiles: tuple[StudentDifficultyProfile, ...] = ()
 
 
 class BaselineInternalConsistencyError(RuntimeError):

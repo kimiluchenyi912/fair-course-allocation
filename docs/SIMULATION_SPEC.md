@@ -292,7 +292,42 @@ The current planner does not model teacher availability, teacher load, room
 inventory, room type, lab availability, or which teachers can teach which
 courses.
 
-## 10. Known bottleneck courses
+## 10. Baseline allocation algorithms
+
+Baseline allocation algorithms use the same canonical students, approved
+requests, fixed sections, capacities, period layout, mandatory math fallback
+configuration, and policy report definitions. They differ only in ordering
+policy.
+
+The seeded random greedy baseline processes students and primary requests with
+seeded random order, then runs mandatory math fallback, then ranked alternates.
+
+The constrained-first greedy baseline uses the same three phases:
+
+1. primary requests;
+2. mandatory math fallback;
+3. ranked alternates.
+
+It is still greedy. It does not backtrack, swap, displace students, repair a
+previous assignment, regenerate sections, or prove global optimality. It only
+changes ordering:
+
+- protected status, math coverage risk, high-demand primaries, scarce
+  candidates, candidate flexibility, double-period burden, target load, and a
+  seeded tie-break determine initial student order;
+- each student's remaining primary requests are dynamically reordered by
+  current feasible candidate count, math/high-demand/double-period priority,
+  static candidate count, period units, and seeded tie-break;
+- candidate sections are ordered by current remaining capacity ratio, period
+  pressure, current-student future-option preservation, remaining seats, and
+  seeded tie-break.
+
+All actual feasibility decisions still go through the same fixed-section
+assignment state. Fairness fields influence constrained-first ordering only;
+they are not hard constraints in the baseline. A baseline failure to assign a
+request is reported as an outcome, not as global infeasibility.
+
+## 11. Known bottleneck courses
 
 The initial calibration set includes:
 
@@ -305,7 +340,7 @@ The initial calibration set includes:
 
 These courses should be represented as realistic stress points rather than guaranteed failures every year.
 
-## 11. Modeling uncertainty and yearly change
+## 12. Modeling uncertainty and yearly change
 
 Unknown elective demand is not filled with fake precision. Each course receives:
 
@@ -324,7 +359,7 @@ Recommended test scenarios:
 
 Randomness must be reproducible through a recorded seed.
 
-## 12. Solver priorities
+## 13. Solver priorities
 
 Use lexicographic optimization or strongly separated weights:
 
@@ -337,7 +372,7 @@ Use lexicographic optimization or strongly separated weights:
 
 The solver must never silently violate hard constraints.
 
-## 13. Required evaluation metrics
+## 14. Required evaluation metrics
 
 Report at minimum:
 

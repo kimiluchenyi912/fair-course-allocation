@@ -24,7 +24,15 @@ from .baseline_models import (
     PrimaryRequestStatus,
     RequestOutcome,
     SectionRosterSummary,
+    StudentDifficultyProfile,
     StudentOutcome,
+)
+from .constrained_first_baseline import (
+    build_ordering_context,
+    build_student_difficulty_profiles,
+    candidate_section_priority,
+    primary_request_priority,
+    run_constrained_first_baseline,
 )
 from .input_adapter import canonicalize_allocation_input
 from .input_models import (
@@ -87,12 +95,18 @@ __all__ = [
     "SectionMember",
     "SourceRequestRow",
     "StateConsistencyIssue",
+    "StudentDifficultyProfile",
     "StudentOutcome",
     "StudentMathPolicyOutcome",
+    "build_ordering_context",
+    "build_student_difficulty_profiles",
+    "candidate_section_priority",
     "canonicalize_allocation_input",
     "evaluate_math_policy",
     "load_math_fallback_rules",
     "math_course_ids_from_catalog",
     "parse_math_fallback_rules",
+    "primary_request_priority",
+    "run_constrained_first_baseline",
     "run_seeded_random_baseline",
 ]
