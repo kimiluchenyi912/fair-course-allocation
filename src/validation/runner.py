@@ -8,6 +8,7 @@ from .config_checks import (
     validate_demand_scenarios,
     validate_grade_profiles,
     validate_linked_course_blocks,
+    validate_math_fallbacks,
 )
 from .constants import CONFIG_COLUMNS, TEMPLATE_COLUMNS
 from .generation_config_checks import validate_generation_config_tables
@@ -39,6 +40,7 @@ def validate_configuration(
     validate_course_catalog(config, report)
     validate_linked_course_blocks(config, report)
     validate_demand_scenarios(config, report)
+    validate_math_fallbacks(config, report)
     validate_generation_config_tables(config, report)
     validate_section_planning_config(config, report)
     validate_templates(config, templates, report)

@@ -4,9 +4,12 @@ import pandas as pd
 import pytest
 
 from src.allocation import (
+    AllocationInputError,
     AllocationState,
     AssignmentRecord,
     AssignmentRejectionReason,
+    LogicalRequest,
+    SourceRequestRow,
     canonicalize_allocation_input,
 )
 
@@ -153,6 +156,23 @@ def state(target_1: int = 7, include_mismatch: bool = False) -> AllocationState:
     return AllocationState(canonical(target_1, include_mismatch))
 
 
+def supplemental_request(
+    request_key: str = "mandatory_fallback:STU_1:primary:STU_1:MATH2_3_HA:NORMAL",
+    student_id: str = "STU_1",
+    course_id: str = "NORMAL",
+) -> LogicalRequest:
+    return LogicalRequest(
+        request_key=request_key,
+        student_id=student_id,
+        request_type="mandatory_fallback",
+        candidate_key=course_id,
+        course_ids=(course_id,),
+        source_rows=(SourceRequestRow(course_id, "mandatory_fallback", "primary:STU_1:MATH2_3_HA", None),),
+        request_rank=None,
+        period_units=1,
+    )
+
+
 def key(student_id: str, course_or_rank: str) -> str:
     if course_or_rank in {"ALT1", "ALT2", "ALT3", "NORMAL_ALT"}:
         rank = {"ALT1": 1, "NORMAL_ALT": 2, "ALT2": 3, "ALT3": 3}[course_or_rank]
@@ -262,6 +282,59 @@ def test_primary_and_alternate_use_same_assignment_engine() -> None:
     assert alternate.request_type == "alternate"
     assert alternate.alternate_rank == 1
     assert allocation_state.student_used_period_units("STU_1") == 2
+
+
+def test_state_accepts_synthetic_mandatory_fallback_request_at_initialization() -> None:
+    data = canonical()
+    request = supplemental_request()
+    allocation_state = AllocationState(
+        data,
+        supplemental_requests=(request,),
+        supplemental_candidate_index={request.request_key: ("NORMAL_A",)},
+    )
+
+    assignment = assign_or_fail(allocation_state, "STU_1", request.request_key, "NORMAL_A")
+
+    assert assignment.request_type == "mandatory_fallback"
+    assert assignment.request_candidate_key == "NORMAL"
+    assert allocation_state.validate_internal_consistency() == ()
+
+
+def test_supplemental_request_key_collision_is_rejected() -> None:
+    data = canonical()
+    request = supplemental_request(request_key=key("STU_1", "NORMAL"))
+
+    with pytest.raises(ValueError, match="collides"):
+        AllocationState(data, supplemental_requests=(request,), supplemental_candidate_index={request.request_key: ("NORMAL_A",)})
+
+
+def test_supplemental_request_unknown_student_or_course_is_rejected() -> None:
+    data = canonical()
+
+    with pytest.raises(ValueError, match="unknown student_id"):
+        AllocationState(data, supplemental_requests=(supplemental_request(student_id="UNKNOWN"),))
+    with pytest.raises(ValueError, match="unknown course_id"):
+        AllocationState(data, supplemental_requests=(supplemental_request(course_id="UNKNOWN"),))
+
+
+def test_supplemental_request_unknown_or_mismatched_section_is_rejected() -> None:
+    data = canonical()
+    request = supplemental_request()
+
+    with pytest.raises(ValueError, match="unknown section"):
+        AllocationState(data, supplemental_requests=(request,), supplemental_candidate_index={request.request_key: ("UNKNOWN",)})
+    with pytest.raises(ValueError, match="does not match"):
+        AllocationState(data, supplemental_requests=(request,), supplemental_candidate_index={request.request_key: ("ALT1_A",)})
+
+
+def test_raw_csv_request_parser_rejects_mandatory_fallback_request_type() -> None:
+    request_df = requests()
+    request_df.loc[len(request_df)] = ["STU_1", "NORMAL", "mandatory_fallback", "", "", ""]
+
+    with pytest.raises(AllocationInputError) as exc:
+        canonicalize_allocation_input(students(), request_df, sections(), catalog())
+
+    assert any(issue.code == "INVALID_REQUEST_TYPE" for issue in exc.value.issues)
 
 
 def test_alternate_rank_is_preserved_in_assignment_record() -> None:

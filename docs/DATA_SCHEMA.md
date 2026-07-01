@@ -146,6 +146,26 @@ Small set of planner model assumptions.
 Current V1 rules include positive-demand minimum sections and the allowed
 consecutive pairs for double-period Math 2/3 sections.
 
+### `math_fallbacks.csv`
+
+Explicit mandatory math fallback mappings used by math policy evaluation and
+the seeded random greedy baseline's mandatory fallback phase.
+
+| Column | Meaning |
+|---|---|
+| source_course_id | source math course that may require a fallback |
+| fallback_course_id | target math fallback course |
+| policy_type | currently `mandatory_fallback` |
+| enabled | true if this mapping is active |
+| source_type | estimate or model assumption |
+| notes | clarification |
+
+Current V1 records `MATH2_3_HA -> MATH2` as an enabled mandatory fallback
+mapping. The fallback phase creates an in-memory synthetic
+`mandatory_fallback` logical request only after the source primary is unmet and
+math coverage has not already been satisfied by another assigned math primary.
+The source primary remains unmet even when fallback assignment succeeds.
+
 ### Waitlist expansion rule
 
 Future section planning uses one expansion rule for all courses: if the

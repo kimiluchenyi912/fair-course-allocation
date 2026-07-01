@@ -105,6 +105,14 @@ CONFIG_COLUMNS = {
         "source_type",
         "notes",
     ],
+    "math_fallbacks.csv": [
+        "source_course_id",
+        "fallback_course_id",
+        "policy_type",
+        "enabled",
+        "source_type",
+        "notes",
+    ],
 }
 
 TEMPLATE_COLUMNS = {

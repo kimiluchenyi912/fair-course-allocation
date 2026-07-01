@@ -136,6 +136,19 @@ def test_linked_block_must_reference_existing_course(tmp_path: Path) -> None:
     assert "UNKNOWN_BLOCK_COURSE" in issue_codes(report)
 
 
+def test_math_fallback_must_reference_math_courses(tmp_path: Path) -> None:
+    config_dir, templates_dir = copy_validation_inputs(tmp_path)
+    path = config_dir / "math_fallbacks.csv"
+    df = read_csv(path)
+    df.loc[0, "fallback_course_id"] = "ENG9"
+    write_csv(path, df)
+
+    report = validate_configuration(config_dir, templates_dir)
+
+    assert not report.is_valid
+    assert "NON_MATH_FALLBACK_TARGET" in issue_codes(report)
+
+
 def test_malformed_semicolon_field_is_reported(tmp_path: Path) -> None:
     config_dir, templates_dir = copy_validation_inputs(tmp_path)
     path = config_dir / "course_catalog.csv"

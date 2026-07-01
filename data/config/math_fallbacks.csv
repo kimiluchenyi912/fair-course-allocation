@@ -1,0 +1,2 @@
+source_course_id,fallback_course_id,policy_type,enabled,source_type,notes
+MATH2_3_HA,MATH2,mandatory_fallback,true,model_assumption,If Integrated Math 2/3 Honors Accelerated is the student's only math primary and is unmet then Math 2 is the explicit pending mandatory fallback target; assignment is not implemented yet.

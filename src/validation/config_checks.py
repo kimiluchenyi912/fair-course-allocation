@@ -37,8 +37,7 @@ def validate_grade_profiles(df: pd.DataFrame | None, report: ValidationReport) -
             "Grades must contain exactly 9, 10, 11, and 12 once each.",
         )
 
-    for idx, row in df.iterrows():
-        line = line_number(idx)
+    for line, (_, row) in enumerate(df.iterrows(), start=2):
         grade = text(row["grade"])
         if grade not in VALID_GRADES:
             report.add_error("INVALID_GRADE", filename, "Grade must be 9, 10, 11, or 12.", line, grade)
@@ -243,6 +242,51 @@ def validate_demand_scenarios(config: dict[str, pd.DataFrame], report: Validatio
 
     if "stable_year" not in {text(value) for value in df["scenario_id"]}:
         report.add_error("MISSING_BASE_SCENARIO", filename, "stable_year baseline scenario must exist.")
+
+
+def validate_math_fallbacks(config: dict[str, pd.DataFrame], report: ValidationReport) -> None:
+    filename = "math_fallbacks.csv"
+    df = config.get(filename)
+    courses = config.get("course_catalog.csv")
+    if not has_columns(df, CONFIG_COLUMNS[filename]):
+        return
+
+    course_by_id = courses.set_index("course_id", drop=False) if has_columns(courses, CONFIG_COLUMNS["course_catalog.csv"]) else pd.DataFrame()
+    enabled_sources: dict[str, str] = {}
+    valid_policy_types = {"mandatory_fallback"}
+    for line, (_, row) in enumerate(df.iterrows(), start=2):
+        source = text(row["source_course_id"])
+        fallback = text(row["fallback_course_id"])
+        policy_type = text(row["policy_type"])
+        enabled = parse_bool(row["enabled"])
+        identifier = source or f"line {line}"
+        if not source:
+            report.add_error("EMPTY_MATH_FALLBACK_SOURCE", filename, "source_course_id cannot be blank.", line)
+        if not fallback:
+            report.add_error("EMPTY_MATH_FALLBACK_TARGET", filename, "fallback_course_id cannot be blank.", line, identifier)
+        if policy_type not in valid_policy_types:
+            report.add_error("INVALID_MATH_FALLBACK_POLICY_TYPE", filename, "policy_type must be mandatory_fallback.", line, identifier)
+        if enabled is None:
+            report.add_error("INVALID_MATH_FALLBACK_ENABLED", filename, "enabled must be true or false.", line, identifier)
+        if source and source not in course_by_id.index:
+            report.add_error("UNKNOWN_MATH_FALLBACK_SOURCE", filename, "source_course_id must exist in course_catalog.csv.", line, source)
+        elif source and text(course_by_id.loc[source, "department"]) != "Mathematics":
+            report.add_error("NON_MATH_FALLBACK_SOURCE", filename, "source_course_id must have department=Mathematics.", line, source)
+        if fallback and fallback not in course_by_id.index:
+            report.add_error("UNKNOWN_MATH_FALLBACK_TARGET", filename, "fallback_course_id must exist in course_catalog.csv.", line, fallback)
+        elif fallback and text(course_by_id.loc[fallback, "department"]) != "Mathematics":
+            report.add_error("NON_MATH_FALLBACK_TARGET", filename, "fallback_course_id must have department=Mathematics.", line, fallback)
+        if enabled is True and source and fallback and policy_type == "mandatory_fallback":
+            previous = enabled_sources.get(source)
+            if previous is not None and previous != fallback:
+                report.add_error(
+                    "CONFLICTING_MATH_FALLBACK",
+                    filename,
+                    "An enabled source course cannot map to multiple mandatory fallback courses.",
+                    line,
+                    source,
+                )
+            enabled_sources[source] = fallback
 
 
 def _validate_course_row(

@@ -171,6 +171,16 @@ Example: Integrated Math 2/3 Honors Accelerated.
 
 The student receives one course request, but the assigned section consumes two periods. Whether the periods must be consecutive remains configurable until verified.
 
+Math policy evaluation classifies math courses using
+`course_catalog.department = Mathematics`. If `MATH2_3_HA` is the student's
+only math primary and is unmet, the seeded random greedy baseline runs an
+explicit mandatory fallback attempt to `MATH2` after all primary requests and
+before ordinary ranked alternates. The fallback does not erase the original
+Math 2/3 primary unmet and does not increase primary satisfaction. If assigned,
+it satisfies math coverage and consumes one period unit; if it fails, the
+baseline returns a reported math coverage violation rather than treating the
+case as globally infeasible.
+
 ### Sequential semester block sharing one period
 
 Examples:
