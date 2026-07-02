@@ -327,7 +327,72 @@ assignment state. Fairness fields influence constrained-first ordering only;
 they are not hard constraints in the baseline. A baseline failure to assign a
 request is reported as an outcome, not as global infeasibility.
 
-## 11. Known bottleneck courses
+## 11. Fixed-section CP-SAT allocation
+
+The fair CP-SAT allocator starts from canonical students, approved logical
+requests, fixed logical sections, fixed capacities, fixed occupied periods,
+and the configured mandatory math fallback rules. It does not change section
+counts, capacities, period layout, course eligibility, or generated requests.
+
+The CP-SAT hard policies are:
+
+- every selected assignment must use a request-specific canonical candidate
+  logical section;
+- each logical request can be assigned at most once;
+- section capacity, student period conflicts, target period units, and
+  duplicate logical course/block identity must match `AllocationState`
+  semantics;
+- protected students must have zero unmet logical primaries;
+- ordinary non-protected students may have at most one unmet logical primary;
+- logical primary requests for courses with approved logical primary demand
+  greater than 120 must be assigned.
+
+The high-demand hard policy uses only logical primary demand. Demand of 120 or
+less does not trigger a full-assignment guarantee. Courses at or below that
+threshold can still leave students unassigned because the section planner uses
+the uniform 50% waitlist expansion policy rather than a full-capacity floor.
+
+Mathematics is identified from `course_catalog.department == "Mathematics"` in
+configuration helpers, not from course-name strings. A student with one math
+primary receives very high soft priority, and students with multiple math
+primaries receive high soft priority for at least one math assignment. This is
+not a hard constraint. If fixed capacity and periods leave a single-math
+student without math coverage, the solver reports a math coverage violation;
+it does not create a section, increase capacity, or call the model globally
+infeasible on that basis alone.
+
+The configured mandatory fallback currently maps Math 2/3 Honors Accelerated
+to Math 2. Fallback assignment is synthetic: it does not change the original
+primary request outcome, but it consumes real target units, period slots, and
+section capacity, and it can satisfy math coverage. Ranked alternates are also
+modeled globally and can fill remaining target units without changing primary
+satisfaction statistics.
+
+Soft goals are solved lexicographically:
+
+1. minimize math coverage violations;
+2. minimize primary unmet count, then primary unmet period units;
+3. maximize rank-1 alternates;
+4. maximize rank-2 alternates;
+5. maximize rank-3 alternates;
+6. maximize fully scheduled students;
+7. minimize total remaining period units;
+8. apply a deterministic seeded assignment tie-break.
+
+Every stage records CP-SAT status, objective value, best bound, runtime,
+conflicts, branches, and whether optimality was proven. A FEASIBLE incumbent
+is not reported as OPTIMAL, and UNKNOWN is not reported as INFEASIBLE.
+
+After CP-SAT returns selected variables, the solution is replayed into a fresh
+`AllocationState` with the same supplemental fallback requests. Replay must
+pass all local feasibility checks and internal consistency validation. A
+solution that cannot replay is treated as an internal model error, not as a
+student allocation result.
+
+The CP-SAT allocator still does not implement dynamic section planning,
+local repair, swap/displacement, beam search, or website behavior.
+
+## 12. Known bottleneck courses
 
 The initial calibration set includes:
 
@@ -340,7 +405,7 @@ The initial calibration set includes:
 
 These courses should be represented as realistic stress points rather than guaranteed failures every year.
 
-## 12. Modeling uncertainty and yearly change
+## 13. Modeling uncertainty and yearly change
 
 Unknown elective demand is not filled with fake precision. Each course receives:
 
@@ -359,20 +424,20 @@ Recommended test scenarios:
 
 Randomness must be reproducible through a recorded seed.
 
-## 13. Solver priorities
+## 14. Solver priorities
 
-Use lexicographic optimization or strongly separated weights:
+Use lexicographic optimization:
 
-1. maximize the number of students receiving a complete target schedule;
-2. maximize fulfilled primary requests;
-3. minimize use of alternates;
-4. protect the worst-off students and distribute losses fairly;
-5. minimize total unmet requests;
-6. balance section utilization only after the higher priorities.
+1. minimize math coverage violations;
+2. minimize unmet primary requests, then unmet primary period units;
+3. maximize rank-1, rank-2, and rank-3 alternates in that order;
+4. maximize the number of students receiving a complete target schedule;
+5. minimize remaining period units;
+6. apply deterministic seeded tie-breaks.
 
 The solver must never silently violate hard constraints.
 
-## 14. Required evaluation metrics
+## 15. Required evaluation metrics
 
 Report at minimum:
 

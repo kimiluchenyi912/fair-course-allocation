@@ -27,6 +27,15 @@ from .baseline_models import (
     StudentDifficultyProfile,
     StudentOutcome,
 )
+from .cp_sat_models import (
+    CpSatAllocationResult,
+    CpSatModelStats,
+    CpSatObjectiveValues,
+    CpSatSolveStatus,
+    CpSatStageDiagnostic,
+    CpSatStageName,
+)
+from .cp_sat_solver import run_fair_cp_sat_solver
 from .constrained_first_baseline import (
     build_ordering_context,
     build_student_difficulty_profiles,
@@ -78,6 +87,12 @@ __all__ = [
     "CanonicalStudent",
     "CandidateAttempt",
     "CourseMetadata",
+    "CpSatAllocationResult",
+    "CpSatModelStats",
+    "CpSatObjectiveValues",
+    "CpSatSolveStatus",
+    "CpSatStageDiagnostic",
+    "CpSatStageName",
     "HighDemandCandidateDemand",
     "MandatoryFallbackOutcome",
     "MandatoryFallbackStatus",
@@ -107,6 +122,7 @@ __all__ = [
     "math_course_ids_from_catalog",
     "parse_math_fallback_rules",
     "primary_request_priority",
+    "run_fair_cp_sat_solver",
     "run_constrained_first_baseline",
     "run_seeded_random_baseline",
 ]

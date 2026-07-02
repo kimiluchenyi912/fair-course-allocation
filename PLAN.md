@@ -90,6 +90,9 @@ Every valid fixed-section allocation must satisfy:
 10. One-year protected students with a prior-year involuntary unmet primary
     must have zero unmet logical primaries, or the solver must report
     infeasibility diagnostics.
+11. In the CP-SAT solver, every logical primary request for a high-demand
+    course with approved logical primary demand greater than 120 must be
+    satisfied. Demand of exactly 120 does not trigger this hard guarantee.
 
 `target_course_count` is both the student's desired load and an upper bound.
 An allocation remains valid when a student receives fewer courses, but the
@@ -97,17 +100,25 @@ student must be reported as having an incomplete schedule.
 
 ## 6. Optimization Priorities
 
-The fair algorithm will optimize goals in this order:
+The fixed-section CP-SAT solver treats protected students, ordinary max-one
+unmet primary, and high-demand demand-greater-than-120 guarantees as hard
+policies. It does not add a hard single-math guarantee and does not create
+sections when math capacity is short.
 
-1. Maximize the number of students receiving a complete target schedule.
-2. Maximize fulfilled primary requests.
-3. Minimize use of alternates.
-4. Protect the worst-off students and distribute unavoidable unmet requests
-   fairly.
-5. Minimize total unmet requests.
-6. Balance section utilization only after the higher priorities.
+The fair algorithm will optimize soft goals lexicographically in this order:
+
+1. minimize math coverage violations;
+2. minimize unmet primary requests, then unmet primary period units;
+3. maximize rank-1 alternates, then rank-2 alternates, then rank-3 alternates;
+4. maximize complete target schedules;
+5. minimize total remaining period units;
+6. apply a deterministic seeded tie-break only after substantive goals are
+   fixed.
 
 Students with equal priority should be treated using a reproducible lottery.
+Solver status must distinguish OPTIMAL, FEASIBLE, INFEASIBLE, MODEL_INVALID,
+and UNKNOWN. FEASIBLE is not reported as OPTIMAL, and UNKNOWN is not reported
+as INFEASIBLE.
 
 Logical primary counts are not simple request-row counts. A Grade 12
 Government/Economics linked block counts once, and Math 2/3 Honors Accelerated
