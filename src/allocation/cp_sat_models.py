@@ -25,6 +25,8 @@ class CpSatSolveStatus(str, Enum):
 class CpSatStageName(str, Enum):
     MATH_COVERAGE = "math_coverage"
     PRIMARY_SATISFACTION = "primary_satisfaction"
+    PRIMARY_UNMET_COUNT = "primary_unmet_count"
+    PRIMARY_UNMET_PERIOD_UNITS = "primary_unmet_period_units"
     ALTERNATE_RANK_1 = "alternate_rank_1"
     ALTERNATE_RANK_2 = "alternate_rank_2"
     ALTERNATE_RANK_3 = "alternate_rank_3"
@@ -33,9 +35,15 @@ class CpSatStageName(str, Enum):
     SEEDED_TIE_BREAK = "seeded_tie_break"
 
 
+class CpSatModelScope(str, Enum):
+    CORE = "core"
+    ENRICHMENT = "enrichment"
+
+
 @dataclass(frozen=True)
 class CpSatStageDiagnostic:
     stage_name: CpSatStageName
+    model_scope: CpSatModelScope
     status: CpSatSolveStatus
     objective_value: int | None
     best_objective_bound: int | None
@@ -43,6 +51,8 @@ class CpSatStageDiagnostic:
     conflicts: int
     branches: int
     optimum_proven: bool
+    conditional_on_unproven_incumbent: bool = False
+    fixed_higher_priority_values: tuple[tuple[CpSatStageName, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -65,6 +75,21 @@ class CpSatModelStats:
     total_constraints: int
     build_time_seconds: float = field(compare=False)
     solve_time_seconds: float = field(compare=False)
+    core_model_variable_count: int = 0
+    core_model_constraint_count: int = 0
+    enrichment_model_variable_count: int = 0
+    enrichment_model_constraint_count: int = 0
+    core_build_time_seconds: float = field(default=0.0, compare=False)
+    enrichment_build_time_seconds: float = field(default=0.0, compare=False)
+    total_build_time_seconds: float = field(default=0.0, compare=False)
+    total_solve_time_seconds: float = field(default=0.0, compare=False)
+    time_to_first_feasible_solution_seconds: float | None = field(default=None, compare=False)
+    warm_start_strategy: str = "none"
+    external_hint_used: bool = False
+    stage_to_stage_hint_used: bool = False
+    highest_globally_proven_stage: CpSatStageName | None = None
+    conditional_optimization_performed: bool = False
+    objective_vector: tuple[tuple[CpSatStageName, int], ...] = ()
 
 
 @dataclass(frozen=True)

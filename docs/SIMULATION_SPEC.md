@@ -379,9 +379,31 @@ Soft goals are solved lexicographically:
 7. minimize total remaining period units;
 8. apply a deterministic seeded assignment tie-break.
 
+The implementation separates this into two CP-SAT model scopes:
+
+- the Core model contains primary requests, mandatory math fallback options,
+  math coverage variables, and all hard constraints needed for primary
+  allocation quality;
+- the Enrichment model contains the full request set, including ranked
+  alternates and complete-schedule variables, and fixes the Core incumbent
+  values before optimizing lower-priority goals.
+
+Core primary quality is solved in three distinct stages: math coverage
+violations, primary unmet count, and primary unmet period units. The solver
+does not collapse count and units into one large-weight objective.
+
+The solver may use solution hints to speed search. The default warm start uses
+a constrained-first partial hint plus stage-to-stage incumbent hints. Hints are
+not constraints: CP-SAT may repair or ignore them, and the formal hard
+constraints and objective stages remain the source of truth.
+
 Every stage records CP-SAT status, objective value, best bound, runtime,
 conflicts, branches, and whether optimality was proven. A FEASIBLE incumbent
-is not reported as OPTIMAL, and UNKNOWN is not reported as INFEASIBLE.
+is not reported as OPTIMAL, and UNKNOWN is not reported as INFEASIBLE. When a
+stage has a FEASIBLE incumbent but not a proof of optimality, later stages may
+continue conditionally with that incumbent value fixed. Such lower-priority
+improvements are useful diagnostics, but they do not prove a global
+lexicographic optimum.
 
 After CP-SAT returns selected variables, the solution is replayed into a fresh
 `AllocationState` with the same supplemental fallback requests. Replay must

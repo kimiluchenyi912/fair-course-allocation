@@ -120,6 +120,20 @@ Solver status must distinguish OPTIMAL, FEASIBLE, INFEASIBLE, MODEL_INVALID,
 and UNKNOWN. FEASIBLE is not reported as OPTIMAL, and UNKNOWN is not reported
 as INFEASIBLE.
 
+The CP-SAT implementation uses a Core/Enrichment decomposition. The Core model
+contains primary requests, mandatory math fallback options, math coverage, and
+hard policy constraints, and solves math coverage, primary unmet count, and
+primary unmet period units as separate stages. The
+Enrichment model then fixes those Core incumbent values and optimizes
+alternates, complete schedules, remaining units, and the seeded tie-break. If a
+stage returns FEASIBLE but not OPTIMAL, the solver may continue lower-priority
+stages conditionally, but the result remains FEASIBLE and is not reported as a
+global lexicographic optimum.
+
+CP-SAT warm starts may use constrained-first partial hints and stage-to-stage
+incumbent hints. These hints are search guidance only; they do not relax or
+replace hard constraints.
+
 Logical primary counts are not simple request-row counts. A Grade 12
 Government/Economics linked block counts once, and Math 2/3 Honors Accelerated
 counts once even though it consumes two periods.

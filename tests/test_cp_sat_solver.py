@@ -4,8 +4,10 @@ import random
 
 import pandas as pd
 
+import src.allocation.cp_sat_solver as cp_sat_solver_module
 from src.allocation import (
     AlternateRequestStatus,
+    CpSatModelScope,
     CpSatSolveStatus,
     CpSatStageName,
     MandatoryFallbackStatus,
@@ -660,7 +662,8 @@ def test_stage_diagnostics_record_all_lexicographic_stages() -> None:
 
     assert [item.stage_name for item in result.stage_diagnostics] == [
         CpSatStageName.MATH_COVERAGE,
-        CpSatStageName.PRIMARY_SATISFACTION,
+        CpSatStageName.PRIMARY_UNMET_COUNT,
+        CpSatStageName.PRIMARY_UNMET_PERIOD_UNITS,
         CpSatStageName.ALTERNATE_RANK_1,
         CpSatStageName.ALTERNATE_RANK_2,
         CpSatStageName.ALTERNATE_RANK_3,
@@ -668,7 +671,173 @@ def test_stage_diagnostics_record_all_lexicographic_stages() -> None:
         CpSatStageName.REMAINING_PERIOD_UNITS,
         CpSatStageName.SEEDED_TIE_BREAK,
     ]
+    assert [item.model_scope for item in result.stage_diagnostics[:3]] == [CpSatModelScope.CORE] * 3
+    assert [item.model_scope for item in result.stage_diagnostics[3:]] == [CpSatModelScope.ENRICHMENT] * 6
     assert all(item.status == CpSatSolveStatus.OPTIMAL for item in result.stage_diagnostics)
+
+
+def test_enrichment_stages_fix_core_objectives_individually() -> None:
+    result = run_solver(
+        canonical(
+            [("STU_1", 12, 1, False)],
+            [request_row("STU_1", "NOSEC"), request_row("STU_1", "ALT1", "alternate", 1, "alternate")],
+        )
+    )
+
+    first_enrichment = next(item for item in result.stage_diagnostics if item.model_scope == CpSatModelScope.ENRICHMENT)
+    fixed = dict(first_enrichment.fixed_higher_priority_values)
+
+    assert fixed[CpSatStageName.MATH_COVERAGE] == result.objective_values.math_coverage_violations
+    assert fixed[CpSatStageName.PRIMARY_UNMET_COUNT] == result.objective_values.primary_unmet_count
+    assert fixed[CpSatStageName.PRIMARY_UNMET_PERIOD_UNITS] == result.objective_values.primary_unmet_period_units
+    assert CpSatStageName.PRIMARY_SATISFACTION not in fixed
+
+
+def test_core_and_enrichment_model_statistics_are_recorded() -> None:
+    result = run_solver(
+        canonical(
+            [("STU_1", 12, 1, False)],
+            [request_row("STU_1", "CORE_A"), request_row("STU_1", "ALT1", "alternate", 1, "alternate")],
+        )
+    )
+
+    assert result.model_stats.core_model_variable_count > 0
+    assert result.model_stats.enrichment_model_variable_count > result.model_stats.core_model_variable_count
+    assert result.model_stats.core_model_constraint_count > 0
+    assert result.model_stats.enrichment_model_constraint_count > result.model_stats.core_model_constraint_count
+    assert result.model_stats.warm_start_strategy == "stage_to_stage_incumbent+constrained_first_partial"
+    assert result.model_stats.stage_to_stage_hint_used is True
+    assert result.model_stats.external_hint_used is True
+
+
+def test_conditional_continuation_after_feasible_incumbent_is_not_global_optimum(monkeypatch) -> None:
+    original = cp_sat_solver_module._solve_status
+    call_count = 0
+
+    def fake_solve_status(raw_status):
+        nonlocal call_count
+        call_count += 1
+        status = original(raw_status)
+        if call_count == 2 and status == CpSatSolveStatus.OPTIMAL:
+            return CpSatSolveStatus.FEASIBLE
+        return status
+
+    monkeypatch.setattr(cp_sat_solver_module, "_solve_status", fake_solve_status)
+
+    result = run_solver(
+        canonical(
+            [("STU_1", 12, 1, False)],
+            [request_row("STU_1", "NOSEC"), request_row("STU_1", "ALT1", "alternate", 1, "alternate")],
+        )
+    )
+
+    assert result.solve_status == CpSatSolveStatus.FEASIBLE
+    assert result.lexicographic_optimality_proven is False
+    assert result.model_stats.conditional_optimization_performed is True
+    assert len(result.stage_diagnostics) == 9
+    assert any(item.conditional_on_unproven_incumbent for item in result.stage_diagnostics[2:])
+    assert outcome(result, alt_key("STU_1", 1, "ALT1")).status == AlternateRequestStatus.ASSIGNED
+
+
+def test_unknown_without_any_incumbent_returns_empty_result(monkeypatch) -> None:
+    monkeypatch.setattr(cp_sat_solver_module, "_solve_status", lambda raw_status: CpSatSolveStatus.UNKNOWN)
+
+    result = run_solver(canonical())
+
+    assert result.solve_status == CpSatSolveStatus.UNKNOWN
+    assert result.assignments == ()
+    assert result.request_outcomes == ()
+    assert result.lexicographic_optimality_proven is False
+
+
+def test_external_hint_can_be_disabled_and_is_not_a_constraint(monkeypatch) -> None:
+    hinted_key = cp_sat_solver_module._VariableKey(key("STU_1", "CORE_A"), "CORE_A_1")
+    monkeypatch.setattr(cp_sat_solver_module, "_constrained_first_partial_hint_keys", lambda *args, **kwargs: (hinted_key,))
+    data = canonical(
+        [("STU_1", 12, 1, False)],
+        [request_row("STU_1", "MATH1"), request_row("STU_1", "CORE_A")],
+        [
+            section_row("SEC_MATH", "MATH1", "P1", capacity=1, group_id="MATH1_1"),
+            section_row("SEC_CORE", "CORE_A", "P1", capacity=1, group_id="CORE_A_1"),
+        ],
+    )
+
+    hinted_result = run_fair_cp_sat_solver(
+        data,
+        seed=1,
+        math_fallback_rules=fallback_rules(),
+        math_course_ids=math_ids(),
+        max_time_seconds_per_stage=2,
+    )
+    disabled_result = run_fair_cp_sat_solver(
+        data,
+        seed=1,
+        math_fallback_rules=fallback_rules(),
+        math_course_ids=math_ids(),
+        max_time_seconds_per_stage=2,
+        use_constrained_first_hint=False,
+    )
+
+    assert hinted_result.model_stats.external_hint_used is True
+    assert disabled_result.model_stats.external_hint_used is False
+    assert outcome(hinted_result, key("STU_1", "MATH1")).status == PrimaryRequestStatus.ASSIGNED
+    assert outcome(hinted_result, key("STU_1", "CORE_A")).status != PrimaryRequestStatus.ASSIGNED
+
+
+def test_stage_to_stage_hints_can_be_disabled() -> None:
+    result = run_fair_cp_sat_solver(
+        canonical(),
+        seed=1,
+        math_fallback_rules=fallback_rules(),
+        math_course_ids=math_ids(),
+        max_time_seconds_per_stage=2,
+        stage_to_stage_hints=False,
+        use_constrained_first_hint=False,
+    )
+
+    assert result.model_stats.stage_to_stage_hint_used is False
+    assert result.model_stats.warm_start_strategy == "none"
+
+
+def test_external_hint_alone_does_not_report_stage_to_stage_hint_used() -> None:
+    result = run_fair_cp_sat_solver(
+        canonical(),
+        seed=1,
+        math_fallback_rules=fallback_rules(),
+        math_course_ids=math_ids(),
+        max_time_seconds_per_stage=2,
+        stage_to_stage_hints=False,
+        use_constrained_first_hint=True,
+    )
+
+    assert result.model_stats.external_hint_used is True
+    assert result.model_stats.stage_to_stage_hint_used is False
+    assert result.model_stats.warm_start_strategy == "constrained_first_partial"
+
+
+def test_highest_globally_proven_stage_survives_conditional_enrichment(monkeypatch) -> None:
+    original = cp_sat_solver_module._solve_status
+    call_count = 0
+
+    def fake_solve_status(raw_status):
+        nonlocal call_count
+        call_count += 1
+        status = original(raw_status)
+        if call_count == 4 and status == CpSatSolveStatus.OPTIMAL:
+            return CpSatSolveStatus.FEASIBLE
+        return status
+
+    monkeypatch.setattr(cp_sat_solver_module, "_solve_status", fake_solve_status)
+
+    result = run_solver(
+        canonical(
+            [("STU_1", 12, 1, False)],
+            [request_row("STU_1", "NOSEC"), request_row("STU_1", "ALT1", "alternate", 1, "alternate")],
+        )
+    )
+
+    assert result.lexicographic_optimality_proven is False
+    assert result.model_stats.highest_globally_proven_stage == CpSatStageName.PRIMARY_UNMET_PERIOD_UNITS
 
 
 def test_same_seed_full_result_and_assignments_are_identical() -> None:
