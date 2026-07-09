@@ -327,6 +327,11 @@ assignment state. Fairness fields influence constrained-first ordering only;
 they are not hard constraints in the baseline. A baseline failure to assign a
 request is reported as an outcome, not as global infeasibility.
 
+Benchmark Runner v1 defaults to seeded random greedy and constrained-first
+greedy only. First-come-first-served, grade-priority, and CP-SAT comparisons
+remain broader evaluation targets, but CP-SAT is opt-in because it is
+substantially more expensive than the greedy baselines.
+
 ## 11. Fixed-section CP-SAT allocation
 
 The fair CP-SAT allocator starts from canonical students, approved logical
@@ -481,7 +486,8 @@ Randomness must be reproducible through separately recorded generation,
 section-planning, and solver seeds.
 
 Stable-year benchmark reports must record data-generation, section-planning,
-and allocation-solver seeds separately. The current comparison checkpoint uses
+and allocation-solver seeds separately, along with the canonical allocation
+input fingerprint. The current comparison checkpoint uses
 `data_seed=2026`, `section_planning_seed=2026`, and
 `solver_seed=20260630`; the solver seed must not be reused to regenerate the
 benchmark input.
@@ -529,6 +535,11 @@ Compare against:
 - first-come-first-served;
 - grade-priority allocation;
 - the fairness-optimized solver.
+
+The full evaluation may include the broader algorithm set above. Benchmark
+Runner v1 defaults to seeded random greedy and constrained-first greedy only;
+CP-SAT and fairness-solver comparisons must be explicitly requested and marked
+as opt-in benchmark runs.
 
 ## 14. V1 implementation order
 

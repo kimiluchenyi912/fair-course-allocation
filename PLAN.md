@@ -165,6 +165,13 @@ All algorithms must use the same input data and hard constraints. Greedy
 baselines may use policy fields for ordering, but they do not backtrack,
 repair, displace students, or prove global infeasibility.
 
+Benchmark Runner v1 defaults to the first two implemented baselines: seeded
+random greedy and constrained-first greedy. CP-SAT comparison is supported only
+when explicitly requested because stable-year CP-SAT runs are more expensive.
+Every benchmark report must bind results to separate data-generation,
+section-planning, and solver seeds plus the canonical allocation-input
+fingerprint.
+
 ## 8. Evaluation Metrics
 
 The project will measure:

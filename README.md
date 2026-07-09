@@ -84,3 +84,24 @@ its upstream files. It records the solver seed, input paths, canonical-input
 counts, canonical/file/configuration hashes, and optionally the Git commit. Call
 `verify_experiment_manifest` before every benchmark or solver run. If it raises
 `ExperimentManifestError`, stop; do not run the benchmark or solver.
+
+## Benchmark Runner v1
+
+Run the manifest-guarded benchmark runner on already generated inputs:
+
+```bash
+python -m src.benchmark_runner \
+  --generated-input-dir data/generated/stable_2026 \
+  --sections-input-dir data/generated/stable_2026_sections \
+  --data-seed 2026 \
+  --section-seed 2026 \
+  --solver-seed 20260630 \
+  --output-json /tmp/fca_benchmark_summary.json
+```
+
+The default runner executes seeded random greedy and constrained-first greedy.
+CP-SAT is opt-in because it is more expensive; include `--algorithms
+random,constrained,cp_sat` to request it explicitly. Every benchmark summary
+records the data-generation seed, section-planning seed, solver seed, and
+canonical input fingerprint. A fingerprint mismatch invalidates comparison with
+older benchmark results.
