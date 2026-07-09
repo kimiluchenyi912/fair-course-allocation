@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -40,8 +41,13 @@ def main() -> int:
     result.students.to_csv(output_dir / "students.csv", index=False)
     result.requests.to_csv(output_dir / "requests.csv", index=False)
     result.summary.to_csv(output_dir / "generation_summary.csv", index=False)
+    metadata = dict(result.metadata)
+    metadata["output_file_hashes"] = {
+        "students.csv": _file_hash(output_dir / "students.csv"),
+        "requests.csv": _file_hash(output_dir / "requests.csv"),
+    }
     with (output_dir / "generation_metadata.json").open("w", encoding="utf-8") as handle:
-        json.dump(result.metadata, handle, indent=2, sort_keys=True)
+        json.dump(metadata, handle, indent=2, sort_keys=True)
         handle.write("\n")
 
     print(
@@ -55,6 +61,14 @@ def main() -> int:
     print("Target loads:")
     print(result.students.groupby(["grade", "target_course_count"]).size().sort_index().to_string())
     return 0
+
+
+def _file_hash(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 if __name__ == "__main__":

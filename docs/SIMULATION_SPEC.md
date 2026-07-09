@@ -273,7 +273,7 @@ This is descriptive, not a hard maximum.
 ### Period layout
 
 The V1 section planner places planned sections into P1–P7 using a deterministic
-heuristic seeded by scenario and random seed. The heuristic uses primary
+heuristic seeded by scenario and `section_planning_seed`. The heuristic uses primary
 co-request conflicts to reduce obvious period conflicts, spreads multiple
 sections of the same course when feasible, and balances section counts across
 periods. It is not a proof of student-level schedule feasibility.
@@ -477,13 +477,23 @@ Recommended test scenarios:
 3. **Stress year** — several popular courses rise simultaneously.
 4. **Randomized robustness runs** — repeat many seeds and compare outcomes.
 
-Randomness must be reproducible through a recorded seed.
+Randomness must be reproducible through separately recorded generation,
+section-planning, and solver seeds.
 
 Stable-year benchmark reports must record data-generation, section-planning,
 and allocation-solver seeds separately. The current comparison checkpoint uses
 `data_seed=2026`, `section_planning_seed=2026`, and
 `solver_seed=20260630`; the solver seed must not be reused to regenerate the
 benchmark input.
+
+Before a benchmark or solver run, load and verify its experiment manifest.
+Verification must confirm the data and section-planning seeds against
+generation and planner metadata, confirm each stage's recorded output hashes,
+and confirm the planner-recorded hashes of its upstream files. Manifest counts
+must all come from canonical allocation input. The manifest records the solver
+seed, generated and section input paths, canonical counts,
+canonical-input/file/configuration hashes, and an optional Git commit. If
+verification fails, do not run the benchmark or solver.
 
 ## 14. Solver priorities
 

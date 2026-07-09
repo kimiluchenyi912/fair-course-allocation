@@ -94,8 +94,12 @@ def write_result_atomic(result: SectionPlanningResult, output_dir: str | Path) -
         result.sections.to_csv(temp_dir / "sections.csv", index=False)
         result.course_demand_summary.to_csv(temp_dir / "course_demand_summary.csv", index=False)
         result.period_layout_summary.to_csv(temp_dir / "period_layout_summary.csv", index=False)
+        metadata = dict(result.metadata)
+        metadata["output_file_hashes"] = {
+            "sections.csv": _file_hash(temp_dir / "sections.csv"),
+        }
         with (temp_dir / "section_planning_metadata.json").open("w", encoding="utf-8") as handle:
-            json.dump(result.metadata, handle, indent=2, sort_keys=True)
+            json.dump(metadata, handle, indent=2, sort_keys=True)
             handle.write("\n")
         if output_dir.exists():
             shutil.rmtree(output_dir)

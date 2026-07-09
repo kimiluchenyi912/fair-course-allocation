@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import shutil
 import subprocess
 import sys
@@ -281,6 +283,12 @@ def test_cli_writes_all_expected_output_files(tmp_path: Path) -> None:
     assert (output_dir / "requests.csv").exists()
     assert (output_dir / "generation_summary.csv").exists()
     assert (output_dir / "generation_metadata.json").exists()
+    with (output_dir / "generation_metadata.json").open(encoding="utf-8") as handle:
+        metadata = json.load(handle)
+    assert metadata["output_file_hashes"] == {
+        "students.csv": hashlib.sha256((output_dir / "students.csv").read_bytes()).hexdigest(),
+        "requests.csv": hashlib.sha256((output_dir / "requests.csv").read_bytes()).hexdigest(),
+    }
 
 
 def test_invalid_generator_config_cli_fails_validation_without_partial_outputs(tmp_path: Path) -> None:

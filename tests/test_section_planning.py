@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -831,3 +832,6 @@ def test_planning_outputs_are_readable(tmp_path: Path) -> None:
     with (output_dir / "section_planning_metadata.json").open(encoding="utf-8") as handle:
         metadata = json.load(handle)
     assert metadata["planner_version"] == "v1"
+    assert metadata["output_file_hashes"] == {
+        "sections.csv": hashlib.sha256((output_dir / "sections.csv").read_bytes()).hexdigest(),
+    }

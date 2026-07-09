@@ -45,3 +45,42 @@ python -m src.section_planning \
 The planner writes `sections.csv`, `course_demand_summary.csv`,
 `period_layout_summary.csv`, and `section_planning_metadata.json`. It does not
 assign students to sections.
+
+## Reproducible benchmark manifest
+
+The stable-year comparison checkpoint uses data seed `2026`, section-planning
+seed `2026`, and solver seed `20260630`.
+
+```python
+from src.experiment_manifest import (
+    STABLE_YEAR_BENCHMARK_SEEDS,
+    build_experiment_manifest,
+    load_experiment_manifest,
+    verify_experiment_manifest,
+    write_experiment_manifest,
+)
+
+manifest_path = "data/generated/stable_2026_manifest.json"
+manifest = build_experiment_manifest(
+    "data/generated/stable_2026",
+    "data/generated/stable_2026_sections",
+    "data/config",
+    scenario_id="stable_year",
+    seeds=STABLE_YEAR_BENCHMARK_SEEDS,
+    repo_root=".",  # Omit to leave git_commit empty.
+)
+write_experiment_manifest(manifest, manifest_path)
+canonical_input = verify_experiment_manifest(
+    load_experiment_manifest(manifest_path),
+    config_dir="data/config",
+    repo_root=".",
+)
+# Only now run the benchmark/solver with manifest.seeds.solver_seed.
+```
+
+The manifest validates the data and section-planning seeds against generation
+and planner metadata, including their output hashes and the planner's hashes of
+its upstream files. It records the solver seed, input paths, canonical-input
+counts, canonical/file/configuration hashes, and optionally the Git commit. Call
+`verify_experiment_manifest` before every benchmark or solver run. If it raises
+`ExperimentManifestError`, stop; do not run the benchmark or solver.
