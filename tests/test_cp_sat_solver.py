@@ -659,8 +659,15 @@ def test_schedule_completion_runs_after_higher_objectives() -> None:
 
 def test_stage_diagnostics_record_all_lexicographic_stages() -> None:
     result = run_solver(canonical())
+    objective_diagnostics = [
+        item
+        for item in result.stage_diagnostics
+        if item.model_scope != CpSatModelScope.BOOTSTRAP
+    ]
 
-    assert [item.stage_name for item in result.stage_diagnostics] == [
+    assert result.stage_diagnostics[0].stage_name == CpSatStageName.FEASIBILITY_BOOTSTRAP
+    assert result.stage_diagnostics[0].model_scope == CpSatModelScope.BOOTSTRAP
+    assert [item.stage_name for item in objective_diagnostics] == [
         CpSatStageName.MATH_COVERAGE,
         CpSatStageName.PRIMARY_UNMET_COUNT,
         CpSatStageName.PRIMARY_UNMET_PERIOD_UNITS,
@@ -671,8 +678,8 @@ def test_stage_diagnostics_record_all_lexicographic_stages() -> None:
         CpSatStageName.REMAINING_PERIOD_UNITS,
         CpSatStageName.SEEDED_TIE_BREAK,
     ]
-    assert [item.model_scope for item in result.stage_diagnostics[:3]] == [CpSatModelScope.CORE] * 3
-    assert [item.model_scope for item in result.stage_diagnostics[3:]] == [CpSatModelScope.ENRICHMENT] * 6
+    assert [item.model_scope for item in objective_diagnostics[:3]] == [CpSatModelScope.CORE] * 3
+    assert [item.model_scope for item in objective_diagnostics[3:]] == [CpSatModelScope.ENRICHMENT] * 6
     assert all(item.status == CpSatSolveStatus.OPTIMAL for item in result.stage_diagnostics)
 
 
@@ -718,7 +725,7 @@ def test_conditional_continuation_after_feasible_incumbent_is_not_global_optimum
         nonlocal call_count
         call_count += 1
         status = original(raw_status)
-        if call_count == 2 and status == CpSatSolveStatus.OPTIMAL:
+        if call_count == 3 and status == CpSatSolveStatus.OPTIMAL:
             return CpSatSolveStatus.FEASIBLE
         return status
 
@@ -734,8 +741,8 @@ def test_conditional_continuation_after_feasible_incumbent_is_not_global_optimum
     assert result.solve_status == CpSatSolveStatus.FEASIBLE
     assert result.lexicographic_optimality_proven is False
     assert result.model_stats.conditional_optimization_performed is True
-    assert len(result.stage_diagnostics) == 9
-    assert any(item.conditional_on_unproven_incumbent for item in result.stage_diagnostics[2:])
+    assert len(result.stage_diagnostics) == 10
+    assert any(item.conditional_on_unproven_incumbent for item in result.stage_diagnostics[3:])
     assert outcome(result, alt_key("STU_1", 1, "ALT1")).status == AlternateRequestStatus.ASSIGNED
 
 
@@ -823,7 +830,7 @@ def test_highest_globally_proven_stage_survives_conditional_enrichment(monkeypat
         nonlocal call_count
         call_count += 1
         status = original(raw_status)
-        if call_count == 4 and status == CpSatSolveStatus.OPTIMAL:
+        if call_count == 5 and status == CpSatSolveStatus.OPTIMAL:
             return CpSatSolveStatus.FEASIBLE
         return status
 

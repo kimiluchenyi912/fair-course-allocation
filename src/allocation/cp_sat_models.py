@@ -20,9 +20,19 @@ class CpSatSolveStatus(str, Enum):
     INFEASIBLE = "INFEASIBLE"
     MODEL_INVALID = "MODEL_INVALID"
     UNKNOWN = "UNKNOWN"
+    SKIPPED = "SKIPPED"
+
+
+class CpSatBootstrapStatus(str, Enum):
+    DISABLED = "DISABLED"
+    FEASIBLE_FOUND = "FEASIBLE_FOUND"
+    INFEASIBLE = "INFEASIBLE"
+    UNKNOWN_NO_INCUMBENT = "UNKNOWN_NO_INCUMBENT"
+    MODEL_INVALID = "MODEL_INVALID"
 
 
 class CpSatStageName(str, Enum):
+    FEASIBILITY_BOOTSTRAP = "feasibility_bootstrap"
     MATH_COVERAGE = "math_coverage"
     PRIMARY_SATISFACTION = "primary_satisfaction"
     PRIMARY_UNMET_COUNT = "primary_unmet_count"
@@ -36,6 +46,7 @@ class CpSatStageName(str, Enum):
 
 
 class CpSatModelScope(str, Enum):
+    BOOTSTRAP = "bootstrap"
     CORE = "core"
     ENRICHMENT = "enrichment"
 
@@ -53,6 +64,10 @@ class CpSatStageDiagnostic:
     optimum_proven: bool
     conditional_on_unproven_incumbent: bool = False
     fixed_higher_priority_values: tuple[tuple[CpSatStageName, int], ...] = ()
+    skipped: bool = False
+    skip_reason: str = ""
+    remaining_global_budget_at_start_seconds: float | None = field(default=None, compare=False)
+    effective_time_limit_seconds: float | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -79,6 +94,19 @@ class CpSatModelStats:
     core_model_constraint_count: int = 0
     enrichment_model_variable_count: int = 0
     enrichment_model_constraint_count: int = 0
+    bootstrap_enabled: bool = False
+    bootstrap_status: CpSatBootstrapStatus = CpSatBootstrapStatus.DISABLED
+    bootstrap_variable_count: int = 0
+    bootstrap_constraint_count: int = 0
+    bootstrap_build_time_seconds: float = field(default=0.0, compare=False)
+    bootstrap_solve_time_seconds: float = field(default=0.0, compare=False)
+    bootstrap_hint_strategy: str = "none"
+    bootstrap_incumbent_found: bool = False
+    time_to_first_hard_feasible_solution_seconds: float | None = field(default=None, compare=False)
+    core_hint_source: str = "none"
+    max_total_time_seconds: float | None = None
+    total_budget_exhausted: bool = False
+    skipped_stage_count: int = 0
     core_build_time_seconds: float = field(default=0.0, compare=False)
     enrichment_build_time_seconds: float = field(default=0.0, compare=False)
     total_build_time_seconds: float = field(default=0.0, compare=False)

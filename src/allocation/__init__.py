@@ -29,6 +29,7 @@ from .baseline_models import (
 )
 from .cp_sat_models import (
     CpSatAllocationResult,
+    CpSatBootstrapStatus,
     CpSatModelStats,
     CpSatModelScope,
     CpSatObjectiveValues,
@@ -89,6 +90,7 @@ __all__ = [
     "CandidateAttempt",
     "CourseMetadata",
     "CpSatAllocationResult",
+    "CpSatBootstrapStatus",
     "CpSatModelStats",
     "CpSatModelScope",
     "CpSatObjectiveValues",

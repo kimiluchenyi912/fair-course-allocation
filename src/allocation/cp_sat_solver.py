@@ -18,6 +18,7 @@ from .baseline_models import (
 )
 from .cp_sat_models import (
     CpSatAllocationResult,
+    CpSatBootstrapStatus,
     CpSatModelStats,
     CpSatModelScope,
     CpSatObjectiveValues,
@@ -36,7 +37,7 @@ from .random_baseline import (
 from .state import MANDATORY_FALLBACK_REQUEST_TYPE, AllocationState
 
 
-ALGORITHM_NAME = "fair_cp_sat_solver_v1_1"
+ALGORITHM_NAME = "fair_cp_sat_solver_v1_2"
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,56 @@ class _StageRun:
     conditional_optimization_performed: bool
     highest_globally_proven_stage: CpSatStageName | None
     stage_to_stage_hint_used: bool
+    budget_exhausted: bool = False
+
+
+@dataclass
+class _BootstrapBuild:
+    model: cp_model.CpModel
+    assignment_vars: dict[_VariableKey, cp_model.IntVar]
+    assigned_vars: dict[str, cp_model.LinearExpr]
+    requests_by_key: dict[str, LogicalRequest]
+    candidate_index: dict[str, tuple[str, ...]]
+    build_time_seconds: float
+
+
+@dataclass(frozen=True)
+class _BootstrapRun:
+    build: _BootstrapBuild | None
+    solver: cp_model.CpSolver | None
+    status: CpSatBootstrapStatus
+    diagnostic: CpSatStageDiagnostic | None
+    selected_keys: tuple[_VariableKey, ...]
+    solve_time_seconds: float
+    time_to_first_hard_feasible_solution_seconds: float | None
+    hint_strategy: str
+    budget_exhausted: bool = False
+
+
+@dataclass
+class _GlobalTimeBudget:
+    max_seconds: float | None
+    started_at: float
+    exhausted: bool = False
+
+    def remaining(self) -> float | None:
+        if self.max_seconds is None:
+            return None
+        return max(float(self.max_seconds) - (time.perf_counter() - self.started_at), 0.0)
+
+    def effective_limit(self, requested: float) -> float:
+        remaining = self.remaining()
+        if remaining is None:
+            return float(requested)
+        if remaining <= 0:
+            self.exhausted = True
+            return 0.0
+        return min(float(requested), remaining)
+
+    def refresh(self) -> None:
+        remaining = self.remaining()
+        if remaining is not None and remaining <= 0:
+            self.exhausted = True
 
 
 def run_fair_cp_sat_solver(
@@ -97,6 +148,9 @@ def run_fair_cp_sat_solver(
     num_search_workers: int = 1,
     log_search_progress: bool = False,
     continue_after_feasible: bool = True,
+    use_feasibility_bootstrap: bool = True,
+    bootstrap_time_seconds: float | None = None,
+    max_total_time_seconds: float | None = None,
     use_constrained_first_hint: bool = True,
     stage_to_stage_hints: bool = True,
 ) -> CpSatAllocationResult:
@@ -109,7 +163,41 @@ def run_fair_cp_sat_solver(
 
     started = time.perf_counter()
     math_course_ids = tuple(sorted(math_course_ids))
+    budget = _GlobalTimeBudget(max_total_time_seconds, started)
     fallback_plans = _convert_fallback_plans(_build_mandatory_fallback_plans(allocation_input, math_fallback_rules))
+    bootstrap_run = _BootstrapRun(
+        build=None,
+        solver=None,
+        status=CpSatBootstrapStatus.DISABLED,
+        diagnostic=None,
+        selected_keys=(),
+        solve_time_seconds=0.0,
+        time_to_first_hard_feasible_solution_seconds=None,
+        hint_strategy="none",
+    )
+    diagnostics: list[CpSatStageDiagnostic] = []
+    try:
+        _validate_candidate_index(allocation_input)
+    except ValueError:
+        if use_feasibility_bootstrap:
+            bootstrap_run = _model_invalid_bootstrap_run("none")
+            diagnostics.append(bootstrap_run.diagnostic)
+        return _empty_result(
+            seed,
+            CpSatSolveStatus.MODEL_INVALID,
+            tuple(diagnostics),
+            None,
+            None,
+            bootstrap_run,
+            time.perf_counter() - started,
+            False,
+            external_hint_used=False,
+            stage_to_stage_hint_used=False,
+            max_total_time_seconds=max_total_time_seconds,
+            total_budget_exhausted=budget.exhausted,
+            skipped_stage_count=0,
+            core_hint_source="none",
+        )
     external_hint_keys = (
         _constrained_first_partial_hint_keys(
             allocation_input,
@@ -120,8 +208,65 @@ def run_fair_cp_sat_solver(
         if use_constrained_first_hint
         else ()
     )
+    external_hint_used = bool(external_hint_keys)
+
+    if use_feasibility_bootstrap:
+        bootstrap_run = _run_feasibility_bootstrap(
+            allocation_input,
+            seed=seed,
+            max_time_seconds=bootstrap_time_seconds if bootstrap_time_seconds is not None else max_time_seconds_per_stage,
+            num_search_workers=num_search_workers,
+            log_search_progress=log_search_progress,
+            initial_hint_keys=external_hint_keys,
+            budget=budget,
+        )
+        if bootstrap_run.diagnostic is not None:
+            diagnostics.append(bootstrap_run.diagnostic)
+        if bootstrap_run.status == CpSatBootstrapStatus.INFEASIBLE:
+            return _empty_result(
+                seed,
+                CpSatSolveStatus.INFEASIBLE,
+                tuple(diagnostics),
+                None,
+                None,
+                bootstrap_run,
+                time.perf_counter() - started,
+                False,
+                external_hint_used=external_hint_used,
+                stage_to_stage_hint_used=False,
+                max_total_time_seconds=max_total_time_seconds,
+                total_budget_exhausted=budget.exhausted,
+                skipped_stage_count=0,
+                core_hint_source="none",
+            )
+        if bootstrap_run.status == CpSatBootstrapStatus.MODEL_INVALID:
+            return _empty_result(
+                seed,
+                CpSatSolveStatus.MODEL_INVALID,
+                tuple(diagnostics),
+                None,
+                None,
+                bootstrap_run,
+                time.perf_counter() - started,
+                False,
+                external_hint_used=external_hint_used,
+                stage_to_stage_hint_used=False,
+                max_total_time_seconds=max_total_time_seconds,
+                total_budget_exhausted=budget.exhausted,
+                skipped_stage_count=0,
+                core_hint_source="none",
+            )
 
     core_build = _build_core_cp_sat_model(allocation_input, fallback_plans, math_course_ids, seed)
+    core_initial_hint_source = set(external_hint_keys)
+    core_hint_source = "constrained_first_partial" if external_hint_keys else "none"
+    if bootstrap_run.selected_keys:
+        core_initial_hint_source.update(bootstrap_run.selected_keys)
+        core_hint_source = (
+            "bootstrap+constrained_first_partial"
+            if external_hint_keys
+            else "bootstrap"
+        )
     core_run = _solve_stage_sequence(
         core_build,
         (
@@ -135,22 +280,41 @@ def run_fair_cp_sat_solver(
         seed=seed,
         continue_after_feasible=continue_after_feasible,
         stage_to_stage_hints=stage_to_stage_hints,
-        initial_hint_keys=external_hint_keys,
+        initial_hint_keys=tuple(sorted(core_initial_hint_source, key=lambda item: (item.request_key, item.section_id))),
         initial_fixed_values=(),
         already_conditional=False,
+        budget=budget,
     )
-    diagnostics = list(core_run.diagnostics)
+    diagnostics.extend(core_run.diagnostics)
     if core_run.solver is None:
+        skipped = _skipped_diagnostics(
+            (
+                _SolveStage(CpSatStageName.ALTERNATE_RANK_1, "max"),
+                _SolveStage(CpSatStageName.ALTERNATE_RANK_2, "max"),
+                _SolveStage(CpSatStageName.ALTERNATE_RANK_3, "max"),
+                _SolveStage(CpSatStageName.FULLY_SCHEDULED, "max"),
+                _SolveStage(CpSatStageName.REMAINING_PERIOD_UNITS, "min"),
+                _SolveStage(CpSatStageName.SEEDED_TIE_BREAK, "min"),
+            ),
+            reason="time_budget_exhausted" if budget.exhausted else "no_incumbent",
+            model_scope=CpSatModelScope.ENRICHMENT,
+        )
+        diagnostics.extend(skipped)
         return _empty_result(
             seed,
             core_run.status,
             tuple(diagnostics),
             core_build,
             None,
+            bootstrap_run,
             time.perf_counter() - started,
             False,
-            external_hint_used=bool(external_hint_keys),
+            external_hint_used=external_hint_used,
             stage_to_stage_hint_used=core_run.stage_to_stage_hint_used,
+            max_total_time_seconds=max_total_time_seconds,
+            total_budget_exhausted=budget.exhausted,
+            skipped_stage_count=sum(1 for item in diagnostics if item.skipped),
+            core_hint_source=core_hint_source,
         )
 
     required_core_stages = (
@@ -168,7 +332,20 @@ def run_fair_cp_sat_solver(
         final_solver = core_run.solver
         final_stage_values = core_run.stage_values
         enrichment_build = None
-        enrichment_run = _StageRun(None, core_run.status, (), {}, False, False, None, False)
+        skipped = _skipped_diagnostics(
+            (
+                _SolveStage(CpSatStageName.ALTERNATE_RANK_1, "max"),
+                _SolveStage(CpSatStageName.ALTERNATE_RANK_2, "max"),
+                _SolveStage(CpSatStageName.ALTERNATE_RANK_3, "max"),
+                _SolveStage(CpSatStageName.FULLY_SCHEDULED, "max"),
+                _SolveStage(CpSatStageName.REMAINING_PERIOD_UNITS, "min"),
+                _SolveStage(CpSatStageName.SEEDED_TIE_BREAK, "min"),
+            ),
+            reason="missing_core_objective",
+            model_scope=CpSatModelScope.ENRICHMENT,
+        )
+        diagnostics.extend(skipped)
+        enrichment_run = _StageRun(None, core_run.status, skipped, {}, False, False, None, False)
     else:
         core_selected = _selected_assignments(core_build, core_run.solver)
         enrichment_build = _build_enrichment_cp_sat_model(
@@ -201,6 +378,7 @@ def run_fair_cp_sat_solver(
             initial_hint_keys=enrichment_hint_keys,
             initial_fixed_values=tuple(core_values.items()),
             already_conditional=not core_run.lexicographic_optimum,
+            budget=budget,
         )
         diagnostics.extend(enrichment_run.diagnostics)
 
@@ -222,10 +400,15 @@ def run_fair_cp_sat_solver(
             tuple(diagnostics),
             final_build,
             core_build if final_build is enrichment_build else None,
+            bootstrap_run,
             time.perf_counter() - started,
             False,
-            external_hint_used=bool(external_hint_keys),
+            external_hint_used=external_hint_used,
             stage_to_stage_hint_used=core_run.stage_to_stage_hint_used or enrichment_run.stage_to_stage_hint_used,
+            max_total_time_seconds=max_total_time_seconds,
+            total_budget_exhausted=budget.exhausted,
+            skipped_stage_count=0,
+            core_hint_source=core_hint_source,
         )
 
     request_outcomes = _build_request_outcomes(allocation_input, final_build, final_solver, state)
@@ -247,10 +430,11 @@ def run_fair_cp_sat_solver(
     enrichment_variable_count = len(enrichment_proto.variables) if enrichment_proto is not None else 0
     enrichment_constraint_count = len(enrichment_proto.constraints) if enrichment_proto is not None else 0
     enrichment_build_time = enrichment_build.build_time_seconds if enrichment_build is not None else 0.0
-    total_build_time = core_build.build_time_seconds + enrichment_build_time
+    total_build_time = core_build.build_time_seconds + enrichment_build_time + _bootstrap_build_time(bootstrap_run)
     elapsed = time.perf_counter() - started
     conditional = core_run.conditional_optimization_performed or enrichment_run.conditional_optimization_performed
     highest_global = enrichment_run.highest_globally_proven_stage or core_run.highest_globally_proven_stage
+    skipped_count = sum(1 for item in diagnostics if item.skipped)
     return CpSatAllocationResult(
         algorithm_name=ALGORITHM_NAME,
         seed=int(seed),
@@ -267,12 +451,34 @@ def run_fair_cp_sat_solver(
             core_model_constraint_count=len(core_proto.constraints),
             enrichment_model_variable_count=enrichment_variable_count,
             enrichment_model_constraint_count=enrichment_constraint_count,
+            bootstrap_enabled=use_feasibility_bootstrap,
+            bootstrap_status=bootstrap_run.status,
+            bootstrap_variable_count=_bootstrap_variable_count(bootstrap_run),
+            bootstrap_constraint_count=_bootstrap_constraint_count(bootstrap_run),
+            bootstrap_build_time_seconds=round(_bootstrap_build_time(bootstrap_run), 6),
+            bootstrap_solve_time_seconds=round(bootstrap_run.solve_time_seconds, 6),
+            bootstrap_hint_strategy=bootstrap_run.hint_strategy,
+            bootstrap_incumbent_found=bootstrap_run.status == CpSatBootstrapStatus.FEASIBLE_FOUND,
+            time_to_first_hard_feasible_solution_seconds=(
+                round(bootstrap_run.time_to_first_hard_feasible_solution_seconds, 6)
+                if bootstrap_run.time_to_first_hard_feasible_solution_seconds is not None
+                else None
+            ),
+            core_hint_source=core_hint_source,
+            max_total_time_seconds=max_total_time_seconds,
+            total_budget_exhausted=budget.exhausted,
+            skipped_stage_count=skipped_count,
             core_build_time_seconds=round(core_build.build_time_seconds, 6),
             enrichment_build_time_seconds=round(enrichment_build_time, 6),
             total_build_time_seconds=round(total_build_time, 6),
             total_solve_time_seconds=round(max(elapsed - total_build_time, 0.0), 6),
+            time_to_first_feasible_solution_seconds=(
+                round(bootstrap_run.time_to_first_hard_feasible_solution_seconds, 6)
+                if bootstrap_run.time_to_first_hard_feasible_solution_seconds is not None
+                else None
+            ),
             warm_start_strategy=_warm_start_strategy(stage_to_stage_hints, bool(external_hint_keys)),
-            external_hint_used=bool(external_hint_keys),
+            external_hint_used=external_hint_used,
             stage_to_stage_hint_used=core_run.stage_to_stage_hint_used or enrichment_run.stage_to_stage_hint_used,
             highest_globally_proven_stage=highest_global,
             conditional_optimization_performed=conditional,
@@ -326,6 +532,214 @@ def _build_enrichment_cp_sat_model(
     )
 
 
+def _build_feasibility_bootstrap_model(
+    allocation_input: CanonicalAllocationInput,
+) -> _BootstrapBuild:
+    started = time.perf_counter()
+    model = cp_model.CpModel()
+    requests_by_key = {
+        request.request_key: request
+        for request in allocation_input.logical_requests
+        if request.request_type == "primary"
+    }
+    candidate_index: dict[str, tuple[str, ...]] = {}
+    assignment_vars: dict[_VariableKey, cp_model.IntVar] = {}
+    assigned_vars: dict[str, cp_model.LinearExpr] = {}
+    for request_key in sorted(requests_by_key):
+        request = requests_by_key[request_key]
+        raw_candidates = allocation_input.candidate_index.get(request_key, ())
+        candidates = tuple(raw_candidates)
+        _validate_candidates_for_request(allocation_input, request, candidates)
+        candidate_index[request_key] = candidates
+        candidate_vars: list[cp_model.IntVar] = []
+        for section_id in candidates:
+            var = model.NewBoolVar(f"boot_x__{_safe_name(request_key)}__{_safe_name(section_id)}")
+            assignment_vars[_VariableKey(request_key, section_id)] = var
+            candidate_vars.append(var)
+        if len(candidate_vars) == 1:
+            assigned_vars[request_key] = candidate_vars[0]
+        elif candidate_vars:
+            assigned = model.NewBoolVar(f"boot_assigned__{_safe_name(request_key)}")
+            assigned_vars[request_key] = assigned
+            model.Add(sum(candidate_vars) == assigned)
+        else:
+            assigned_vars[request_key] = 0
+    _add_section_capacity_constraints(model, allocation_input, assignment_vars)
+    _add_student_period_constraints(model, allocation_input, requests_by_key, assignment_vars)
+    _add_student_target_constraints(model, allocation_input, requests_by_key, assignment_vars)
+    _add_duplicate_identity_constraints(model, allocation_input, requests_by_key, assigned_vars)
+    _add_fairness_hard_constraints(model, allocation_input, assigned_vars)
+    return _BootstrapBuild(
+        model=model,
+        assignment_vars=assignment_vars,
+        assigned_vars=assigned_vars,
+        requests_by_key=requests_by_key,
+        candidate_index=candidate_index,
+        build_time_seconds=time.perf_counter() - started,
+    )
+
+
+def _validate_candidate_index(allocation_input: CanonicalAllocationInput) -> None:
+    for request in allocation_input.logical_requests:
+        candidates = tuple(allocation_input.candidate_index.get(request.request_key, ()))
+        _validate_candidates_for_request(allocation_input, request, candidates)
+
+
+def _validate_candidates_for_request(
+    allocation_input: CanonicalAllocationInput,
+    request: LogicalRequest,
+    candidates: tuple[str, ...],
+) -> None:
+    if len(candidates) != len(set(candidates)):
+        raise ValueError(f"duplicate candidate sections for {request.request_key}")
+    for section_id in candidates:
+        section = allocation_input.logical_sections_by_id.get(section_id)
+        if section is None:
+            raise ValueError(f"dangling candidate section {section_id} for {request.request_key}")
+        if section.logical_block_id != request.candidate_key:
+            raise ValueError(f"candidate section {section_id} does not match {request.request_key}")
+        if section.period_units != request.period_units:
+            raise ValueError(f"candidate section {section_id} has wrong period units for {request.request_key}")
+        if tuple(sorted(section.course_ids)) != tuple(sorted(request.course_ids)):
+            raise ValueError(f"candidate section {section_id} has wrong course identity for {request.request_key}")
+
+
+def _model_invalid_bootstrap_run(hint_strategy: str) -> _BootstrapRun:
+    return _BootstrapRun(
+        build=None,
+        solver=None,
+        status=CpSatBootstrapStatus.MODEL_INVALID,
+        diagnostic=CpSatStageDiagnostic(
+            stage_name=CpSatStageName.FEASIBILITY_BOOTSTRAP,
+            model_scope=CpSatModelScope.BOOTSTRAP,
+            status=CpSatSolveStatus.MODEL_INVALID,
+            objective_value=None,
+            best_objective_bound=None,
+            wall_time_seconds=0.0,
+            conflicts=0,
+            branches=0,
+            optimum_proven=False,
+        ),
+        selected_keys=(),
+        solve_time_seconds=0.0,
+        time_to_first_hard_feasible_solution_seconds=None,
+        hint_strategy=hint_strategy,
+    )
+
+
+def _run_feasibility_bootstrap(
+    allocation_input: CanonicalAllocationInput,
+    *,
+    seed: int,
+    max_time_seconds: float,
+    num_search_workers: int,
+    log_search_progress: bool,
+    initial_hint_keys: tuple[_VariableKey, ...],
+    budget: _GlobalTimeBudget,
+) -> _BootstrapRun:
+    try:
+        build = _build_feasibility_bootstrap_model(allocation_input)
+    except ValueError:
+        return _model_invalid_bootstrap_run(_bootstrap_hint_strategy(initial_hint_keys))
+    effective_limit = budget.effective_limit(max_time_seconds)
+    remaining_at_start = budget.remaining()
+    if effective_limit <= 0:
+        return _BootstrapRun(
+            build=build,
+            solver=None,
+            status=CpSatBootstrapStatus.UNKNOWN_NO_INCUMBENT,
+            diagnostic=_skipped_diagnostic(
+                CpSatStageName.FEASIBILITY_BOOTSTRAP,
+                CpSatModelScope.BOOTSTRAP,
+                "time_budget_exhausted",
+                remaining_at_start,
+                effective_limit,
+            ),
+            selected_keys=(),
+            solve_time_seconds=0.0,
+            time_to_first_hard_feasible_solution_seconds=None,
+            hint_strategy=_bootstrap_hint_strategy(initial_hint_keys),
+            budget_exhausted=True,
+        )
+    if initial_hint_keys:
+        _apply_key_hint(build.model, build.assignment_vars, initial_hint_keys)
+    solver = _new_solver(effective_limit, num_search_workers, log_search_progress, seed)
+    solver.parameters.stop_after_first_solution = True
+    solve_started = time.perf_counter()
+    raw_status = solver.Solve(build.model)
+    solve_time = time.perf_counter() - solve_started
+    budget.refresh()
+    status = _solve_status(raw_status)
+    diagnostic = _stage_diagnostic(
+        CpSatStageName.FEASIBILITY_BOOTSTRAP,
+        CpSatModelScope.BOOTSTRAP,
+        status,
+        solver,
+        conditional_on_unproven_incumbent=False,
+        fixed_higher_priority_values=(),
+        remaining_global_budget_at_start_seconds=remaining_at_start,
+        effective_time_limit_seconds=effective_limit,
+    )
+    if status in {CpSatSolveStatus.OPTIMAL, CpSatSolveStatus.FEASIBLE}:
+        selected = _selected_bootstrap_assignments(build, solver)
+        try:
+            _replay_bootstrap_solution(allocation_input, build, selected)
+        except RuntimeError:
+            return _BootstrapRun(
+                build=build,
+                solver=solver,
+                status=CpSatBootstrapStatus.MODEL_INVALID,
+                diagnostic=diagnostic,
+                selected_keys=(),
+                solve_time_seconds=solve_time,
+                time_to_first_hard_feasible_solution_seconds=None,
+                hint_strategy=_bootstrap_hint_strategy(initial_hint_keys),
+            )
+        return _BootstrapRun(
+            build=build,
+            solver=solver,
+            status=CpSatBootstrapStatus.FEASIBLE_FOUND,
+            diagnostic=diagnostic,
+            selected_keys=selected,
+            solve_time_seconds=solve_time,
+            time_to_first_hard_feasible_solution_seconds=solve_time,
+            hint_strategy=_bootstrap_hint_strategy(initial_hint_keys),
+        )
+    if status == CpSatSolveStatus.INFEASIBLE:
+        return _BootstrapRun(
+            build=build,
+            solver=solver,
+            status=CpSatBootstrapStatus.INFEASIBLE,
+            diagnostic=diagnostic,
+            selected_keys=(),
+            solve_time_seconds=solve_time,
+            time_to_first_hard_feasible_solution_seconds=None,
+            hint_strategy=_bootstrap_hint_strategy(initial_hint_keys),
+        )
+    if status == CpSatSolveStatus.MODEL_INVALID:
+        return _BootstrapRun(
+            build=build,
+            solver=solver,
+            status=CpSatBootstrapStatus.MODEL_INVALID,
+            diagnostic=diagnostic,
+            selected_keys=(),
+            solve_time_seconds=solve_time,
+            time_to_first_hard_feasible_solution_seconds=None,
+            hint_strategy=_bootstrap_hint_strategy(initial_hint_keys),
+        )
+    return _BootstrapRun(
+        build=build,
+        solver=None,
+        status=CpSatBootstrapStatus.UNKNOWN_NO_INCUMBENT,
+        diagnostic=diagnostic,
+        selected_keys=(),
+        solve_time_seconds=solve_time,
+        time_to_first_hard_feasible_solution_seconds=None,
+        hint_strategy=_bootstrap_hint_strategy(initial_hint_keys),
+        budget_exhausted=budget.exhausted,
+    )
+
+
 def _build_model(
     allocation_input: CanonicalAllocationInput,
     fallback_plans: tuple[_FallbackPlan, ...],
@@ -353,13 +767,16 @@ def _build_model(
     assigned_vars: dict[str, cp_model.LinearExpr] = {}
     for request_key in sorted(requests_by_key):
         request = requests_by_key[request_key]
-        candidates = tuple(section_id for section_id in candidate_index.get(request_key, ()) if section_id in allocation_input.logical_sections_by_id)
+        candidates = tuple(candidate_index.get(request_key, ()))
+        _validate_candidates_for_request(allocation_input, request, candidates)
         candidate_vars: list[cp_model.IntVar] = []
         for section_id in candidates:
             var = model.NewBoolVar(f"x__{_safe_name(request_key)}__{_safe_name(section_id)}")
             assignment_vars[_VariableKey(request_key, section_id)] = var
             candidate_vars.append(var)
-        if candidate_vars:
+        if len(candidate_vars) == 1:
+            assigned_vars[request_key] = candidate_vars[0]
+        elif candidate_vars:
             assigned = model.NewBoolVar(f"assigned__{_safe_name(request_key)}")
             assigned_vars[request_key] = assigned
             model.Add(sum(candidate_vars) == assigned)
@@ -669,6 +1086,7 @@ def _solve_stage_sequence(
     initial_hint_keys: tuple[_VariableKey, ...],
     initial_fixed_values: tuple[tuple[CpSatStageName, int], ...],
     already_conditional: bool,
+    budget: _GlobalTimeBudget,
 ) -> _StageRun:
     diagnostics: list[CpSatStageDiagnostic] = []
     stage_values: dict[CpSatStageName, int] = {}
@@ -684,14 +1102,30 @@ def _solve_stage_sequence(
     if initial_hint_keys:
         _apply_key_hint(build.model, build.assignment_vars, initial_hint_keys)
 
-    for stage in stages:
+    for index, stage in enumerate(stages):
+        remaining_at_start = budget.remaining()
+        effective_limit = budget.effective_limit(max_time_seconds_per_stage)
+        if effective_limit <= 0:
+            diagnostics.append(
+                _skipped_diagnostic(
+                    stage.stage_name,
+                    build.model_scope,
+                    "time_budget_exhausted",
+                    remaining_at_start,
+                    effective_limit,
+                )
+            )
+            diagnostics.extend(_skipped_diagnostics(stages[index + 1 :], "time_budget_exhausted", build.model_scope))
+            lexicographic_optimum = False
+            break
         expr = build.stage_exprs[stage.stage_name]
         if stage.sense == "min":
             build.model.Minimize(expr)
         else:
             build.model.Maximize(expr)
-        solver = _new_solver(max_time_seconds_per_stage, num_search_workers, log_search_progress, seed)
+        solver = _new_solver(effective_limit, num_search_workers, log_search_progress, seed)
         raw_status = solver.Solve(build.model)
+        budget.refresh()
         status = _solve_status(raw_status)
         diagnostic = _stage_diagnostic(
             stage.stage_name,
@@ -700,10 +1134,13 @@ def _solve_stage_sequence(
             solver,
             conditional_on_unproven_incumbent=conditional,
             fixed_higher_priority_values=tuple(fixed_values.items()),
+            remaining_global_budget_at_start_seconds=remaining_at_start,
+            effective_time_limit_seconds=effective_limit,
         )
         diagnostics.append(diagnostic)
 
         if status not in {CpSatSolveStatus.OPTIMAL, CpSatSolveStatus.FEASIBLE}:
+            diagnostics.extend(_skipped_diagnostics(stages[index + 1 :], "no_incumbent", build.model_scope))
             lexicographic_optimum = False
             break
 
@@ -720,6 +1157,9 @@ def _solve_stage_sequence(
             conditional = True
             conditional_performed = True
             if not continue_after_feasible:
+                diagnostics.extend(
+                    _skipped_diagnostics(stages[index + 1 :], "conditional_continuation_disabled", build.model_scope)
+                )
                 break
 
         if stage_to_stage_hints:
@@ -735,6 +1175,7 @@ def _solve_stage_sequence(
         conditional_optimization_performed=conditional_performed,
         highest_globally_proven_stage=highest_global,
         stage_to_stage_hint_used=stage_hint_used,
+        budget_exhausted=budget.exhausted,
     )
 
 
@@ -748,6 +1189,53 @@ def _apply_key_hint(
         var = assignment_vars.get(key)
         if var is not None:
             model.AddHint(var, 1)
+
+
+def _selected_bootstrap_assignments(
+    build: _BootstrapBuild,
+    solver: cp_model.CpSolver,
+) -> tuple[_VariableKey, ...]:
+    return tuple(
+        key
+        for key in sorted(build.assignment_vars, key=lambda item: (item.request_key, item.section_id))
+        if solver.BooleanValue(build.assignment_vars[key])
+    )
+
+
+def _replay_bootstrap_solution(
+    allocation_input: CanonicalAllocationInput,
+    build: _BootstrapBuild,
+    selected: tuple[_VariableKey, ...],
+) -> AllocationState:
+    state = AllocationState(allocation_input)
+    for key in sorted(selected, key=lambda item: _assignment_replay_sort_key(build.requests_by_key[item.request_key], item.section_id)):
+        request = build.requests_by_key[key.request_key]
+        result = state.try_assign(request.student_id, request.request_key, key.section_id)
+        if not result.allowed:
+            raise RuntimeError(
+                "CP-SAT bootstrap solution failed AllocationState replay: "
+                f"{request.request_key} -> {key.section_id}: {[reason.value for reason in result.reasons]}"
+            )
+    issues = state.validate_internal_consistency()
+    if issues:
+        raise RuntimeError(f"CP-SAT bootstrap solution failed AllocationState consistency: {issues!r}")
+    return state
+
+
+def _bootstrap_hint_strategy(hint_keys: tuple[_VariableKey, ...]) -> str:
+    return "constrained_first_partial" if hint_keys else "none"
+
+
+def _bootstrap_variable_count(bootstrap_run: _BootstrapRun) -> int:
+    return len(bootstrap_run.build.model.Proto().variables) if bootstrap_run.build is not None else 0
+
+
+def _bootstrap_constraint_count(bootstrap_run: _BootstrapRun) -> int:
+    return len(bootstrap_run.build.model.Proto().constraints) if bootstrap_run.build is not None else 0
+
+
+def _bootstrap_build_time(bootstrap_run: _BootstrapRun) -> float:
+    return bootstrap_run.build.build_time_seconds if bootstrap_run.build is not None else 0.0
 
 
 def _apply_solution_hint(
@@ -809,6 +1297,8 @@ def _stage_diagnostic(
     *,
     conditional_on_unproven_incumbent: bool,
     fixed_higher_priority_values: tuple[tuple[CpSatStageName, int], ...],
+    remaining_global_budget_at_start_seconds: float | None = None,
+    effective_time_limit_seconds: float | None = None,
 ) -> CpSatStageDiagnostic:
     has_solution = status in {CpSatSolveStatus.OPTIMAL, CpSatSolveStatus.FEASIBLE}
     objective = int(round(solver.ObjectiveValue())) if has_solution else None
@@ -825,6 +1315,59 @@ def _stage_diagnostic(
         optimum_proven=status == CpSatSolveStatus.OPTIMAL,
         conditional_on_unproven_incumbent=conditional_on_unproven_incumbent,
         fixed_higher_priority_values=fixed_higher_priority_values,
+        remaining_global_budget_at_start_seconds=(
+            round(remaining_global_budget_at_start_seconds, 6)
+            if remaining_global_budget_at_start_seconds is not None
+            else None
+        ),
+        effective_time_limit_seconds=(
+            round(effective_time_limit_seconds, 6)
+            if effective_time_limit_seconds is not None
+            else None
+        ),
+    )
+
+
+def _skipped_diagnostic(
+    stage_name: CpSatStageName,
+    model_scope: CpSatModelScope,
+    reason: str,
+    remaining_global_budget_at_start_seconds: float | None = None,
+    effective_time_limit_seconds: float | None = None,
+) -> CpSatStageDiagnostic:
+    return CpSatStageDiagnostic(
+        stage_name=stage_name,
+        model_scope=model_scope,
+        status=CpSatSolveStatus.SKIPPED,
+        objective_value=None,
+        best_objective_bound=None,
+        wall_time_seconds=0.0,
+        conflicts=0,
+        branches=0,
+        optimum_proven=False,
+        skipped=True,
+        skip_reason=reason,
+        remaining_global_budget_at_start_seconds=(
+            round(remaining_global_budget_at_start_seconds, 6)
+            if remaining_global_budget_at_start_seconds is not None
+            else None
+        ),
+        effective_time_limit_seconds=(
+            round(effective_time_limit_seconds, 6)
+            if effective_time_limit_seconds is not None
+            else None
+        ),
+    )
+
+
+def _skipped_diagnostics(
+    stages: tuple[_SolveStage, ...],
+    reason: str,
+    model_scope: CpSatModelScope,
+) -> tuple[CpSatStageDiagnostic, ...]:
+    return tuple(
+        _skipped_diagnostic(stage.stage_name, model_scope, reason)
+        for stage in stages
     )
 
 
@@ -901,11 +1444,11 @@ def _build_request_outcomes(
                 PrimaryRequestStatus.ASSIGNED
                 if assignment is not None
                 else PrimaryRequestStatus.UNMET_NO_CANDIDATES
-                if not build.candidate_index.get(request.request_key, ())
+                if not build.candidate_index.get(request.request_key, allocation_input.candidate_index.get(request.request_key, ()))
                 else PrimaryRequestStatus.UNMET_ALL_CANDIDATES_REJECTED
             )
         else:
-            status = _alternate_status(request, assignment, before, build)
+            status = _alternate_status(request, assignment, before, build, allocation_input)
         outcomes.append(
             RequestOutcome(
                 request_key=request.request_key,
@@ -930,6 +1473,7 @@ def _alternate_status(
     assignment,
     remaining_units: int,
     build: _ModelBuild,
+    allocation_input: CanonicalAllocationInput,
 ) -> AlternateRequestStatus:
     if assignment is not None:
         return AlternateRequestStatus.ASSIGNED
@@ -937,7 +1481,7 @@ def _alternate_status(
         return AlternateRequestStatus.NOT_NEEDED
     if request.period_units > remaining_units:
         return AlternateRequestStatus.DOES_NOT_FIT_REMAINING_LOAD
-    if not build.candidate_index.get(request.request_key, ()):
+    if not build.candidate_index.get(request.request_key, allocation_input.candidate_index.get(request.request_key, ())):
         return AlternateRequestStatus.UNASSIGNED_NO_CANDIDATES
     return AlternateRequestStatus.UNASSIGNED_ALL_CANDIDATES_REJECTED
 
@@ -1002,29 +1546,33 @@ def _solver_bool_value(solver: cp_model.CpSolver, expr: cp_model.LinearExpr) -> 
     return bool(solver.BooleanValue(expr))
 
 
+def _solver_int_value(solver: cp_model.CpSolver, expr: cp_model.LinearExpr) -> int:
+    if isinstance(expr, int):
+        return int(expr)
+    return int(round(solver.Value(expr)))
+
+
 def _objective_values(
     build: _ModelBuild,
     solver: cp_model.CpSolver,
     stage_values: dict[CpSatStageName, int],
 ) -> CpSatObjectiveValues:
-    primary_unmet_count = stage_values.get(CpSatStageName.PRIMARY_UNMET_COUNT, 0)
-    primary_unmet_units = stage_values.get(CpSatStageName.PRIMARY_UNMET_PERIOD_UNITS, 0)
-    primary_penalty = (
-        stage_values.get(CpSatStageName.PRIMARY_SATISFACTION)
-        if CpSatStageName.PRIMARY_SATISFACTION in stage_values
-        else primary_unmet_count * build.primary_penalty_dominance_base + primary_unmet_units
-    )
+    del stage_values
+    stage_exprs = build.stage_exprs
+    primary_unmet_count = _solver_int_value(solver, stage_exprs[CpSatStageName.PRIMARY_UNMET_COUNT])
+    primary_unmet_units = _solver_int_value(solver, stage_exprs[CpSatStageName.PRIMARY_UNMET_PERIOD_UNITS])
+    primary_penalty = _solver_int_value(solver, stage_exprs[CpSatStageName.PRIMARY_SATISFACTION])
     return CpSatObjectiveValues(
-        math_coverage_violations=stage_values.get(CpSatStageName.MATH_COVERAGE, 0),
+        math_coverage_violations=_solver_int_value(solver, stage_exprs[CpSatStageName.MATH_COVERAGE]),
         primary_unmet_count=primary_unmet_count,
         primary_unmet_period_units=primary_unmet_units,
         primary_penalty=primary_penalty,
-        alternate_rank1_assigned=stage_values.get(CpSatStageName.ALTERNATE_RANK_1, 0),
-        alternate_rank2_assigned=stage_values.get(CpSatStageName.ALTERNATE_RANK_2, 0),
-        alternate_rank3_assigned=stage_values.get(CpSatStageName.ALTERNATE_RANK_3, 0),
-        fully_scheduled_students=stage_values.get(CpSatStageName.FULLY_SCHEDULED, 0),
-        total_remaining_period_units=stage_values.get(CpSatStageName.REMAINING_PERIOD_UNITS, 0),
-        seeded_tie_break_value=stage_values.get(CpSatStageName.SEEDED_TIE_BREAK, 0),
+        alternate_rank1_assigned=_solver_int_value(solver, stage_exprs[CpSatStageName.ALTERNATE_RANK_1]),
+        alternate_rank2_assigned=_solver_int_value(solver, stage_exprs[CpSatStageName.ALTERNATE_RANK_2]),
+        alternate_rank3_assigned=_solver_int_value(solver, stage_exprs[CpSatStageName.ALTERNATE_RANK_3]),
+        fully_scheduled_students=_solver_int_value(solver, stage_exprs[CpSatStageName.FULLY_SCHEDULED]),
+        total_remaining_period_units=_solver_int_value(solver, stage_exprs[CpSatStageName.REMAINING_PERIOD_UNITS]),
+        seeded_tie_break_value=_solver_int_value(solver, stage_exprs[CpSatStageName.SEEDED_TIE_BREAK]),
     )
 
 
@@ -1057,23 +1605,30 @@ def _empty_result(
     seed: int,
     status: CpSatSolveStatus,
     diagnostics: tuple[CpSatStageDiagnostic, ...],
-    build: _ModelBuild,
+    build: _ModelBuild | None,
     other_build: _ModelBuild | None,
+    bootstrap_run: _BootstrapRun,
     elapsed: float,
     optimality_proven: bool,
     *,
     external_hint_used: bool,
     stage_to_stage_hint_used: bool,
+    max_total_time_seconds: float | None,
+    total_budget_exhausted: bool,
+    skipped_stage_count: int,
+    core_hint_source: str,
 ) -> CpSatAllocationResult:
-    proto = build.model.Proto()
+    proto = build.model.Proto() if build is not None else None
     other_proto = other_build.model.Proto() if other_build is not None else None
-    core_proto = proto if build.model_scope == CpSatModelScope.CORE else other_proto
-    enrichment_proto = proto if build.model_scope == CpSatModelScope.ENRICHMENT else other_proto
+    core_proto = proto if build is not None and build.model_scope == CpSatModelScope.CORE else other_proto
+    enrichment_proto = proto if build is not None and build.model_scope == CpSatModelScope.ENRICHMENT else other_proto
     core_vars = len(core_proto.variables) if core_proto is not None else 0
     core_constraints = len(core_proto.constraints) if core_proto is not None else 0
     enrichment_vars = len(enrichment_proto.variables) if enrichment_proto is not None else 0
     enrichment_constraints = len(enrichment_proto.constraints) if enrichment_proto is not None else 0
-    total_build_time = build.build_time_seconds + (other_build.build_time_seconds if other_build is not None else 0.0)
+    build_time = build.build_time_seconds if build is not None else 0.0
+    other_build_time = other_build.build_time_seconds if other_build is not None else 0.0
+    total_build_time = build_time + other_build_time + _bootstrap_build_time(bootstrap_run)
     return CpSatAllocationResult(
         algorithm_name=ALGORITHM_NAME,
         seed=int(seed),
@@ -1090,10 +1645,32 @@ def _empty_result(
             core_model_constraint_count=core_constraints,
             enrichment_model_variable_count=enrichment_vars,
             enrichment_model_constraint_count=enrichment_constraints,
-            core_build_time_seconds=round(build.build_time_seconds if build.model_scope == CpSatModelScope.CORE else (other_build.build_time_seconds if other_build else 0.0), 6),
-            enrichment_build_time_seconds=round(build.build_time_seconds if build.model_scope == CpSatModelScope.ENRICHMENT else (other_build.build_time_seconds if other_build else 0.0), 6),
+            bootstrap_enabled=bootstrap_run.status != CpSatBootstrapStatus.DISABLED,
+            bootstrap_status=bootstrap_run.status,
+            bootstrap_variable_count=_bootstrap_variable_count(bootstrap_run),
+            bootstrap_constraint_count=_bootstrap_constraint_count(bootstrap_run),
+            bootstrap_build_time_seconds=round(_bootstrap_build_time(bootstrap_run), 6),
+            bootstrap_solve_time_seconds=round(bootstrap_run.solve_time_seconds, 6),
+            bootstrap_hint_strategy=bootstrap_run.hint_strategy,
+            bootstrap_incumbent_found=bootstrap_run.status == CpSatBootstrapStatus.FEASIBLE_FOUND,
+            time_to_first_hard_feasible_solution_seconds=(
+                round(bootstrap_run.time_to_first_hard_feasible_solution_seconds, 6)
+                if bootstrap_run.time_to_first_hard_feasible_solution_seconds is not None
+                else None
+            ),
+            core_hint_source=core_hint_source,
+            max_total_time_seconds=max_total_time_seconds,
+            total_budget_exhausted=total_budget_exhausted,
+            skipped_stage_count=skipped_stage_count,
+            core_build_time_seconds=round(build_time if build is not None and build.model_scope == CpSatModelScope.CORE else other_build_time, 6),
+            enrichment_build_time_seconds=round(build_time if build is not None and build.model_scope == CpSatModelScope.ENRICHMENT else other_build_time, 6),
             total_build_time_seconds=round(total_build_time, 6),
             total_solve_time_seconds=round(max(elapsed - total_build_time, 0.0), 6),
+            time_to_first_feasible_solution_seconds=(
+                round(bootstrap_run.time_to_first_hard_feasible_solution_seconds, 6)
+                if bootstrap_run.time_to_first_hard_feasible_solution_seconds is not None
+                else None
+            ),
             warm_start_strategy=_warm_start_strategy(stage_to_stage_hint_used, external_hint_used),
             external_hint_used=external_hint_used,
             stage_to_stage_hint_used=stage_to_stage_hint_used,

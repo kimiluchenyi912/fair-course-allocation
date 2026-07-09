@@ -392,10 +392,43 @@ Core primary quality is solved in three distinct stages: math coverage
 violations, primary unmet count, and primary unmet period units. The solver
 does not collapse count and units into one large-weight objective.
 
+CP-SAT v1.2 adds a primary-only feasibility bootstrap before the Core model.
+The bootstrap creates only primary request-section assignment variables plus
+minimal helper expressions needed for hard constraints. It enforces canonical
+candidate validity, section capacity, period conflicts, target-load upper
+bounds, duplicate logical identities, protected all-primary policy, ordinary
+max-one-primary-unmet policy, and the demand-greater-than-120 high-demand
+primary guarantee. It does not create fallback variables, alternate variables,
+math coverage variables, complete-schedule variables, remaining-unit variables,
+or any soft objective.
+
+Bootstrap status is diagnostic, not lexicographic optimality. If the no-objective
+bootstrap returns a CP-SAT `OPTIMAL` status, that means the hard-feasibility
+model was fully solved and a feasible assignment was found; it does not mean
+the primary allocation is globally optimal. Bootstrap values are not included
+in the solver objective vector and do not update the highest globally proven
+optimization stage.
+
+Omitted bootstrap variables are safe because they can be extended with
+`fallback=0` and `alternate=0`; math coverage and complete-schedule indicators
+are then derived or optimized later by Core and Enrichment. A bootstrap
+`INFEASIBLE` result can therefore stop the solve only when the canonical
+candidate data are valid and all hard policies above are present. A
+`MODEL_INVALID` result means the internal model or canonical candidate data are
+malformed, not that the school policy problem is infeasible. If bootstrap ends
+`UNKNOWN` without an incumbent, the solver falls back to the Core stages.
+
 The solver may use solution hints to speed search. The default warm start uses
 a constrained-first partial hint plus stage-to-stage incumbent hints. Hints are
 not constraints: CP-SAT may repair or ignore them, and the formal hard
 constraints and objective stages remain the source of truth.
+
+The solver also supports an optional global time budget. Each stage receives
+the smaller of its per-stage limit and the remaining global budget. When the
+budget is exhausted, lower-priority stages are marked as skipped with explicit
+diagnostics rather than being reported as `OPTIMAL`. If a valid incumbent has
+already been found, the result can remain `FEASIBLE`; if no incumbent exists,
+the result is `UNKNOWN`.
 
 Every stage records CP-SAT status, objective value, best bound, runtime,
 conflicts, branches, and whether optimality was proven. A FEASIBLE incumbent
@@ -445,6 +478,12 @@ Recommended test scenarios:
 4. **Randomized robustness runs** — repeat many seeds and compare outcomes.
 
 Randomness must be reproducible through a recorded seed.
+
+Stable-year benchmark reports must record data-generation, section-planning,
+and allocation-solver seeds separately. The current comparison checkpoint uses
+`data_seed=2026`, `section_planning_seed=2026`, and
+`solver_seed=20260630`; the solver seed must not be reused to regenerate the
+benchmark input.
 
 ## 14. Solver priorities
 

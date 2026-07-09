@@ -130,6 +130,20 @@ stage returns FEASIBLE but not OPTIMAL, the solver may continue lower-priority
 stages conditionally, but the result remains FEASIBLE and is not reported as a
 global lexicographic optimum.
 
+CP-SAT v1.2 adds a primary-only feasibility bootstrap before the Core model.
+The bootstrap enforces the same fixed-section hard policies for primary
+assignments, but omits fallback, alternate, math-coverage, complete-schedule,
+remaining-unit, and tie-break variables. Its purpose is to find a first
+hard-feasible primary incumbent quickly and to provide a Core hint. It is not
+part of the lexicographic objective vector, and a bootstrap feasible result is
+not reported as primary optimality.
+
+The solver may receive `use_feasibility_bootstrap`, `bootstrap_time_seconds`,
+and `max_total_time_seconds` keyword-only parameters. The global budget, when
+provided, caps each stage by the remaining total time. Exhausted lower-priority
+stages must be marked as skipped, not as OPTIMAL, and skipped stages must not
+invent objective values.
+
 CP-SAT warm starts may use constrained-first partial hints and stage-to-stage
 incumbent hints. These hints are search guidance only; they do not relax or
 replace hard constraints.
