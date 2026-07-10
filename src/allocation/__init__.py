@@ -46,6 +46,7 @@ from .constrained_first_baseline import (
     run_constrained_first_baseline,
 )
 from .fcfs_baseline import run_fcfs_baseline
+from .grade_priority_baseline import run_grade_priority_baseline
 from .input_adapter import canonicalize_allocation_input
 from .input_models import (
     AllocationInputError,
@@ -130,5 +131,6 @@ __all__ = [
     "run_fair_cp_sat_solver",
     "run_constrained_first_baseline",
     "run_fcfs_baseline",
+    "run_grade_priority_baseline",
     "run_seeded_random_baseline",
 ]
