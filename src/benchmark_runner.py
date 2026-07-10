@@ -23,6 +23,7 @@ from src.allocation import (
     math_course_ids_from_catalog,
     run_constrained_first_baseline,
     run_fair_cp_sat_solver,
+    run_fcfs_baseline,
     run_seeded_random_baseline,
 )
 from src.allocation.math_policy_models import MathFallbackRule
@@ -263,7 +264,7 @@ def run_benchmark_suite(
 
 
 def _normalize_algorithms(algorithms: tuple[str, ...]) -> tuple[str, ...]:
-    valid = {"random", "constrained", "cp_sat"}
+    valid = {"random", "constrained", "fcfs", "cp_sat"}
     normalized = tuple(item.strip().lower() for item in algorithms if item.strip())
     invalid = tuple(item for item in normalized if item not in valid)
     if invalid:
@@ -314,6 +315,13 @@ def _run_algorithm(
         )
     elif name == "constrained":
         result = run_constrained_first_baseline(
+            allocation_input,
+            seed=seed,
+            math_course_ids=math_course_ids,
+            math_fallback_rules=math_fallback_rules,
+        )
+    elif name == "fcfs":
+        result = run_fcfs_baseline(
             allocation_input,
             seed=seed,
             math_course_ids=math_course_ids,

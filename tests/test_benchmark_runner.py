@@ -252,6 +252,75 @@ def test_constrained_algorithm_result_is_summarized_correctly(tmp_path) -> None:
     assert row.students_with_remaining_units == 0
 
 
+def test_fcfs_algorithm_result_is_summarized_correctly(tmp_path) -> None:
+    result = _run(tmp_path, algorithms=("fcfs",))
+    row = result.results[0]
+
+    assert row.algorithm_name == "first_come_first_served_greedy"
+    assert row.status == "completed"
+    assert row.primary_assigned == 1
+    assert row.primary_unmet == 1
+    assert row.alternate_rank1_assigned == 1
+
+
+def test_fcfs_is_not_run_by_default(tmp_path, monkeypatch) -> None:
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("FCFS should be opt-in")
+
+    monkeypatch.setattr("src.benchmark_runner.run_fcfs_baseline", fail_if_called)
+
+    result = _run(tmp_path)
+
+    assert result.algorithms_run == ("random", "constrained")
+    assert "fcfs" not in result.algorithms_run
+
+
+def test_fcfs_can_be_selected_explicitly_via_cli(tmp_path) -> None:
+    generated, planned, config = _write_fixture(tmp_path)
+    output_json = tmp_path / "summary.json"
+
+    assert main(
+        [
+            "--generated-input-dir",
+            str(generated),
+            "--sections-input-dir",
+            str(planned),
+            "--config-dir",
+            str(config),
+            "--data-seed",
+            "2026",
+            "--section-seed",
+            "2026",
+            "--solver-seed",
+            "20260630",
+            "--algorithms",
+            "fcfs",
+            "--output-json",
+            str(output_json),
+        ]
+    ) == 0
+
+    data = json.loads(output_json.read_text(encoding="utf-8"))
+    assert data["algorithms_run"] == ["fcfs"]
+    assert data["results"][0]["algorithm_name"] == "first_come_first_served_greedy"
+
+
+def test_artifact_export_works_with_fcfs_algorithm(tmp_path) -> None:
+    artifact_dir = tmp_path / "artifacts"
+
+    _run(tmp_path, algorithms=("fcfs",), output_artifact_dir=artifact_dir)
+
+    written = sorted(path.name for path in artifact_dir.iterdir())
+    assert written == [
+        "algorithm_summary.csv",
+        "benchmark_manifest.json",
+        "course_unmet_summary.csv",
+        "section_utilization.csv",
+    ]
+    summary_rows = pd.read_csv(artifact_dir / "algorithm_summary.csv", keep_default_na=False)
+    assert list(summary_rows["algorithm_name"]) == ["first_come_first_served_greedy"]
+
+
 def test_cp_sat_is_not_run_by_default(tmp_path, monkeypatch) -> None:
     def fail_if_called(*args, **kwargs):
         raise AssertionError("CP-SAT should be opt-in")
