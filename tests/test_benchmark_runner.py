@@ -378,6 +378,246 @@ def test_cli_defaults_to_random_and_constrained_and_writes_outputs(tmp_path) -> 
     assert len(pd.read_csv(output_csv, keep_default_na=False)) == 2
 
 
+def test_output_artifact_dir_writes_default_four_artifacts(tmp_path) -> None:
+    artifact_dir = tmp_path / "artifacts"
+
+    _run(tmp_path, output_artifact_dir=artifact_dir)
+
+    written = sorted(path.name for path in artifact_dir.iterdir())
+    assert written == [
+        "algorithm_summary.csv",
+        "benchmark_manifest.json",
+        "course_unmet_summary.csv",
+        "section_utilization.csv",
+    ]
+
+    manifest = json.loads((artifact_dir / "benchmark_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["runner_name"] == "benchmark_runner_v1"
+    assert manifest["algorithms_run"] == ["random", "constrained"]
+    assert manifest["manifest"]["students"] == 2
+    assert manifest["artifact_files"] == list(
+        [
+            "algorithm_summary.csv",
+            "course_unmet_summary.csv",
+            "section_utilization.csv",
+            "benchmark_manifest.json",
+        ]
+    )
+
+    summary_rows = pd.read_csv(artifact_dir / "algorithm_summary.csv", keep_default_na=False)
+    assert list(summary_rows["algorithm_name"]) == ["seeded_random_greedy", "constrained_first_greedy"]
+
+    course_rows = pd.read_csv(artifact_dir / "course_unmet_summary.csv", keep_default_na=False)
+    assert set(course_rows["candidate_key"]) == {"CORE_A"}
+    assert set(course_rows["primary_demand"]) == {2}
+
+    section_rows = pd.read_csv(artifact_dir / "section_utilization.csv", keep_default_na=False)
+    assert set(section_rows["linked_section_group_id"]) == {"CORE_A_1", "ALT1_1"}
+
+
+def test_output_artifact_dir_without_flag_omits_large_tables(tmp_path) -> None:
+    artifact_dir = tmp_path / "artifacts"
+
+    _run(tmp_path, output_artifact_dir=artifact_dir)
+
+    assert not (artifact_dir / "student_outcomes.csv").exists()
+    assert not (artifact_dir / "request_outcomes.csv").exists()
+
+
+def test_include_large_tables_writes_student_and_request_outcomes(tmp_path) -> None:
+    artifact_dir = tmp_path / "artifacts"
+
+    _run(tmp_path, output_artifact_dir=artifact_dir, include_large_tables=True)
+
+    student_rows = pd.read_csv(artifact_dir / "student_outcomes.csv", keep_default_na=False)
+    assert set(student_rows["student_id"]) == {"STU_1", "STU_2"}
+    assert set(student_rows["algorithm_name"]) == {"seeded_random_greedy", "constrained_first_greedy"}
+
+    request_rows = pd.read_csv(artifact_dir / "request_outcomes.csv", keep_default_na=False)
+    assert "candidate_attempts_count" in request_rows.columns
+    assert set(request_rows["request_type"]) == {"primary", "alternate"}
+
+    manifest = json.loads((artifact_dir / "benchmark_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["artifact_files"] == [
+        "algorithm_summary.csv",
+        "course_unmet_summary.csv",
+        "section_utilization.csv",
+        "benchmark_manifest.json",
+        "student_outcomes.csv",
+        "request_outcomes.csv",
+    ]
+
+
+def test_artifact_tables_are_sorted_by_algorithm_then_key(tmp_path) -> None:
+    artifact_dir = tmp_path / "artifacts"
+
+    _run(tmp_path, output_artifact_dir=artifact_dir, include_large_tables=True)
+
+    course_rows = pd.read_csv(artifact_dir / "course_unmet_summary.csv", keep_default_na=False)
+    course_pairs = list(zip(course_rows["algorithm_name"], course_rows["candidate_key"]))
+    assert course_pairs == sorted(course_pairs)
+
+    section_rows = pd.read_csv(artifact_dir / "section_utilization.csv", keep_default_na=False)
+    section_pairs = list(zip(section_rows["algorithm_name"], section_rows["linked_section_group_id"]))
+    assert section_pairs == sorted(section_pairs)
+
+    student_rows = pd.read_csv(artifact_dir / "student_outcomes.csv", keep_default_na=False)
+    student_pairs = list(zip(student_rows["algorithm_name"], student_rows["student_id"]))
+    assert student_pairs == sorted(student_pairs)
+
+    request_rows = pd.read_csv(artifact_dir / "request_outcomes.csv", keep_default_na=False)
+    request_pairs = list(zip(request_rows["algorithm_name"], request_rows["request_key"]))
+    assert request_pairs == sorted(request_pairs)
+
+    # algorithm_summary.csv tracks execution order, not alphabetical order,
+    # so it is deliberately excluded from the sorted() comparison above.
+    summary_rows = pd.read_csv(artifact_dir / "algorithm_summary.csv", keep_default_na=False)
+    assert list(summary_rows["algorithm_name"]) == ["seeded_random_greedy", "constrained_first_greedy"]
+
+
+def test_pre_existing_artifact_directory_untouched_on_fingerprint_mismatch(tmp_path, monkeypatch) -> None:
+    generated, planned, config = _write_fixture(tmp_path)
+    actual = build_experiment_manifest(generated, planned, config, scenario_id="stable_year", seeds=SEEDS).fingerprint
+    expected = CanonicalInputFingerprint(**{**actual.__dict__, "students": 3})
+
+    artifact_dir = tmp_path / "artifacts"
+    artifact_dir.mkdir()
+    old_manifest = artifact_dir / "benchmark_manifest.json"
+    old_manifest.write_text('{"stale": true}', encoding="utf-8")
+    unrelated_file = artifact_dir / "old_report.csv"
+    unrelated_file.write_text("legacy,data\n1,2\n", encoding="utf-8")
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("algorithm should not run")
+
+    monkeypatch.setattr("src.benchmark_runner.run_seeded_random_baseline", fail_if_called)
+
+    with pytest.raises(BenchmarkRunnerError, match="Canonical fingerprint mismatch"):
+        run_benchmark_suite(
+            generated_input_dir=generated,
+            sections_input_dir=planned,
+            config_dir=config,
+            seeds=SEEDS,
+            expected_fingerprint=expected,
+            output_artifact_dir=artifact_dir,
+        )
+
+    assert old_manifest.read_text(encoding="utf-8") == '{"stale": true}'
+    assert unrelated_file.read_text(encoding="utf-8") == "legacy,data\n1,2\n"
+    assert sorted(path.name for path in artifact_dir.iterdir()) == ["benchmark_manifest.json", "old_report.csv"]
+
+
+def test_fingerprint_mismatch_does_not_write_artifacts(tmp_path, monkeypatch) -> None:
+    generated, planned, config = _write_fixture(tmp_path)
+    actual = build_experiment_manifest(generated, planned, config, scenario_id="stable_year", seeds=SEEDS).fingerprint
+    expected = CanonicalInputFingerprint(**{**actual.__dict__, "students": 3})
+    artifact_dir = tmp_path / "artifacts"
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("algorithm should not run")
+
+    monkeypatch.setattr("src.benchmark_runner.run_seeded_random_baseline", fail_if_called)
+
+    with pytest.raises(BenchmarkRunnerError, match="Canonical fingerprint mismatch"):
+        run_benchmark_suite(
+            generated_input_dir=generated,
+            sections_input_dir=planned,
+            config_dir=config,
+            seeds=SEEDS,
+            expected_fingerprint=expected,
+            output_artifact_dir=artifact_dir,
+            include_large_tables=True,
+        )
+
+    assert not artifact_dir.exists()
+
+
+def test_manifest_verification_failure_does_not_write_artifacts(tmp_path) -> None:
+    generated, planned, config = _write_fixture(tmp_path)
+    (generated / "students.csv").write_text(
+        _students().iloc[:1].to_csv(index=False), encoding="utf-8"
+    )
+    artifact_dir = tmp_path / "artifacts"
+
+    with pytest.raises(Exception):
+        run_benchmark_suite(
+            generated_input_dir=generated,
+            sections_input_dir=planned,
+            config_dir=config,
+            seeds=SEEDS,
+            output_artifact_dir=artifact_dir,
+        )
+
+    assert not artifact_dir.exists()
+
+
+def test_artifact_export_does_not_trigger_cp_sat_by_default(tmp_path, monkeypatch) -> None:
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("CP-SAT should be opt-in")
+
+    monkeypatch.setattr("src.benchmark_runner.run_fair_cp_sat_solver", fail_if_called)
+
+    result = _run(tmp_path, output_artifact_dir=tmp_path / "artifacts", include_large_tables=True)
+
+    assert result.algorithms_run == ("random", "constrained")
+
+
+def test_cli_output_artifact_dir_writes_default_artifacts_without_large_tables(tmp_path) -> None:
+    generated, planned, config = _write_fixture(tmp_path)
+    artifact_dir = tmp_path / "artifacts"
+
+    assert main(
+        [
+            "--generated-input-dir",
+            str(generated),
+            "--sections-input-dir",
+            str(planned),
+            "--config-dir",
+            str(config),
+            "--data-seed",
+            "2026",
+            "--section-seed",
+            "2026",
+            "--solver-seed",
+            "20260630",
+            "--output-artifact-dir",
+            str(artifact_dir),
+        ]
+    ) == 0
+
+    assert (artifact_dir / "algorithm_summary.csv").exists()
+    assert (artifact_dir / "benchmark_manifest.json").exists()
+    assert not (artifact_dir / "student_outcomes.csv").exists()
+
+
+def test_cli_include_large_tables_flag_writes_large_tables(tmp_path) -> None:
+    generated, planned, config = _write_fixture(tmp_path)
+    artifact_dir = tmp_path / "artifacts"
+
+    assert main(
+        [
+            "--generated-input-dir",
+            str(generated),
+            "--sections-input-dir",
+            str(planned),
+            "--config-dir",
+            str(config),
+            "--data-seed",
+            "2026",
+            "--section-seed",
+            "2026",
+            "--solver-seed",
+            "20260630",
+            "--output-artifact-dir",
+            str(artifact_dir),
+            "--include-large-tables",
+        ]
+    ) == 0
+
+    assert (artifact_dir / "student_outcomes.csv").exists()
+    assert (artifact_dir / "request_outcomes.csv").exists()
+
+
 def _stable_metric_projection(rows: tuple[dict, ...]) -> tuple[dict, ...]:
     ignored = {"runtime_seconds", "generated_input_dir", "sections_input_dir"}
     return tuple({key: value for key, value in row.items() if key not in ignored} for row in rows)

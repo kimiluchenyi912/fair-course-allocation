@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import time
+from collections import defaultdict
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -37,6 +38,75 @@ from src.experiment_manifest import (
 
 DEFAULT_ALGORITHMS = ("random", "constrained")
 RUNNER_NAME = "benchmark_runner_v1"
+
+DEFAULT_ARTIFACT_FILES = (
+    "algorithm_summary.csv",
+    "course_unmet_summary.csv",
+    "section_utilization.csv",
+    "benchmark_manifest.json",
+)
+LARGE_TABLE_ARTIFACT_FILES = (
+    "student_outcomes.csv",
+    "request_outcomes.csv",
+)
+
+COURSE_UNMET_SUMMARY_FIELDNAMES = (
+    "algorithm_name",
+    "candidate_key",
+    "primary_demand",
+    "primary_assigned",
+    "primary_unmet",
+    "primary_unmet_rate",
+)
+SECTION_UTILIZATION_FIELDNAMES = (
+    "algorithm_name",
+    "linked_section_group_id",
+    "capacity",
+    "assigned_count",
+    "remaining_capacity",
+    "utilization_rate",
+)
+STUDENT_OUTCOMES_FIELDNAMES = (
+    "algorithm_name",
+    "student_id",
+    "grade",
+    "target_period_units",
+    "assigned_period_units",
+    "remaining_period_units",
+    "assignment_keys",
+    "primary_request_count",
+    "primary_assigned_count",
+    "primary_unmet_count",
+    "primary_unmet_request_keys",
+    "primary_unmet_period_units",
+    "alternate_request_count",
+    "alternate_assigned_count",
+    "alternate_assigned_period_units",
+    "mandatory_fallback_assigned_count",
+    "mandatory_fallback_assigned_period_units",
+    "mandatory_fallback_assignment_keys",
+    "fully_scheduled",
+    "priority_protected",
+    "ordinary_fairness_violation",
+    "protected_fairness_violation",
+    "high_demand_guarantee_violation_count",
+    "high_demand_violating_request_keys",
+)
+REQUEST_OUTCOMES_FIELDNAMES = (
+    "algorithm_name",
+    "request_key",
+    "student_id",
+    "request_type",
+    "alternate_rank",
+    "candidate_key",
+    "period_units",
+    "status",
+    "assignment_key",
+    "assigned_linked_section_group_id",
+    "candidate_attempts_count",
+    "remaining_units_before",
+    "remaining_units_after",
+)
 
 
 class BenchmarkRunnerError(ValueError):
@@ -150,6 +220,8 @@ def run_benchmark_suite(
     algorithms: tuple[str, ...] = DEFAULT_ALGORITHMS,
     output_json_path: str | Path | None = None,
     output_csv_path: str | Path | None = None,
+    output_artifact_dir: str | Path | None = None,
+    include_large_tables: bool = False,
     cp_sat_options: CpSatBenchmarkOptions | None = None,
 ) -> BenchmarkSuiteResult:
     algorithms = _normalize_algorithms(algorithms)
@@ -168,10 +240,11 @@ def run_benchmark_suite(
     math_course_ids = math_course_ids_from_catalog(catalog) if "department" in catalog.columns else ()
     math_fallback_rules = _load_math_fallback_rules(Path(config_dir), catalog)
 
-    results = tuple(
+    algorithm_runs = tuple(
         _run_algorithm(name, allocation_input, seeds.solver_seed, math_course_ids, math_fallback_rules, cp_sat_options)
         for name in algorithms
     )
+    results = tuple(summary for summary, _raw_result in algorithm_runs)
     suite = BenchmarkSuiteResult(
         manifest=manifest,
         expected_fingerprint=expected_fingerprint,
@@ -183,6 +256,9 @@ def run_benchmark_suite(
         _write_json(suite, Path(output_json_path))
     if output_csv_path is not None:
         _write_csv(suite, Path(output_csv_path))
+    if output_artifact_dir is not None:
+        raw_results = tuple(raw_result for _summary, raw_result in algorithm_runs)
+        _export_artifacts(suite, raw_results, Path(output_artifact_dir), include_large_tables=include_large_tables)
     return suite
 
 
@@ -227,7 +303,7 @@ def _run_algorithm(
     math_course_ids: tuple[str, ...],
     math_fallback_rules: tuple[MathFallbackRule, ...],
     cp_sat_options: CpSatBenchmarkOptions | None,
-) -> BenchmarkAlgorithmResult:
+) -> tuple[BenchmarkAlgorithmResult, BaselineResult | CpSatAllocationResult]:
     started = time.perf_counter()
     if name == "random":
         result = run_seeded_random_baseline(
@@ -259,7 +335,8 @@ def _run_algorithm(
         )
     else:  # pragma: no cover - _normalize_algorithms keeps this unreachable.
         raise BenchmarkRunnerError(f"Unsupported benchmark algorithm: {name}")
-    return _summarize_result(allocation_input, result, round(time.perf_counter() - started, 6), math_course_ids, math_fallback_rules)
+    summary = _summarize_result(allocation_input, result, round(time.perf_counter() - started, 6), math_course_ids, math_fallback_rules)
+    return summary, result
 
 
 def _summarize_result(
@@ -378,6 +455,173 @@ def _write_csv(result: BenchmarkSuiteResult, path: Path) -> None:
         writer.writerows(rows)
 
 
+def _export_artifacts(
+    suite: BenchmarkSuiteResult,
+    raw_results: tuple[BaselineResult | CpSatAllocationResult, ...],
+    output_artifact_dir: Path,
+    *,
+    include_large_tables: bool,
+) -> tuple[str, ...]:
+    """Write manifest-bound benchmark artifacts to ``output_artifact_dir``.
+
+    Callers only reach this after fingerprint/manifest verification has
+    already succeeded (``run_benchmark_suite`` raises before this point on
+    mismatch), so no partial or misleading artifact set is ever written for
+    a rejected input.
+    """
+    course_unmet_rows = _course_unmet_summary_rows(raw_results)
+    section_utilization_rows = _section_utilization_rows(raw_results)
+    written_files = DEFAULT_ARTIFACT_FILES + (LARGE_TABLE_ARTIFACT_FILES if include_large_tables else ())
+    manifest_payload = _benchmark_manifest_payload(suite, written_files)
+    student_outcome_rows = _student_outcome_rows(raw_results) if include_large_tables else ()
+    request_outcome_rows = _request_outcome_rows(raw_results) if include_large_tables else ()
+
+    output_artifact_dir.mkdir(parents=True, exist_ok=True)
+    _write_csv(suite, output_artifact_dir / "algorithm_summary.csv")
+    _write_rows_csv(output_artifact_dir / "course_unmet_summary.csv", COURSE_UNMET_SUMMARY_FIELDNAMES, course_unmet_rows)
+    _write_rows_csv(output_artifact_dir / "section_utilization.csv", SECTION_UTILIZATION_FIELDNAMES, section_utilization_rows)
+    (output_artifact_dir / "benchmark_manifest.json").write_text(
+        json.dumps(manifest_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    if include_large_tables:
+        _write_rows_csv(output_artifact_dir / "student_outcomes.csv", STUDENT_OUTCOMES_FIELDNAMES, student_outcome_rows)
+        _write_rows_csv(output_artifact_dir / "request_outcomes.csv", REQUEST_OUTCOMES_FIELDNAMES, request_outcome_rows)
+    return written_files
+
+
+def _write_rows_csv(path: Path, fieldnames: tuple[str, ...], rows: tuple[dict[str, Any], ...]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _course_unmet_summary_rows(
+    raw_results: tuple[BaselineResult | CpSatAllocationResult, ...],
+) -> tuple[dict[str, Any], ...]:
+    rows: list[dict[str, Any]] = []
+    for result in raw_results:
+        grouped: dict[str, list] = defaultdict(list)
+        for outcome in result.request_outcomes:
+            if outcome.request_type != "primary":
+                continue
+            grouped[outcome.candidate_key].append(outcome)
+        for candidate_key, outcomes in grouped.items():
+            demand = len(outcomes)
+            assigned = sum(outcome.status == PrimaryRequestStatus.ASSIGNED for outcome in outcomes)
+            unmet = demand - assigned
+            rows.append(
+                {
+                    "algorithm_name": result.algorithm_name,
+                    "candidate_key": candidate_key,
+                    "primary_demand": demand,
+                    "primary_assigned": assigned,
+                    "primary_unmet": unmet,
+                    "primary_unmet_rate": round(unmet / demand, 6),
+                }
+            )
+    return tuple(sorted(rows, key=lambda row: (row["algorithm_name"], row["candidate_key"])))
+
+
+def _section_utilization_rows(
+    raw_results: tuple[BaselineResult | CpSatAllocationResult, ...],
+) -> tuple[dict[str, Any], ...]:
+    rows: list[dict[str, Any]] = []
+    for result in raw_results:
+        for section in result.section_roster_summary:
+            rows.append(
+                {
+                    "algorithm_name": result.algorithm_name,
+                    "linked_section_group_id": section.linked_section_group_id,
+                    "capacity": section.capacity,
+                    "assigned_count": section.assigned_count,
+                    "remaining_capacity": section.remaining_capacity,
+                    "utilization_rate": round(section.assigned_count / section.capacity, 6),
+                }
+            )
+    return tuple(sorted(rows, key=lambda row: (row["algorithm_name"], row["linked_section_group_id"])))
+
+
+def _student_outcome_rows(
+    raw_results: tuple[BaselineResult | CpSatAllocationResult, ...],
+) -> tuple[dict[str, Any], ...]:
+    rows: list[dict[str, Any]] = []
+    for result in raw_results:
+        for outcome in result.student_outcomes:
+            rows.append(
+                {
+                    "algorithm_name": result.algorithm_name,
+                    "student_id": outcome.student_id,
+                    "grade": outcome.grade,
+                    "target_period_units": outcome.target_period_units,
+                    "assigned_period_units": outcome.assigned_period_units,
+                    "remaining_period_units": outcome.remaining_period_units,
+                    "assignment_keys": "|".join(outcome.assignment_keys),
+                    "primary_request_count": outcome.primary_request_count,
+                    "primary_assigned_count": outcome.primary_assigned_count,
+                    "primary_unmet_count": outcome.primary_unmet_count,
+                    "primary_unmet_request_keys": "|".join(outcome.primary_unmet_request_keys),
+                    "primary_unmet_period_units": outcome.primary_unmet_period_units,
+                    "alternate_request_count": outcome.alternate_request_count,
+                    "alternate_assigned_count": outcome.alternate_assigned_count,
+                    "alternate_assigned_period_units": outcome.alternate_assigned_period_units,
+                    "mandatory_fallback_assigned_count": outcome.mandatory_fallback_assigned_count,
+                    "mandatory_fallback_assigned_period_units": outcome.mandatory_fallback_assigned_period_units,
+                    "mandatory_fallback_assignment_keys": "|".join(outcome.mandatory_fallback_assignment_keys),
+                    "fully_scheduled": outcome.fully_scheduled,
+                    "priority_protected": outcome.priority_protected,
+                    "ordinary_fairness_violation": outcome.ordinary_fairness_violation,
+                    "protected_fairness_violation": outcome.protected_fairness_violation,
+                    "high_demand_guarantee_violation_count": outcome.high_demand_guarantee_violation_count,
+                    "high_demand_violating_request_keys": "|".join(outcome.high_demand_violating_request_keys),
+                }
+            )
+    return tuple(sorted(rows, key=lambda row: (row["algorithm_name"], row["student_id"])))
+
+
+def _request_outcome_rows(
+    raw_results: tuple[BaselineResult | CpSatAllocationResult, ...],
+) -> tuple[dict[str, Any], ...]:
+    # candidate_attempts is a nested per-attempt structure (attempt index,
+    # candidate section, rejection reasons); flattening it into this row
+    # would either fabricate columns or require a second table, so this
+    # export only reports its count. See completion report for detail.
+    rows: list[dict[str, Any]] = []
+    for result in raw_results:
+        for outcome in result.request_outcomes:
+            rows.append(
+                {
+                    "algorithm_name": result.algorithm_name,
+                    "request_key": outcome.request_key,
+                    "student_id": outcome.student_id,
+                    "request_type": outcome.request_type,
+                    "alternate_rank": outcome.alternate_rank,
+                    "candidate_key": outcome.candidate_key,
+                    "period_units": outcome.period_units,
+                    "status": outcome.status.value,
+                    "assignment_key": outcome.assignment_key,
+                    "assigned_linked_section_group_id": outcome.assigned_linked_section_group_id,
+                    "candidate_attempts_count": len(outcome.candidate_attempts),
+                    "remaining_units_before": outcome.remaining_units_before,
+                    "remaining_units_after": outcome.remaining_units_after,
+                }
+            )
+    return tuple(sorted(rows, key=lambda row: (row["algorithm_name"], row["request_key"])))
+
+
+def _benchmark_manifest_payload(suite: BenchmarkSuiteResult, written_files: tuple[str, ...]) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "runner_name": RUNNER_NAME,
+        "manifest": suite.manifest.to_dict(),
+        "expected_fingerprint": asdict(suite.expected_fingerprint) if suite.expected_fingerprint is not None else None,
+        "fingerprint_verified": suite.fingerprint_verified,
+        "algorithms_run": list(suite.algorithms_run),
+        "artifact_files": list(written_files),
+    }
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run manifest-guarded allocation benchmarks.")
     parser.add_argument("--generated-input-dir", required=True)
@@ -391,6 +635,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--algorithms", default="random,constrained")
     parser.add_argument("--output-json")
     parser.add_argument("--output-csv")
+    parser.add_argument("--output-artifact-dir")
+    parser.add_argument("--include-large-tables", action="store_true")
     parser.add_argument("--cp-sat-max-time-seconds-per-stage", type=float, default=30.0)
     parser.add_argument("--cp-sat-max-total-time-seconds", type=float)
     parser.add_argument("--cp-sat-bootstrap-time-seconds", type=float)
@@ -411,6 +657,8 @@ def main(argv: Iterable[str] | None = None) -> int:
             algorithms=algorithms,
             output_json_path=args.output_json,
             output_csv_path=args.output_csv,
+            output_artifact_dir=args.output_artifact_dir,
+            include_large_tables=args.include_large_tables,
             cp_sat_options=CpSatBenchmarkOptions(
                 max_time_seconds_per_stage=args.cp_sat_max_time_seconds_per_stage,
                 max_total_time_seconds=args.cp_sat_max_total_time_seconds,
