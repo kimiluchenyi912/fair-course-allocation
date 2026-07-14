@@ -38,6 +38,20 @@ from src.experiment_manifest import (
     build_experiment_manifest,
     verify_experiment_manifest,
 )
+from src.final_schedule_policy import (
+    COURSE_COUNT_SEMANTICS,
+    MAXIMUM_ORDINARY_PRIMARY_UNMET_COUNT,
+    MAXIMUM_PROTECTED_PRIMARY_UNMET_COUNT,
+    MAXIMUM_SCHEDULE_GAP_COUNT,
+    MINIMUM_ASSIGNED_LOGICAL_COURSE_COUNT,
+    REASON_CODES as FINAL_POLICY_REASON_CODES,
+    SCHEMA_VERSION as FINAL_POLICY_SCHEMA_VERSION,
+    SUMMARY_FIELDNAMES as FINAL_POLICY_SUMMARY_FIELDNAMES,
+    VIOLATION_FIELDNAMES as FINAL_POLICY_VIOLATION_FIELDNAMES,
+    evaluate_final_schedule_policy,
+    summary_row as final_policy_summary_row,
+    violation_row as final_policy_violation_row,
+)
 
 
 DEFAULT_ALGORITHMS = ("random", "constrained")
@@ -49,6 +63,8 @@ DEFAULT_ARTIFACT_FILES = (
     "section_utilization.csv",
     "assignment_failure_summary.csv",
     "student_schedule_gaps.csv",
+    "final_schedule_policy_summary.csv",
+    "final_schedule_policy_violations.csv",
     "benchmark_manifest.json",
 )
 LARGE_TABLE_ARTIFACT_FILES = (
@@ -123,6 +139,9 @@ STUDENT_OUTCOMES_FIELDNAMES = (
     "assigned_course_count",
     "schedule_gap_count",
     "assigned_alternate_count",
+    "target_logical_course_count",
+    "assigned_logical_course_count",
+    "logical_schedule_gap_count",
 )
 REQUEST_OUTCOMES_FIELDNAMES = (
     "algorithm_name",
@@ -217,6 +236,10 @@ class BenchmarkAlgorithmResult:
     skipped_stage_count: int | None = None
     bootstrap_status: str | None = None
     stage_diagnostics_summary: tuple[dict[str, Any], ...] = ()
+    final_schedule_policy_pass: bool | None = None
+    final_schedule_policy_violation_students: int | None = None
+    students_below_minimum_course_count: int | None = None
+    students_with_schedule_gap_over_limit: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -447,6 +470,7 @@ def _summarize_result(
             math_course_ids,
             math_fallback_rules,
         )
+    final_policy_report = evaluate_final_schedule_policy(result.algorithm_name, result.student_outcomes)
     base = BenchmarkAlgorithmResult(
         algorithm_name=result.algorithm_name,
         status=_result_status(result),
@@ -476,6 +500,10 @@ def _summarize_result(
         ),
         section_over_capacity_count=sum(row.assigned_count > row.capacity for row in result.section_roster_summary),
         consistency_issue_count=len(result.consistency_issues),
+        final_schedule_policy_pass=final_policy_report.summary.final_schedule_policy_pass,
+        final_schedule_policy_violation_students=final_policy_report.summary.violating_student_count,
+        students_below_minimum_course_count=final_policy_report.summary.below_minimum_course_count,
+        students_with_schedule_gap_over_limit=final_policy_report.summary.schedule_gap_over_limit_count,
     )
     if not isinstance(result, CpSatAllocationResult):
         return base
@@ -550,6 +578,9 @@ def _export_artifacts(
     section_utilization_rows = _section_utilization_rows(raw_results)
     failure_summary_rows = _assignment_failure_summary_rows(raw_results)
     schedule_gap_rows = _student_schedule_gap_rows(raw_results)
+    final_policy_reports = tuple(
+        evaluate_final_schedule_policy(result.algorithm_name, result.student_outcomes) for result in raw_results
+    )
     written_files = DEFAULT_ARTIFACT_FILES + (LARGE_TABLE_ARTIFACT_FILES if include_large_tables else ())
     manifest_payload = _benchmark_manifest_payload(suite, written_files)
     student_outcome_rows = _student_outcome_rows(raw_results) if include_large_tables else ()
@@ -568,6 +599,16 @@ def _export_artifacts(
         output_artifact_dir / "student_schedule_gaps.csv",
         STUDENT_SCHEDULE_GAPS_FIELDNAMES,
         schedule_gap_rows,
+    )
+    _write_rows_csv(
+        output_artifact_dir / "final_schedule_policy_summary.csv",
+        FINAL_POLICY_SUMMARY_FIELDNAMES,
+        tuple(final_policy_summary_row(report) for report in final_policy_reports),
+    )
+    _write_rows_csv(
+        output_artifact_dir / "final_schedule_policy_violations.csv",
+        FINAL_POLICY_VIOLATION_FIELDNAMES,
+        tuple(final_policy_violation_row(violation) for report in final_policy_reports for violation in report.violations),
     )
     (output_artifact_dir / "benchmark_manifest.json").write_text(
         json.dumps(manifest_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -744,6 +785,9 @@ def _student_outcome_rows(
                     "assigned_course_count": outcome.assigned_period_units,
                     "schedule_gap_count": max(outcome.target_period_units - outcome.assigned_period_units, 0),
                     "assigned_alternate_count": outcome.alternate_assigned_count,
+                    "target_logical_course_count": outcome.target_period_units,
+                    "assigned_logical_course_count": len(outcome.assignment_keys),
+                    "logical_schedule_gap_count": max(outcome.target_period_units - len(outcome.assignment_keys), 0),
                 }
             )
     return tuple(sorted(rows, key=lambda row: (row["algorithm_name"], row["student_id"])))
@@ -925,6 +969,37 @@ def _benchmark_manifest_payload(suite: BenchmarkSuiteResult, written_files: tupl
             "period_conflict means the candidate overlapped the student's already-assigned periods at that "
             "moment; it does not prove a swap, repair, or global optimizer could not resolve the conflict."
         ),
+        "final_schedule_policy_schema_version": FINAL_POLICY_SCHEMA_VERSION,
+        "final_schedule_policy_artifact_files": [
+            "final_schedule_policy_summary.csv",
+            "final_schedule_policy_violations.csv",
+        ],
+        "final_schedule_policy_rules": {
+            "protected_primary_unmet": "priority_protected students must have primary_unmet_count == 0.",
+            "ordinary_primary_unmet_over_limit": (
+                "non-protected students must have primary_unmet_count <= "
+                f"{MAXIMUM_ORDINARY_PRIMARY_UNMET_COUNT}."
+            ),
+            "schedule_gap_over_limit": (
+                "each student must have final logical schedule_gap_count <= "
+                f"{MAXIMUM_SCHEDULE_GAP_COUNT}."
+            ),
+            "below_minimum_course_count": (
+                "each student must have assigned_logical_course_count >= "
+                f"{MINIMUM_ASSIGNED_LOGICAL_COURSE_COUNT}."
+            ),
+        },
+        "minimum_assigned_course_count": MINIMUM_ASSIGNED_LOGICAL_COURSE_COUNT,
+        "maximum_ordinary_primary_unmet_count": MAXIMUM_ORDINARY_PRIMARY_UNMET_COUNT,
+        "maximum_protected_primary_unmet_count": MAXIMUM_PROTECTED_PRIMARY_UNMET_COUNT,
+        "maximum_schedule_gap_count": MAXIMUM_SCHEDULE_GAP_COUNT,
+        "final_schedule_policy_reason_codes": list(FINAL_POLICY_REASON_CODES),
+        "course_count_semantics": COURSE_COUNT_SEMANTICS,
+        "final_schedule_policy_limitation": (
+            "A benchmark algorithm may complete successfully while failing the final schedule policy gate. "
+            "A failed gate means the result is not eligible to be described or exported as a publishable "
+            "final schedule."
+        ),
     }
 
 
@@ -986,6 +1061,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     )
     if "cp_sat" not in result.algorithms_run:
         print("CP-SAT was not run; include --algorithms ... ,cp_sat to opt in.")
+    for row in result.results:
+        status = "PASS" if row.final_schedule_policy_pass else "FAIL"
+        print(
+            f"Final schedule policy: {row.algorithm_name} {status} "
+            f"({row.final_schedule_policy_violation_students} violating student(s))"
+        )
     return 0
 
 

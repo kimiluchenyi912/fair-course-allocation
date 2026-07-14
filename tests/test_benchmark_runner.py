@@ -316,6 +316,8 @@ def test_artifact_export_works_with_fcfs_algorithm(tmp_path) -> None:
         "assignment_failure_summary.csv",
         "benchmark_manifest.json",
         "course_unmet_summary.csv",
+        "final_schedule_policy_summary.csv",
+        "final_schedule_policy_violations.csv",
         "section_utilization.csv",
         "student_schedule_gaps.csv",
     ]
@@ -387,6 +389,8 @@ def test_artifact_export_works_with_grade_priority_algorithm(tmp_path) -> None:
         "assignment_failure_summary.csv",
         "benchmark_manifest.json",
         "course_unmet_summary.csv",
+        "final_schedule_policy_summary.csv",
+        "final_schedule_policy_violations.csv",
         "section_utilization.csv",
         "student_schedule_gaps.csv",
     ]
@@ -531,6 +535,8 @@ def test_output_artifact_dir_writes_default_four_artifacts(tmp_path) -> None:
         "assignment_failure_summary.csv",
         "benchmark_manifest.json",
         "course_unmet_summary.csv",
+        "final_schedule_policy_summary.csv",
+        "final_schedule_policy_violations.csv",
         "section_utilization.csv",
         "student_schedule_gaps.csv",
     ]
@@ -546,6 +552,8 @@ def test_output_artifact_dir_writes_default_four_artifacts(tmp_path) -> None:
             "section_utilization.csv",
             "assignment_failure_summary.csv",
             "student_schedule_gaps.csv",
+            "final_schedule_policy_summary.csv",
+            "final_schedule_policy_violations.csv",
             "benchmark_manifest.json",
         ]
     )
@@ -554,9 +562,20 @@ def test_output_artifact_dir_writes_default_four_artifacts(tmp_path) -> None:
         "assignment_failure_summary.csv",
         "student_schedule_gaps.csv",
     ]
+    assert manifest["final_schedule_policy_schema_version"] == "final_schedule_policy_gate_v1"
+    assert manifest["final_schedule_policy_artifact_files"] == [
+        "final_schedule_policy_summary.csv",
+        "final_schedule_policy_violations.csv",
+    ]
 
     summary_rows = pd.read_csv(artifact_dir / "algorithm_summary.csv", keep_default_na=False)
     assert list(summary_rows["algorithm_name"]) == ["seeded_random_greedy", "constrained_first_greedy"]
+    assert {
+        "final_schedule_policy_pass",
+        "final_schedule_policy_violation_students",
+        "students_below_minimum_course_count",
+        "students_with_schedule_gap_over_limit",
+    } <= set(summary_rows.columns)
 
     course_rows = pd.read_csv(artifact_dir / "course_unmet_summary.csv", keep_default_na=False)
     assert set(course_rows["candidate_key"]) == {"CORE_A"}
@@ -575,6 +594,8 @@ def test_output_artifact_dir_without_flag_omits_large_tables(tmp_path) -> None:
     assert not (artifact_dir / "request_outcomes.csv").exists()
     assert (artifact_dir / "assignment_failure_summary.csv").exists()
     assert (artifact_dir / "student_schedule_gaps.csv").exists()
+    assert (artifact_dir / "final_schedule_policy_summary.csv").exists()
+    assert (artifact_dir / "final_schedule_policy_violations.csv").exists()
 
 
 def test_include_large_tables_writes_student_and_request_outcomes(tmp_path) -> None:
@@ -609,6 +630,8 @@ def test_include_large_tables_writes_student_and_request_outcomes(tmp_path) -> N
         "section_utilization.csv",
         "assignment_failure_summary.csv",
         "student_schedule_gaps.csv",
+        "final_schedule_policy_summary.csv",
+        "final_schedule_policy_violations.csv",
         "benchmark_manifest.json",
         "student_outcomes.csv",
         "request_outcomes.csv",
