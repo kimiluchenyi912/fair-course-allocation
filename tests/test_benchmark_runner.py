@@ -313,9 +313,11 @@ def test_artifact_export_works_with_fcfs_algorithm(tmp_path) -> None:
     written = sorted(path.name for path in artifact_dir.iterdir())
     assert written == [
         "algorithm_summary.csv",
+        "assignment_failure_summary.csv",
         "benchmark_manifest.json",
         "course_unmet_summary.csv",
         "section_utilization.csv",
+        "student_schedule_gaps.csv",
     ]
     summary_rows = pd.read_csv(artifact_dir / "algorithm_summary.csv", keep_default_na=False)
     assert list(summary_rows["algorithm_name"]) == ["first_come_first_served_greedy"]
@@ -382,9 +384,11 @@ def test_artifact_export_works_with_grade_priority_algorithm(tmp_path) -> None:
     written = sorted(path.name for path in artifact_dir.iterdir())
     assert written == [
         "algorithm_summary.csv",
+        "assignment_failure_summary.csv",
         "benchmark_manifest.json",
         "course_unmet_summary.csv",
         "section_utilization.csv",
+        "student_schedule_gaps.csv",
     ]
     summary_rows = pd.read_csv(artifact_dir / "algorithm_summary.csv", keep_default_na=False)
     assert list(summary_rows["algorithm_name"]) == ["grade_priority_greedy"]
@@ -524,9 +528,11 @@ def test_output_artifact_dir_writes_default_four_artifacts(tmp_path) -> None:
     written = sorted(path.name for path in artifact_dir.iterdir())
     assert written == [
         "algorithm_summary.csv",
+        "assignment_failure_summary.csv",
         "benchmark_manifest.json",
         "course_unmet_summary.csv",
         "section_utilization.csv",
+        "student_schedule_gaps.csv",
     ]
 
     manifest = json.loads((artifact_dir / "benchmark_manifest.json").read_text(encoding="utf-8"))
@@ -538,9 +544,16 @@ def test_output_artifact_dir_writes_default_four_artifacts(tmp_path) -> None:
             "algorithm_summary.csv",
             "course_unmet_summary.csv",
             "section_utilization.csv",
+            "assignment_failure_summary.csv",
+            "student_schedule_gaps.csv",
             "benchmark_manifest.json",
         ]
     )
+    assert manifest["diagnostics_schema_version"] == "assignment_failure_diagnostics_v1"
+    assert manifest["diagnostics_artifact_files"] == [
+        "assignment_failure_summary.csv",
+        "student_schedule_gaps.csv",
+    ]
 
     summary_rows = pd.read_csv(artifact_dir / "algorithm_summary.csv", keep_default_na=False)
     assert list(summary_rows["algorithm_name"]) == ["seeded_random_greedy", "constrained_first_greedy"]
@@ -560,6 +573,8 @@ def test_output_artifact_dir_without_flag_omits_large_tables(tmp_path) -> None:
 
     assert not (artifact_dir / "student_outcomes.csv").exists()
     assert not (artifact_dir / "request_outcomes.csv").exists()
+    assert (artifact_dir / "assignment_failure_summary.csv").exists()
+    assert (artifact_dir / "student_schedule_gaps.csv").exists()
 
 
 def test_include_large_tables_writes_student_and_request_outcomes(tmp_path) -> None:
@@ -570,9 +585,21 @@ def test_include_large_tables_writes_student_and_request_outcomes(tmp_path) -> N
     student_rows = pd.read_csv(artifact_dir / "student_outcomes.csv", keep_default_na=False)
     assert set(student_rows["student_id"]) == {"STU_1", "STU_2"}
     assert set(student_rows["algorithm_name"]) == {"seeded_random_greedy", "constrained_first_greedy"}
+    assert {"target_course_count", "assigned_course_count", "schedule_gap_count", "assigned_alternate_count"} <= set(
+        student_rows.columns
+    )
 
     request_rows = pd.read_csv(artifact_dir / "request_outcomes.csv", keep_default_na=False)
     assert "candidate_attempts_count" in request_rows.columns
+    assert {
+        "candidate_rejections_count",
+        "rejected_section_at_capacity_count",
+        "rejected_period_conflict_count",
+        "rejected_duplicate_logical_course_count",
+        "rejected_student_load_limit_count",
+        "rejected_other_count",
+        "terminal_unmet_reason",
+    } <= set(request_rows.columns)
     assert set(request_rows["request_type"]) == {"primary", "alternate"}
 
     manifest = json.loads((artifact_dir / "benchmark_manifest.json").read_text(encoding="utf-8"))
@@ -580,6 +607,8 @@ def test_include_large_tables_writes_student_and_request_outcomes(tmp_path) -> N
         "algorithm_summary.csv",
         "course_unmet_summary.csv",
         "section_utilization.csv",
+        "assignment_failure_summary.csv",
+        "student_schedule_gaps.csv",
         "benchmark_manifest.json",
         "student_outcomes.csv",
         "request_outcomes.csv",
@@ -606,6 +635,12 @@ def test_artifact_tables_are_sorted_by_algorithm_then_key(tmp_path) -> None:
     request_rows = pd.read_csv(artifact_dir / "request_outcomes.csv", keep_default_na=False)
     request_pairs = list(zip(request_rows["algorithm_name"], request_rows["request_key"]))
     assert request_pairs == sorted(request_pairs)
+
+    failure_rows = pd.read_csv(artifact_dir / "assignment_failure_summary.csv", keep_default_na=False)
+    assert list(dict.fromkeys(failure_rows["algorithm_name"])) == [
+        "seeded_random_greedy",
+        "constrained_first_greedy",
+    ]
 
     # algorithm_summary.csv tracks execution order, not alphabetical order,
     # so it is deliberately excluded from the sorted() comparison above.

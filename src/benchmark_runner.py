@@ -13,11 +13,13 @@ import pandas as pd
 
 from src.allocation import (
     AlternateRequestStatus,
+    AssignmentRejectionReason,
     BaselineResult,
     CanonicalAllocationInput,
     CpSatAllocationResult,
     MandatoryFallbackStatus,
     PrimaryRequestStatus,
+    RequestOutcome,
     evaluate_math_policy,
     load_math_fallback_rules,
     math_course_ids_from_catalog,
@@ -45,6 +47,8 @@ DEFAULT_ARTIFACT_FILES = (
     "algorithm_summary.csv",
     "course_unmet_summary.csv",
     "section_utilization.csv",
+    "assignment_failure_summary.csv",
+    "student_schedule_gaps.csv",
     "benchmark_manifest.json",
 )
 LARGE_TABLE_ARTIFACT_FILES = (
@@ -67,6 +71,28 @@ SECTION_UTILIZATION_FIELDNAMES = (
     "assigned_count",
     "remaining_capacity",
     "utilization_rate",
+)
+ASSIGNMENT_FAILURE_SUMMARY_FIELDNAMES = (
+    "algorithm_name",
+    "request_kind",
+    "terminal_unmet_reason",
+    "unmet_request_count",
+    "affected_student_count",
+    "total_candidate_attempts",
+    "total_candidate_rejections",
+)
+STUDENT_SCHEDULE_GAPS_FIELDNAMES = (
+    "algorithm_name",
+    "student_id",
+    "grade",
+    "target_course_count",
+    "assigned_course_count",
+    "schedule_gap_count",
+    "primary_unmet_count",
+    "alternates_assigned_count",
+    "unmet_primary_request_ids",
+    "unmet_alternate_request_ids",
+    "terminal_unmet_reasons",
 )
 STUDENT_OUTCOMES_FIELDNAMES = (
     "algorithm_name",
@@ -93,6 +119,10 @@ STUDENT_OUTCOMES_FIELDNAMES = (
     "protected_fairness_violation",
     "high_demand_guarantee_violation_count",
     "high_demand_violating_request_keys",
+    "target_course_count",
+    "assigned_course_count",
+    "schedule_gap_count",
+    "assigned_alternate_count",
 )
 REQUEST_OUTCOMES_FIELDNAMES = (
     "algorithm_name",
@@ -108,7 +138,38 @@ REQUEST_OUTCOMES_FIELDNAMES = (
     "candidate_attempts_count",
     "remaining_units_before",
     "remaining_units_after",
+    "candidate_rejections_count",
+    "rejected_section_at_capacity_count",
+    "rejected_period_conflict_count",
+    "rejected_duplicate_logical_course_count",
+    "rejected_student_load_limit_count",
+    "rejected_other_count",
+    "terminal_unmet_reason",
 )
+
+DIAGNOSTICS_SCHEMA_VERSION = "assignment_failure_diagnostics_v1"
+DIAGNOSTIC_ARTIFACT_FILES = (
+    "assignment_failure_summary.csv",
+    "student_schedule_gaps.csv",
+)
+REJECTION_REASON_CODES = (
+    "section_at_capacity",
+    "period_conflict",
+    "duplicate_logical_course",
+    "student_load_limit",
+    "other_rejection",
+)
+TERMINAL_UNMET_REASON_ORDER = (
+    "no_candidate_sections",
+    "all_section_at_capacity",
+    "all_period_conflict",
+    "all_duplicate_logical_course",
+    "all_student_load_limit",
+    "mixed_rejections",
+    "other_rejection",
+    "not_attempted",
+)
+REQUEST_KIND_ORDER = ("primary", "alternate", "mandatory_fallback")
 
 
 class BenchmarkRunnerError(ValueError):
@@ -487,6 +548,8 @@ def _export_artifacts(
     """
     course_unmet_rows = _course_unmet_summary_rows(raw_results)
     section_utilization_rows = _section_utilization_rows(raw_results)
+    failure_summary_rows = _assignment_failure_summary_rows(raw_results)
+    schedule_gap_rows = _student_schedule_gap_rows(raw_results)
     written_files = DEFAULT_ARTIFACT_FILES + (LARGE_TABLE_ARTIFACT_FILES if include_large_tables else ())
     manifest_payload = _benchmark_manifest_payload(suite, written_files)
     student_outcome_rows = _student_outcome_rows(raw_results) if include_large_tables else ()
@@ -496,6 +559,16 @@ def _export_artifacts(
     _write_csv(suite, output_artifact_dir / "algorithm_summary.csv")
     _write_rows_csv(output_artifact_dir / "course_unmet_summary.csv", COURSE_UNMET_SUMMARY_FIELDNAMES, course_unmet_rows)
     _write_rows_csv(output_artifact_dir / "section_utilization.csv", SECTION_UTILIZATION_FIELDNAMES, section_utilization_rows)
+    _write_rows_csv(
+        output_artifact_dir / "assignment_failure_summary.csv",
+        ASSIGNMENT_FAILURE_SUMMARY_FIELDNAMES,
+        failure_summary_rows,
+    )
+    _write_rows_csv(
+        output_artifact_dir / "student_schedule_gaps.csv",
+        STUDENT_SCHEDULE_GAPS_FIELDNAMES,
+        schedule_gap_rows,
+    )
     (output_artifact_dir / "benchmark_manifest.json").write_text(
         json.dumps(manifest_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
@@ -559,6 +632,82 @@ def _section_utilization_rows(
     return tuple(sorted(rows, key=lambda row: (row["algorithm_name"], row["linked_section_group_id"])))
 
 
+def _assignment_failure_summary_rows(
+    raw_results: tuple[BaselineResult | CpSatAllocationResult, ...],
+) -> tuple[dict[str, Any], ...]:
+    rows: list[dict[str, Any]] = []
+    for algorithm_index, result in enumerate(raw_results):
+        groups: dict[tuple[str, str], list[tuple[str, dict[str, Any]]]] = defaultdict(list)
+        for outcome in result.request_outcomes:
+            diagnostics = _request_failure_diagnostics(outcome)
+            terminal_reason = diagnostics["terminal_unmet_reason"]
+            if not terminal_reason:
+                continue
+            groups[(outcome.request_type, terminal_reason)].append((outcome.student_id, diagnostics))
+        for (request_kind, terminal_reason), items in groups.items():
+            rows.append(
+                {
+                    "_algorithm_order": algorithm_index,
+                    "algorithm_name": result.algorithm_name,
+                    "request_kind": request_kind,
+                    "terminal_unmet_reason": terminal_reason,
+                    "unmet_request_count": len(items),
+                    "affected_student_count": len({student_id for student_id, _diagnostics in items}),
+                    "total_candidate_attempts": sum(
+                        diagnostics["candidate_attempts_count"] for _student_id, diagnostics in items
+                    ),
+                    "total_candidate_rejections": sum(
+                        diagnostics["candidate_rejections_count"] for _student_id, diagnostics in items
+                    ),
+                }
+            )
+    return tuple(_without_internal_sort_keys(row) for row in sorted(rows, key=_assignment_failure_summary_sort_key))
+
+
+def _student_schedule_gap_rows(
+    raw_results: tuple[BaselineResult | CpSatAllocationResult, ...],
+) -> tuple[dict[str, Any], ...]:
+    rows: list[dict[str, Any]] = []
+    for algorithm_index, result in enumerate(raw_results):
+        unmet_by_student: dict[str, list[RequestOutcome]] = defaultdict(list)
+        for outcome in result.request_outcomes:
+            if _request_failure_diagnostics(outcome)["terminal_unmet_reason"]:
+                unmet_by_student[outcome.student_id].append(outcome)
+        for outcome in result.student_outcomes:
+            schedule_gap = max(outcome.target_period_units - outcome.assigned_period_units, 0)
+            if schedule_gap <= 0:
+                continue
+            unmet_outcomes = unmet_by_student.get(outcome.student_id, ())
+            terminal_reasons = sorted(
+                {
+                    diagnostics["terminal_unmet_reason"]
+                    for item in unmet_outcomes
+                    if (diagnostics := _request_failure_diagnostics(item))["terminal_unmet_reason"]
+                }
+            )
+            rows.append(
+                {
+                    "_algorithm_order": algorithm_index,
+                    "algorithm_name": result.algorithm_name,
+                    "student_id": outcome.student_id,
+                    "grade": outcome.grade,
+                    "target_course_count": outcome.target_period_units,
+                    "assigned_course_count": outcome.assigned_period_units,
+                    "schedule_gap_count": schedule_gap,
+                    "primary_unmet_count": outcome.primary_unmet_count,
+                    "alternates_assigned_count": outcome.alternate_assigned_count,
+                    "unmet_primary_request_ids": _json_array(
+                        item.request_key for item in unmet_outcomes if item.request_type == "primary"
+                    ),
+                    "unmet_alternate_request_ids": _json_array(
+                        item.request_key for item in unmet_outcomes if item.request_type == "alternate"
+                    ),
+                    "terminal_unmet_reasons": _json_array(terminal_reasons),
+                }
+            )
+    return tuple(_without_internal_sort_keys(row) for row in sorted(rows, key=_student_schedule_gap_sort_key))
+
+
 def _student_outcome_rows(
     raw_results: tuple[BaselineResult | CpSatAllocationResult, ...],
 ) -> tuple[dict[str, Any], ...]:
@@ -591,6 +740,10 @@ def _student_outcome_rows(
                     "protected_fairness_violation": outcome.protected_fairness_violation,
                     "high_demand_guarantee_violation_count": outcome.high_demand_guarantee_violation_count,
                     "high_demand_violating_request_keys": "|".join(outcome.high_demand_violating_request_keys),
+                    "target_course_count": outcome.target_period_units,
+                    "assigned_course_count": outcome.assigned_period_units,
+                    "schedule_gap_count": max(outcome.target_period_units - outcome.assigned_period_units, 0),
+                    "assigned_alternate_count": outcome.alternate_assigned_count,
                 }
             )
     return tuple(sorted(rows, key=lambda row: (row["algorithm_name"], row["student_id"])))
@@ -599,13 +752,10 @@ def _student_outcome_rows(
 def _request_outcome_rows(
     raw_results: tuple[BaselineResult | CpSatAllocationResult, ...],
 ) -> tuple[dict[str, Any], ...]:
-    # candidate_attempts is a nested per-attempt structure (attempt index,
-    # candidate section, rejection reasons); flattening it into this row
-    # would either fabricate columns or require a second table, so this
-    # export only reports its count. See completion report for detail.
     rows: list[dict[str, Any]] = []
     for result in raw_results:
         for outcome in result.request_outcomes:
+            diagnostics = _request_failure_diagnostics(outcome)
             rows.append(
                 {
                     "algorithm_name": result.algorithm_name,
@@ -619,6 +769,15 @@ def _request_outcome_rows(
                     "assignment_key": outcome.assignment_key,
                     "assigned_linked_section_group_id": outcome.assigned_linked_section_group_id,
                     "candidate_attempts_count": len(outcome.candidate_attempts),
+                    "candidate_rejections_count": diagnostics["candidate_rejections_count"],
+                    "rejected_section_at_capacity_count": diagnostics["rejected_section_at_capacity_count"],
+                    "rejected_period_conflict_count": diagnostics["rejected_period_conflict_count"],
+                    "rejected_duplicate_logical_course_count": diagnostics[
+                        "rejected_duplicate_logical_course_count"
+                    ],
+                    "rejected_student_load_limit_count": diagnostics["rejected_student_load_limit_count"],
+                    "rejected_other_count": diagnostics["rejected_other_count"],
+                    "terminal_unmet_reason": diagnostics["terminal_unmet_reason"],
                     "remaining_units_before": outcome.remaining_units_before,
                     "remaining_units_after": outcome.remaining_units_after,
                 }
@@ -626,15 +785,146 @@ def _request_outcome_rows(
     return tuple(sorted(rows, key=lambda row: (row["algorithm_name"], row["request_key"])))
 
 
+def _request_failure_diagnostics(outcome: RequestOutcome) -> dict[str, Any]:
+    primary_reasons = [_primary_rejection_reason(attempt.rejection_reasons) for attempt in outcome.candidate_attempts if not attempt.success]
+    counts = {reason: primary_reasons.count(reason) for reason in REJECTION_REASON_CODES}
+    candidate_rejections_count = len(primary_reasons)
+    terminal_unmet_reason = _terminal_unmet_reason(outcome, counts, candidate_rejections_count)
+    return {
+        "candidate_attempts_count": len(outcome.candidate_attempts),
+        "candidate_rejections_count": candidate_rejections_count,
+        "rejected_section_at_capacity_count": counts["section_at_capacity"],
+        "rejected_period_conflict_count": counts["period_conflict"],
+        "rejected_duplicate_logical_course_count": counts["duplicate_logical_course"],
+        "rejected_student_load_limit_count": counts["student_load_limit"],
+        "rejected_other_count": counts["other_rejection"],
+        "terminal_unmet_reason": terminal_unmet_reason,
+    }
+
+
+def _primary_rejection_reason(reasons: tuple[AssignmentRejectionReason, ...]) -> str:
+    if not reasons:
+        return "other_rejection"
+    first = reasons[0]
+    if first == AssignmentRejectionReason.SECTION_FULL:
+        return "section_at_capacity"
+    if first == AssignmentRejectionReason.PERIOD_CONFLICT:
+        return "period_conflict"
+    if first == AssignmentRejectionReason.DUPLICATE_LOGICAL_COURSE_OR_BLOCK:
+        return "duplicate_logical_course"
+    if first == AssignmentRejectionReason.TARGET_LOAD_EXCEEDED:
+        return "student_load_limit"
+    return "other_rejection"
+
+
+def _terminal_unmet_reason(
+    outcome: RequestOutcome,
+    counts: dict[str, int],
+    candidate_rejections_count: int,
+) -> str:
+    if outcome.status in {PrimaryRequestStatus.ASSIGNED, AlternateRequestStatus.ASSIGNED}:
+        return ""
+    if not outcome.candidate_attempts:
+        if outcome.status in {
+            PrimaryRequestStatus.UNMET_NO_CANDIDATES,
+            AlternateRequestStatus.UNASSIGNED_NO_CANDIDATES,
+        }:
+            return "no_candidate_sections"
+        return "not_attempted"
+    if candidate_rejections_count == 0:
+        return "other_rejection"
+    nonzero_reasons = [reason for reason in REJECTION_REASON_CODES if counts[reason] > 0]
+    if len(nonzero_reasons) > 1:
+        return "mixed_rejections"
+    only_reason = nonzero_reasons[0] if nonzero_reasons else "other_rejection"
+    if only_reason == "other_rejection":
+        return "other_rejection"
+    return f"all_{only_reason}"
+
+
+def _assignment_failure_summary_sort_key(row: dict[str, Any]) -> tuple[int, int, int]:
+    return (
+        row["_algorithm_order"],
+        _ordered_index(REQUEST_KIND_ORDER, row["request_kind"]),
+        _ordered_index(TERMINAL_UNMET_REASON_ORDER, row["terminal_unmet_reason"]),
+    )
+
+
+def _student_schedule_gap_sort_key(row: dict[str, Any]) -> tuple[int, int, int, str]:
+    return (row["_algorithm_order"], -int(row["schedule_gap_count"]), int(row["grade"]), row["student_id"])
+
+
+def _ordered_index(order: tuple[str, ...], value: str) -> int:
+    try:
+        return order.index(value)
+    except ValueError:
+        return len(order)
+
+
+def _json_array(values: Iterable[str]) -> str:
+    return json.dumps(sorted(values), separators=(",", ":"))
+
+
+def _without_internal_sort_keys(row: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in row.items() if not key.startswith("_")}
+
+
 def _benchmark_manifest_payload(suite: BenchmarkSuiteResult, written_files: tuple[str, ...]) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "runner_name": RUNNER_NAME,
+        "diagnostics_schema_version": DIAGNOSTICS_SCHEMA_VERSION,
         "manifest": suite.manifest.to_dict(),
         "expected_fingerprint": asdict(suite.expected_fingerprint) if suite.expected_fingerprint is not None else None,
         "fingerprint_verified": suite.fingerprint_verified,
         "algorithms_run": list(suite.algorithms_run),
         "artifact_files": list(written_files),
+        "diagnostics_artifact_files": list(DIAGNOSTIC_ARTIFACT_FILES),
+        "request_outcome_diagnostics_fields": [
+            "candidate_rejections_count",
+            "rejected_section_at_capacity_count",
+            "rejected_period_conflict_count",
+            "rejected_duplicate_logical_course_count",
+            "rejected_student_load_limit_count",
+            "rejected_other_count",
+            "terminal_unmet_reason",
+        ],
+        "rejection_reason_codes": list(REJECTION_REASON_CODES),
+        "rejection_precedence": [
+            "Uses AllocationState._assignment_rejection_reasons order and maps the first returned reason.",
+            "Normal mapped checks are duplicate_logical_course, period_conflict, student_load_limit, section_at_capacity.",
+            "Unmapped state/candidate errors are reported as other_rejection.",
+        ],
+        "candidate_attempts_count_definition": (
+            "Count of candidate sections actually entered in the assignment loop and evaluated with "
+            "AllocationState.try_assign; includes the final successful candidate, excludes skipped candidates "
+            "after success, and is 0 when no candidate loop is entered."
+        ),
+        "candidate_rejections_count_definition": (
+            "Count of attempted candidates whose AllocationState.try_assign result was rejected. Each rejected "
+            "candidate contributes exactly one primary rejection reason using the recorded first reason."
+        ),
+        "terminal_classification_rules": {
+            "no_candidate_sections": "The request had no candidate sections and no candidate loop was entered.",
+            "all_<reason>": "At least one candidate was rejected and every rejected candidate had the same primary reason.",
+            "mixed_rejections": "Rejected candidates contained two or more primary rejection reasons.",
+            "other_rejection": "A candidate was rejected through a real path not mapped to the stable taxonomy.",
+            "not_attempted": "The request outcome row exists but no assignment candidate loop was entered.",
+        },
+        "request_kinds": list(REQUEST_KIND_ORDER),
+        "known_diagnostics_limitation": (
+            "Rejection diagnostics describe reasons observed by the evaluated greedy algorithm under its evolving "
+            "assignment state. They do not prove global infeasibility and may change under a different assignment "
+            "order or optimizer."
+        ),
+        "section_at_capacity_limitation": (
+            "section_at_capacity means the candidate section was at capacity when checked; it does not prove "
+            "global total-seat insufficiency."
+        ),
+        "period_conflict_limitation": (
+            "period_conflict means the candidate overlapped the student's already-assigned periods at that "
+            "moment; it does not prove a swap, repair, or global optimizer could not resolve the conflict."
+        ),
     }
 
 
