@@ -93,17 +93,23 @@ Every valid fixed-section allocation must satisfy:
 11. In the CP-SAT solver, every logical primary request for a high-demand
     course with approved logical primary demand greater than 120 must be
     satisfied. Demand of exactly 120 does not trigger this hard guarantee.
+12. In the CP-SAT solver, any returned final FEASIBLE or OPTIMAL schedule must
+    pass Final Schedule Policy Gate v1: at least five assigned logical courses,
+    at most one logical schedule gap, ordinary students with at most one unmet
+    logical primary, and protected students with zero unmet logical primaries.
 
 `target_course_count` is both the student's desired load and an upper bound.
-An allocation remains valid when a student receives fewer courses, but the
-student must be reported as having an incomplete schedule.
+Greedy baseline allocations can remain useful comparison artifacts when a
+student receives fewer courses, but a CP-SAT final schedule is not publishable
+unless it satisfies the final schedule policy gate.
 
 ## 6. Optimization Priorities
 
 The fixed-section CP-SAT solver treats protected students, ordinary max-one
-unmet primary, and high-demand demand-greater-than-120 guarantees as hard
-policies. It does not add a hard single-math guarantee and does not create
-sections when math capacity is short.
+unmet primary, high-demand demand-greater-than-120 guarantees, minimum assigned
+logical course count, and maximum logical schedule gap as hard policies. It
+does not add a hard single-math guarantee and does not create sections when
+math capacity is short.
 
 The fair algorithm will optimize soft goals lexicographically in this order:
 
@@ -187,6 +193,12 @@ The project will measure:
 - assignment churn across nearby random-demand scenarios,
 - variability across random seeds,
 - and algorithm runtime.
+
+Benchmark artifacts distinguish legacy period-unit fullness from logical-course
+fullness. `fully_scheduled_students` is the historical period-unit metric
+based on assigned period units matching the target. Logical schedule
+publishability uses `logical_fully_scheduled_students`,
+`students_with_logical_schedule_gap`, and `total_logical_schedule_gap`.
 
 ## 9. Data And Simulation Configuration
 

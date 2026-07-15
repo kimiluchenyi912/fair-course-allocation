@@ -27,6 +27,11 @@ ALGORITHM_SUMMARY_COLUMNS = (
     "ordinary_violations",
     "protected_violations",
 )
+ALGORITHM_SUMMARY_LOGICAL_COLUMNS = ALGORITHM_SUMMARY_COLUMNS + (
+    "logical_fully_scheduled_students",
+    "students_with_logical_schedule_gap",
+    "total_logical_schedule_gap",
+)
 COURSE_UNMET_COLUMNS = (
     "algorithm_name",
     "candidate_key",
@@ -49,6 +54,16 @@ STUDENT_OUTCOME_COLUMNS = (
 ALGORITHM_SUMMARY_ROWS = [
     ("seeded_random_greedy", "completed", 10, 8, 2, 0.8, 3, 6, 1, 0),
     ("constrained_first_greedy", "completed", 10, 9, 1, 0.9, 1, 8, 0, 0),
+]
+ALGORITHM_SUMMARY_LOGICAL_ROWS = [
+    row + logical
+    for row, logical in zip(
+        ALGORITHM_SUMMARY_ROWS,
+        (
+            (5, 5, 5),
+            (7, 3, 3),
+        ),
+    )
 ]
 
 COURSE_UNMET_ROWS = [
@@ -109,6 +124,7 @@ def _write_fixture(
     algorithm_summary_rows: list[tuple] | None = None,
     course_unmet_rows: list[tuple] | None = None,
     student_outcome_rows: list[tuple] | None = None,
+    include_logical_summary: bool = False,
 ):
     artifact_dir = tmp_path / "artifacts"
     artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -117,8 +133,12 @@ def _write_fixture(
     (artifact_dir / "benchmark_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
     pd.DataFrame(
-        algorithm_summary_rows if algorithm_summary_rows is not None else ALGORITHM_SUMMARY_ROWS,
-        columns=ALGORITHM_SUMMARY_COLUMNS,
+        algorithm_summary_rows
+        if algorithm_summary_rows is not None
+        else ALGORITHM_SUMMARY_LOGICAL_ROWS
+        if include_logical_summary
+        else ALGORITHM_SUMMARY_ROWS,
+        columns=ALGORITHM_SUMMARY_LOGICAL_COLUMNS if include_logical_summary else ALGORITHM_SUMMARY_COLUMNS,
     ).to_csv(artifact_dir / "algorithm_summary.csv", index=False)
 
     pd.DataFrame(
@@ -193,6 +213,8 @@ def test_visualization_manifest_lists_generated_files_and_metadata(tmp_path) -> 
     assert any("CP-SAT" in item for item in manifest["known_limitations"])
     assert any("priority_protected" in item for item in manifest["known_limitations"])
     assert any("rejection reason" in item for item in manifest["known_limitations"])
+    assert manifest["fully_scheduled_metric_used"] == "legacy_period_units"
+    assert manifest["fully_scheduled_metric_column"] == "fully_scheduled_students"
     for filename in ("algorithm_primary_outcomes.png", "grade_primary_unmet_rate.png"):
         assert filename in manifest["chart_data_sources"]
 
@@ -209,10 +231,30 @@ def test_markdown_summary_uses_fixture_numbers_not_stable_year(tmp_path) -> None
     assert "Seeded Random" in summary
     assert "90.0%" in summary  # constrained_first_greedy primary_satisfaction_rate = 0.9
     assert "80.0%" in summary  # seeded_random_greedy primary_satisfaction_rate = 0.8
+    assert "Legacy period-unit fully scheduled" in summary
     # Real stable-year numbers must never leak into a fixture-driven summary.
     assert "16069" not in summary
     assert "17216" not in summary
     assert "2630" not in summary
+
+
+def test_visualizations_use_logical_fully_scheduled_metric_when_available(tmp_path) -> None:
+    artifact_dir = _write_fixture(tmp_path, include_logical_summary=True)
+    output_dir = tmp_path / "viz"
+
+    artifacts = load_benchmark_artifacts(artifact_dir)
+    table = build_metrics_table(artifacts)
+    render_visualization_artifacts(artifacts, output_dir)
+
+    assert table.set_index("algorithm_name").loc["seeded_random_greedy", "display_fully_scheduled_students"] == 5
+    assert table.set_index("algorithm_name").loc["constrained_first_greedy", "display_fully_scheduled_students"] == 7
+
+    summary = (output_dir / "visualization_summary.md").read_text(encoding="utf-8")
+    manifest = json.loads((output_dir / "visualization_manifest.json").read_text(encoding="utf-8"))
+    assert "Logical-course fully scheduled" in summary
+    assert "logical-course targets" in summary
+    assert manifest["fully_scheduled_metric_used"] == "logical_courses"
+    assert manifest["fully_scheduled_metric_column"] == "logical_fully_scheduled_students"
 
 
 def test_algorithm_order_follows_manifest_algorithms_run_not_csv_row_order(tmp_path) -> None:

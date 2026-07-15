@@ -3,6 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
+from src.final_schedule_policy import (
+    MAXIMUM_ORDINARY_PRIMARY_UNMET_COUNT,
+    MAXIMUM_PROTECTED_PRIMARY_UNMET_COUNT,
+    MAXIMUM_SCHEDULE_GAP_COUNT,
+    MINIMUM_ASSIGNED_LOGICAL_COURSE_COUNT,
+    SCHEMA_VERSION as FINAL_SCHEDULE_POLICY_SCHEMA_VERSION,
+)
+
 from .assignment_models import AssignmentRecord, StateConsistencyIssue
 from .baseline_models import (
     MandatoryFallbackOutcome,
@@ -118,6 +126,13 @@ class CpSatModelStats:
     highest_globally_proven_stage: CpSatStageName | None = None
     conditional_optimization_performed: bool = False
     objective_vector: tuple[tuple[CpSatStageName, int], ...] = ()
+    final_schedule_hard_constraints_enabled: bool = True
+    final_schedule_policy_schema_version: str = FINAL_SCHEDULE_POLICY_SCHEMA_VERSION
+    minimum_assigned_logical_course_count: int = MINIMUM_ASSIGNED_LOGICAL_COURSE_COUNT
+    maximum_logical_schedule_gap_count: int = MAXIMUM_SCHEDULE_GAP_COUNT
+    maximum_ordinary_primary_unmet_count: int = MAXIMUM_ORDINARY_PRIMARY_UNMET_COUNT
+    maximum_protected_primary_unmet_count: int = MAXIMUM_PROTECTED_PRIMARY_UNMET_COUNT
+    post_solve_policy_gate_pass: bool | None = None
 
 
 @dataclass(frozen=True)

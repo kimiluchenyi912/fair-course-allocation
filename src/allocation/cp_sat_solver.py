@@ -8,6 +8,14 @@ from typing import Iterable
 
 from ortools.sat.python import cp_model
 
+from src.final_schedule_policy import (
+    MAXIMUM_ORDINARY_PRIMARY_UNMET_COUNT,
+    MAXIMUM_PROTECTED_PRIMARY_UNMET_COUNT,
+    MAXIMUM_SCHEDULE_GAP_COUNT,
+    MINIMUM_ASSIGNED_LOGICAL_COURSE_COUNT,
+    evaluate_final_schedule_policy,
+)
+
 from .baseline_models import (
     AlternateRequestStatus,
     CandidateAttempt,
@@ -38,6 +46,10 @@ from .state import MANDATORY_FALLBACK_REQUEST_TYPE, AllocationState
 
 
 ALGORITHM_NAME = "fair_cp_sat_solver_v1_2"
+
+
+class CpSatFinalSchedulePolicyConsistencyError(RuntimeError):
+    """Raised when a claimed CP-SAT final solution fails the policy gate."""
 
 
 @dataclass(frozen=True)
@@ -153,6 +165,7 @@ def run_fair_cp_sat_solver(
     max_total_time_seconds: float | None = None,
     use_constrained_first_hint: bool = True,
     stage_to_stage_hints: bool = True,
+    enforce_final_schedule_hard_constraints: bool = True,
 ) -> CpSatAllocationResult:
     """Solve the fixed-section allocation problem with CP-SAT.
 
@@ -197,6 +210,7 @@ def run_fair_cp_sat_solver(
             total_budget_exhausted=budget.exhausted,
             skipped_stage_count=0,
             core_hint_source="none",
+            final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
         )
     external_hint_keys = (
         _constrained_first_partial_hint_keys(
@@ -238,6 +252,7 @@ def run_fair_cp_sat_solver(
                 total_budget_exhausted=budget.exhausted,
                 skipped_stage_count=0,
                 core_hint_source="none",
+                final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
             )
         if bootstrap_run.status == CpSatBootstrapStatus.MODEL_INVALID:
             return _empty_result(
@@ -255,6 +270,7 @@ def run_fair_cp_sat_solver(
                 total_budget_exhausted=budget.exhausted,
                 skipped_stage_count=0,
                 core_hint_source="none",
+                final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
             )
 
     core_build = _build_core_cp_sat_model(allocation_input, fallback_plans, math_course_ids, seed)
@@ -315,6 +331,7 @@ def run_fair_cp_sat_solver(
             total_budget_exhausted=budget.exhausted,
             skipped_stage_count=sum(1 for item in diagnostics if item.skipped),
             core_hint_source=core_hint_source,
+            final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
         )
 
     required_core_stages = (
@@ -354,6 +371,7 @@ def run_fair_cp_sat_solver(
             math_course_ids,
             seed,
             core_values,
+            enforce_final_schedule_hard_constraints=enforce_final_schedule_hard_constraints,
         )
         enrichment_hint_source = set(external_hint_keys)
         if stage_to_stage_hints:
@@ -386,6 +404,29 @@ def run_fair_cp_sat_solver(
         final_solver = enrichment_run.solver
         final_stage_values = {**core_run.stage_values, **enrichment_run.stage_values}
         if final_solver is None:
+            if enforce_final_schedule_hard_constraints:
+                final_status = (
+                    CpSatSolveStatus.INFEASIBLE
+                    if enrichment_run.status == CpSatSolveStatus.INFEASIBLE
+                    else CpSatSolveStatus.UNKNOWN
+                )
+                return _empty_result(
+                    seed,
+                    final_status,
+                    tuple(diagnostics),
+                    enrichment_build,
+                    core_build,
+                    bootstrap_run,
+                    time.perf_counter() - started,
+                    False,
+                    external_hint_used=external_hint_used,
+                    stage_to_stage_hint_used=core_run.stage_to_stage_hint_used or enrichment_run.stage_to_stage_hint_used,
+                    max_total_time_seconds=max_total_time_seconds,
+                    total_budget_exhausted=budget.exhausted,
+                    skipped_stage_count=sum(1 for item in diagnostics if item.skipped),
+                    core_hint_source=core_hint_source,
+                    final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+                )
             final_build = core_build
             final_solver = core_run.solver
             final_stage_values = core_run.stage_values
@@ -409,6 +450,7 @@ def run_fair_cp_sat_solver(
             total_budget_exhausted=budget.exhausted,
             skipped_stage_count=0,
             core_hint_source=core_hint_source,
+            final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
         )
 
     request_outcomes = _build_request_outcomes(allocation_input, final_build, final_solver, state)
@@ -422,6 +464,19 @@ def run_fair_cp_sat_solver(
         request_outcomes,
         fallback_outcomes,
     )
+    final_policy_report = None
+    if enforce_final_schedule_hard_constraints:
+        final_policy_report = evaluate_final_schedule_policy(ALGORITHM_NAME, baseline_result.student_outcomes)
+        if not final_policy_report.summary.final_schedule_policy_pass:
+            summary = final_policy_report.summary
+            raise CpSatFinalSchedulePolicyConsistencyError(
+                "CP-SAT final solution violates Final Schedule Policy Gate v1: "
+                f"violating_students={summary.violating_student_count}, "
+                f"protected={summary.protected_primary_unmet_violation_count}, "
+                f"ordinary={summary.ordinary_primary_unmet_violation_count}, "
+                f"schedule_gap_over_limit={summary.schedule_gap_over_limit_count}, "
+                f"below_minimum_course={summary.below_minimum_course_count}"
+            )
     math_report = evaluate_math_policy(allocation_input, baseline_result, tuple(sorted(math_course_ids)), math_fallback_rules)
     lexicographic_optimum = core_run.lexicographic_optimum and enrichment_run.lexicographic_optimum and enrichment_build is not None
     final_status = CpSatSolveStatus.OPTIMAL if lexicographic_optimum else CpSatSolveStatus.FEASIBLE
@@ -483,6 +538,10 @@ def run_fair_cp_sat_solver(
             highest_globally_proven_stage=highest_global,
             conditional_optimization_performed=conditional,
             objective_vector=_objective_vector(final_stage_values),
+            final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+            post_solve_policy_gate_pass=(
+                final_policy_report.summary.final_schedule_policy_pass if final_policy_report is not None else None
+            ),
         ),
         assignments=baseline_result.assignments,
         mandatory_fallback_outcomes=baseline_result.mandatory_fallback_outcomes,
@@ -519,6 +578,8 @@ def _build_enrichment_cp_sat_model(
     math_course_ids: tuple[str, ...],
     seed: int,
     fixed_core_values: dict[CpSatStageName, int],
+    *,
+    enforce_final_schedule_hard_constraints: bool = True,
 ) -> _ModelBuild:
     return _build_model(
         allocation_input,
@@ -529,6 +590,7 @@ def _build_enrichment_cp_sat_model(
         include_alternates=True,
         include_schedule_completion=True,
         fixed_core_values=fixed_core_values,
+        enforce_final_schedule_hard_constraints=enforce_final_schedule_hard_constraints,
     )
 
 
@@ -750,6 +812,7 @@ def _build_model(
     include_alternates: bool,
     include_schedule_completion: bool,
     fixed_core_values: dict[CpSatStageName, int] | None,
+    enforce_final_schedule_hard_constraints: bool = False,
 ) -> _ModelBuild:
     started = time.perf_counter()
     model = cp_model.CpModel()
@@ -801,6 +864,8 @@ def _build_model(
         math_course_ids,
     )
     _add_fairness_hard_constraints(model, allocation_input, assigned_vars)
+    if include_schedule_completion and enforce_final_schedule_hard_constraints:
+        _add_final_schedule_hard_constraints(model, allocation_input, requests_by_key, assigned_vars)
     if include_schedule_completion:
         fully_scheduled_vars, remaining_exprs = _add_schedule_completion_vars(
             model,
@@ -972,12 +1037,27 @@ def _add_fairness_hard_constraints(
         primary_assigned = [assigned_vars[request.request_key] for request in student.primary_requests]
         primary_count = len(student.primary_requests)
         if student.priority_protected:
-            model.Add(sum(primary_assigned) == primary_count)
+            model.Add(primary_count - sum(primary_assigned) <= MAXIMUM_PROTECTED_PRIMARY_UNMET_COUNT)
         else:
-            model.Add(primary_count - sum(primary_assigned) <= 1)
+            model.Add(primary_count - sum(primary_assigned) <= MAXIMUM_ORDINARY_PRIMARY_UNMET_COUNT)
         for request in student.primary_requests:
             if request.candidate_key in high_demand:
                 model.Add(assigned_vars[request.request_key] == 1)
+
+
+def _add_final_schedule_hard_constraints(
+    model: cp_model.CpModel,
+    allocation_input: CanonicalAllocationInput,
+    requests_by_key: dict[str, LogicalRequest],
+    assigned_vars: dict[str, cp_model.LinearExpr],
+) -> None:
+    by_student: dict[str, list[cp_model.LinearExpr]] = defaultdict(list)
+    for request in requests_by_key.values():
+        by_student[request.student_id].append(assigned_vars[request.request_key])
+    for student in allocation_input.students:
+        assigned_logical_courses = sum(by_student.get(student.student_id, ()))
+        model.Add(assigned_logical_courses >= MINIMUM_ASSIGNED_LOGICAL_COURSE_COUNT)
+        model.Add(assigned_logical_courses >= student.target_period_units - MAXIMUM_SCHEDULE_GAP_COUNT)
 
 
 def _add_schedule_completion_vars(
@@ -1617,6 +1697,7 @@ def _empty_result(
     total_budget_exhausted: bool,
     skipped_stage_count: int,
     core_hint_source: str,
+    final_schedule_hard_constraints_enabled: bool = True,
 ) -> CpSatAllocationResult:
     proto = build.model.Proto() if build is not None else None
     other_proto = other_build.model.Proto() if other_build is not None else None
@@ -1674,6 +1755,7 @@ def _empty_result(
             warm_start_strategy=_warm_start_strategy(stage_to_stage_hint_used, external_hint_used),
             external_hint_used=external_hint_used,
             stage_to_stage_hint_used=stage_to_stage_hint_used,
+            final_schedule_hard_constraints_enabled=final_schedule_hard_constraints_enabled,
         ),
     )
 

@@ -156,6 +156,7 @@ def test_bootstrap_records_feasible_incumbent_but_not_objective_vector() -> None
         math_fallback_rules=fallback_rules(),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.model_stats.bootstrap_enabled is True
@@ -181,6 +182,7 @@ def test_bootstrap_feasible_with_no_external_hint() -> None:
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
         use_constrained_first_hint=False,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.model_stats.bootstrap_status == CpSatBootstrapStatus.FEASIBLE_FOUND
@@ -205,6 +207,7 @@ def test_bootstrap_feasible_hint_does_not_constrain_core_math_choice() -> None:
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
         use_constrained_first_hint=False,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert next(item for item in result.request_outcomes if item.request_key == key("STU_1", "MATH1")).status == PrimaryRequestStatus.ASSIGNED
@@ -226,6 +229,7 @@ def test_bootstrap_period_conflict_can_make_protected_student_infeasible() -> No
         math_fallback_rules=fallback_rules(),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.solve_status == CpSatSolveStatus.INFEASIBLE
@@ -248,6 +252,7 @@ def test_bootstrap_target_load_can_make_protected_student_infeasible() -> None:
         math_fallback_rules=fallback_rules(),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.solve_status == CpSatSolveStatus.INFEASIBLE
@@ -271,6 +276,7 @@ def test_bootstrap_ordinary_student_may_not_have_more_than_one_primary_unmet() -
         math_fallback_rules=fallback_rules(),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.solve_status == CpSatSolveStatus.INFEASIBLE
@@ -292,6 +298,7 @@ def test_bootstrap_high_demand_primary_policy_is_hard() -> None:
         math_fallback_rules=fallback_rules(),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.solve_status == CpSatSolveStatus.INFEASIBLE
@@ -313,6 +320,7 @@ def test_high_demand_policy_does_not_trigger_at_exactly_120() -> None:
         math_fallback_rules=fallback_rules(),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.solve_status != CpSatSolveStatus.INFEASIBLE
@@ -332,6 +340,7 @@ def test_bootstrap_infeasible_returns_empty_hard_model_result() -> None:
         math_fallback_rules=fallback_rules(),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.solve_status == CpSatSolveStatus.INFEASIBLE
@@ -352,6 +361,7 @@ def test_bootstrap_does_not_harden_math_coverage_or_fallback() -> None:
         math_fallback_rules=(MathFallbackRule("MATH2_3_HA", "MATH2", "mandatory_fallback", True, "test"),),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.model_stats.bootstrap_status == CpSatBootstrapStatus.FEASIBLE_FOUND
@@ -378,6 +388,7 @@ def test_bootstrap_dangling_candidate_returns_model_invalid() -> None:
         math_fallback_rules=fallback_rules(),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.solve_status == CpSatSolveStatus.MODEL_INVALID
@@ -403,6 +414,7 @@ def test_candidate_section_must_match_request_identity() -> None:
         math_fallback_rules=fallback_rules(),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.solve_status == CpSatSolveStatus.MODEL_INVALID
@@ -430,6 +442,7 @@ def test_bootstrap_unknown_without_incumbent_falls_back_to_core(monkeypatch) -> 
         math_fallback_rules=fallback_rules(),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.solve_status == CpSatSolveStatus.OPTIMAL
@@ -445,6 +458,7 @@ def test_global_budget_exhaustion_without_incumbent_returns_unknown_and_skips_st
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
         max_total_time_seconds=0.0,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.solve_status == CpSatSolveStatus.UNKNOWN
@@ -475,6 +489,7 @@ def test_global_budget_exhaustion_after_core_incumbent_returns_feasible(monkeypa
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
         max_total_time_seconds=None,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.solve_status == CpSatSolveStatus.FEASIBLE
@@ -508,6 +523,7 @@ def test_partial_core_objective_values_reflect_incumbent_not_default_zero(monkey
         continue_after_feasible=False,
         use_feasibility_bootstrap=False,
         use_constrained_first_hint=False,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.solve_status == CpSatSolveStatus.FEASIBLE

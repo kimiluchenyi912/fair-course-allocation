@@ -48,6 +48,9 @@ SUMMARY_FIELDNAMES = (
     "minimum_assigned_course_count",
     "maximum_schedule_gap_count",
     "maximum_primary_unmet_count",
+    "logical_fully_scheduled_student_count",
+    "students_with_logical_schedule_gap",
+    "total_logical_schedule_gap",
 )
 VIOLATION_FIELDNAMES = (
     "algorithm_name",
@@ -93,6 +96,9 @@ class FinalSchedulePolicySummary:
     minimum_assigned_course_count: int
     maximum_schedule_gap_count: int
     maximum_primary_unmet_count: int
+    logical_fully_scheduled_student_count: int
+    students_with_logical_schedule_gap: int
+    total_logical_schedule_gap: int
 
 
 @dataclass(frozen=True)
@@ -106,6 +112,9 @@ def evaluate_final_schedule_policy(algorithm_name: str, student_outcomes: Iterab
     minimum_assigned: int | None = None
     maximum_gap = 0
     maximum_primary_unmet = 0
+    logical_fully_scheduled = 0
+    logical_gap_students = 0
+    total_logical_gap = 0
     for outcome in student_outcomes:
         student = _student_view(algorithm_name, outcome)
         minimum_assigned = (
@@ -115,6 +124,11 @@ def evaluate_final_schedule_policy(algorithm_name: str, student_outcomes: Iterab
         )
         maximum_gap = max(maximum_gap, student.schedule_gap_count)
         maximum_primary_unmet = max(maximum_primary_unmet, student.primary_unmet_count)
+        if student.schedule_gap_count == 0:
+            logical_fully_scheduled += 1
+        else:
+            logical_gap_students += 1
+            total_logical_gap += student.schedule_gap_count
         reasons = _violation_reasons(student)
         if reasons:
             violations.append(
@@ -144,6 +158,9 @@ def evaluate_final_schedule_policy(algorithm_name: str, student_outcomes: Iterab
         minimum_assigned_course_count=minimum_assigned if minimum_assigned is not None else 0,
         maximum_schedule_gap_count=maximum_gap,
         maximum_primary_unmet_count=maximum_primary_unmet,
+        logical_fully_scheduled_student_count=logical_fully_scheduled,
+        students_with_logical_schedule_gap=logical_gap_students,
+        total_logical_schedule_gap=total_logical_gap,
     )
     return FinalSchedulePolicyReport(summary=summary, violations=tuple(sorted(violations, key=_violation_sort_key)))
 
@@ -161,6 +178,9 @@ def summary_row(report: FinalSchedulePolicyReport) -> dict[str, Any]:
         "minimum_assigned_course_count": summary.minimum_assigned_course_count,
         "maximum_schedule_gap_count": summary.maximum_schedule_gap_count,
         "maximum_primary_unmet_count": summary.maximum_primary_unmet_count,
+        "logical_fully_scheduled_student_count": summary.logical_fully_scheduled_student_count,
+        "students_with_logical_schedule_gap": summary.students_with_logical_schedule_gap,
+        "total_logical_schedule_gap": summary.total_logical_schedule_gap,
     }
 
 

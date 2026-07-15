@@ -77,6 +77,11 @@ REQUIRED_ALGORITHM_SUMMARY_COLUMNS = (
     "ordinary_violations",
     "protected_violations",
 )
+OPTIONAL_LOGICAL_SCHEDULE_COLUMNS = (
+    "logical_fully_scheduled_students",
+    "students_with_logical_schedule_gap",
+    "total_logical_schedule_gap",
+)
 REQUIRED_COURSE_UNMET_COLUMNS = (
     "algorithm_name",
     "candidate_key",
@@ -218,6 +223,9 @@ def _rate_column(frame: pd.DataFrame, column: str, source_label: str, *, low: fl
 def _validate_algorithm_summary(frame: pd.DataFrame, source_label: str) -> None:
     for column in ("primary_assigned", "primary_unmet", "total_alternates_assigned", "fully_scheduled_students", "ordinary_violations", "protected_violations", "students"):
         _non_negative_count_column(frame, column, source_label)
+    for column in OPTIONAL_LOGICAL_SCHEDULE_COLUMNS:
+        if column in frame.columns:
+            _non_negative_count_column(frame, column, source_label)
     _rate_column(frame, "primary_satisfaction_rate", source_label)
     if frame["algorithm_name"].isna().any() or (frame["algorithm_name"].astype(str).str.strip() == "").any():
         raise VisualizationInputError(f"{source_label} contains blank algorithm_name value(s).")
@@ -381,8 +389,9 @@ def render_algorithm_primary_satisfaction(artifacts: BenchmarkArtifacts, output_
 
 def render_algorithm_fully_scheduled(artifacts: BenchmarkArtifacts, output_path: Path) -> None:
     summary = _ordered_summary(artifacts)
+    metric = _fully_scheduled_metric(summary)
     labels = [_display_name(name) for name in summary["algorithm_name"]]
-    counts = summary["fully_scheduled_students"].to_numpy()
+    counts = summary[metric["column"]].to_numpy()
     totals = summary["students"].to_numpy()
     rates = counts / totals
 
@@ -394,8 +403,8 @@ def render_algorithm_fully_scheduled(artifacts: BenchmarkArtifacts, output_path:
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.set_ylim(0, max(totals) * 1.12)
-    ax.set_ylabel("Number of fully scheduled students")
-    ax.set_title("Fully Scheduled Students by Algorithm")
+    ax.set_ylabel(metric["ylabel"])
+    ax.set_title(metric["title"])
     _save_and_close(fig, output_path)
 
 
@@ -518,6 +527,7 @@ def _fmt_pct(value: float) -> str:
 
 def build_metrics_table(artifacts: BenchmarkArtifacts) -> pd.DataFrame:
     summary = _ordered_summary(artifacts)
+    metric = _fully_scheduled_metric(summary)
     table = summary[
         [
             "algorithm_name",
@@ -525,13 +535,16 @@ def build_metrics_table(artifacts: BenchmarkArtifacts) -> pd.DataFrame:
             "primary_unmet",
             "primary_satisfaction_rate",
             "total_alternates_assigned",
-            "fully_scheduled_students",
             "ordinary_violations",
             "protected_violations",
         ]
     ].copy()
+    table["fully_scheduled_students"] = summary["fully_scheduled_students"]
+    table["display_fully_scheduled_students"] = summary[metric["column"]]
     table["students"] = summary["students"]
-    table["fully_scheduled_rate"] = table["fully_scheduled_students"] / table["students"]
+    table["fully_scheduled_rate"] = table["display_fully_scheduled_students"] / table["students"]
+    table["fully_scheduled_metric"] = metric["name"]
+    table["fully_scheduled_metric_label"] = metric["table_label"]
     table["display_name"] = table["algorithm_name"].map(_display_name)
     return table
 
@@ -569,13 +582,14 @@ def render_markdown_summary(artifacts: BenchmarkArtifacts, top_n_courses: int) -
     lines.append("")
     lines.append("## 3. Key metrics")
     lines.append("")
-    lines.append("| Algorithm | Primary assigned | Primary unmet | Satisfaction | Alternates assigned | Fully scheduled | Ordinary violations | Protected violations |")
+    full_metric_label = table["fully_scheduled_metric_label"].iloc[0]
+    lines.append(f"| Algorithm | Primary assigned | Primary unmet | Satisfaction | Alternates assigned | {full_metric_label} | Ordinary violations | Protected violations |")
     lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
     for _, row in table.iterrows():
         lines.append(
             f"| {row['display_name']} | {int(row['primary_assigned'])} | {int(row['primary_unmet'])} | "
             f"{_fmt_pct(row['primary_satisfaction_rate'])} | {int(row['total_alternates_assigned'])} | "
-            f"{int(row['fully_scheduled_students'])} ({_fmt_pct(row['fully_scheduled_rate'])}) | "
+            f"{int(row['display_fully_scheduled_students'])} ({_fmt_pct(row['fully_scheduled_rate'])}) | "
             f"{int(row['ordinary_violations'])} | {int(row['protected_violations'])} |"
         )
     lines.append("")
@@ -610,6 +624,16 @@ def render_markdown_summary(artifacts: BenchmarkArtifacts, top_n_courses: int) -
     lines.append("")
     for limitation in KNOWN_LIMITATIONS:
         lines.append(f"- {limitation}")
+    if table["fully_scheduled_metric"].iloc[0] == "legacy_period_units":
+        lines.append(
+            "- Fully scheduled counts in this visualization use the legacy period-unit metric because "
+            "logical_fully_scheduled_students is absent from algorithm_summary.csv."
+        )
+    else:
+        lines.append(
+            "- Fully scheduled counts in this visualization use logical-course targets from "
+            "logical_fully_scheduled_students."
+        )
     lines.append("")
     return "\n".join(lines) + "\n"
 
@@ -620,6 +644,7 @@ def build_visualization_manifest(
     chart_data_sources: dict[str, str],
     top_n_courses: int,
 ) -> dict[str, Any]:
+    metric = _fully_scheduled_metric(_ordered_summary(artifacts))
     return {
         "schema_version": SCHEMA_VERSION,
         "created_by": RUNNER_NAME,
@@ -629,10 +654,47 @@ def build_visualization_manifest(
         "algorithms_detected": list(artifacts.algorithm_order),
         "generated_files": list(generated_files),
         "chart_data_sources": chart_data_sources,
+        "fully_scheduled_metric_used": metric["name"],
+        "fully_scheduled_metric_column": metric["column"],
+        "fully_scheduled_metric_definition": metric["definition"],
+        "legacy_fully_scheduled_definition": (
+            "fully_scheduled_students is the legacy period-unit count from assigned_period_units == "
+            "target_period_units."
+        ),
+        "logical_fully_scheduled_definition": (
+            "logical_fully_scheduled_students counts students whose assigned logical course count "
+            "meets or exceeds target_logical_course_count."
+        ),
         "grade_level_unmet_rate_definition": GRADE_LEVEL_UNMET_RATE_DEFINITION,
         "grade_order": list(GRADE_ORDER),
         "top_unmet_courses_default_n": top_n_courses,
         "known_limitations": list(KNOWN_LIMITATIONS),
+}
+
+
+def _fully_scheduled_metric(summary: pd.DataFrame) -> dict[str, str]:
+    if "logical_fully_scheduled_students" in summary.columns:
+        return {
+            "name": "logical_courses",
+            "column": "logical_fully_scheduled_students",
+            "title": "Logical-Course Fully Scheduled Students by Algorithm",
+            "ylabel": "Logical-course fully scheduled students",
+            "table_label": "Logical-course fully scheduled",
+            "definition": (
+                "Count of students with logical_schedule_gap_count == 0, using logical course "
+                "assignments rather than period units."
+            ),
+        }
+    return {
+        "name": "legacy_period_units",
+        "column": "fully_scheduled_students",
+        "title": "Legacy Period-Unit Fully Scheduled Students by Algorithm",
+        "ylabel": "Legacy period-unit fully scheduled students",
+        "table_label": "Legacy period-unit fully scheduled",
+        "definition": (
+            "Fallback for older artifacts: count of students with assigned_period_units == "
+            "target_period_units."
+        ),
     }
 
 

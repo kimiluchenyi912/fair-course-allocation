@@ -230,6 +230,7 @@ def run_solver(input_data, seed: int = 20260630, max_time: float = 2.0):
         math_fallback_rules=fallback_rules(),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=max_time,
+        enforce_final_schedule_hard_constraints=False,
     )
 
 
@@ -491,7 +492,14 @@ def test_math_classification_uses_department_not_title() -> None:
 
 def test_solver_does_not_infer_math_from_course_title_string() -> None:
     data = canonical([("STU_1", 12, 1, False)], [request_row("STU_1", "CORE_A")])
-    result = run_fair_cp_sat_solver(data, seed=1, math_course_ids=(), math_fallback_rules=(), max_time_seconds_per_stage=2)
+    result = run_fair_cp_sat_solver(
+        data,
+        seed=1,
+        math_course_ids=(),
+        math_fallback_rules=(),
+        max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
+    )
 
     assert result.math_policy_report.no_math_primary_student_ids == ("STU_1",)
 
@@ -775,6 +783,7 @@ def test_external_hint_can_be_disabled_and_is_not_a_constraint(monkeypatch) -> N
         math_fallback_rules=fallback_rules(),
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
+        enforce_final_schedule_hard_constraints=False,
     )
     disabled_result = run_fair_cp_sat_solver(
         data,
@@ -783,6 +792,7 @@ def test_external_hint_can_be_disabled_and_is_not_a_constraint(monkeypatch) -> N
         math_course_ids=math_ids(),
         max_time_seconds_per_stage=2,
         use_constrained_first_hint=False,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert hinted_result.model_stats.external_hint_used is True
@@ -800,6 +810,7 @@ def test_stage_to_stage_hints_can_be_disabled() -> None:
         max_time_seconds_per_stage=2,
         stage_to_stage_hints=False,
         use_constrained_first_hint=False,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.model_stats.stage_to_stage_hint_used is False
@@ -815,6 +826,7 @@ def test_external_hint_alone_does_not_report_stage_to_stage_hint_used() -> None:
         max_time_seconds_per_stage=2,
         stage_to_stage_hints=False,
         use_constrained_first_hint=True,
+        enforce_final_schedule_hard_constraints=False,
     )
 
     assert result.model_stats.external_hint_used is True

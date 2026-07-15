@@ -418,8 +418,9 @@ def test_cp_sat_can_be_selected_explicitly_on_tiny_fixture(tmp_path) -> None:
 
     row = result.results[0]
     assert row.algorithm_name == "fair_cp_sat_solver_v1_2"
-    assert row.solve_status in {"OPTIMAL", "FEASIBLE"}
+    assert row.solve_status == "INFEASIBLE"
     assert row.bootstrap_status is not None
+    assert row.final_schedule_policy_pass is None
 
 
 def test_json_output_contains_seeds_fingerprint_algorithms_and_metrics(tmp_path) -> None:
@@ -567,6 +568,9 @@ def test_output_artifact_dir_writes_default_four_artifacts(tmp_path) -> None:
         "final_schedule_policy_summary.csv",
         "final_schedule_policy_violations.csv",
     ]
+    assert "period-unit metric" in manifest["fully_scheduled_definition"]
+    assert "logical_fully_scheduled" in manifest["logical_fully_scheduled_definition"]
+    assert "logical_schedule_gap" in manifest["logical_schedule_gap_definition"]
 
     summary_rows = pd.read_csv(artifact_dir / "algorithm_summary.csv", keep_default_na=False)
     assert list(summary_rows["algorithm_name"]) == ["seeded_random_greedy", "constrained_first_greedy"]
@@ -575,7 +579,17 @@ def test_output_artifact_dir_writes_default_four_artifacts(tmp_path) -> None:
         "final_schedule_policy_violation_students",
         "students_below_minimum_course_count",
         "students_with_schedule_gap_over_limit",
+        "logical_fully_scheduled_students",
+        "students_with_logical_schedule_gap",
+        "total_logical_schedule_gap",
     } <= set(summary_rows.columns)
+
+    policy_summary = pd.read_csv(artifact_dir / "final_schedule_policy_summary.csv", keep_default_na=False)
+    assert {
+        "logical_fully_scheduled_student_count",
+        "students_with_logical_schedule_gap",
+        "total_logical_schedule_gap",
+    } <= set(policy_summary.columns)
 
     course_rows = pd.read_csv(artifact_dir / "course_unmet_summary.csv", keep_default_na=False)
     assert set(course_rows["candidate_key"]) == {"CORE_A"}
@@ -606,9 +620,17 @@ def test_include_large_tables_writes_student_and_request_outcomes(tmp_path) -> N
     student_rows = pd.read_csv(artifact_dir / "student_outcomes.csv", keep_default_na=False)
     assert set(student_rows["student_id"]) == {"STU_1", "STU_2"}
     assert set(student_rows["algorithm_name"]) == {"seeded_random_greedy", "constrained_first_greedy"}
-    assert {"target_course_count", "assigned_course_count", "schedule_gap_count", "assigned_alternate_count"} <= set(
-        student_rows.columns
-    )
+    assert {
+        "target_course_count",
+        "assigned_course_count",
+        "schedule_gap_count",
+        "assigned_alternate_count",
+        "target_logical_course_count",
+        "assigned_logical_course_count",
+        "logical_schedule_gap_count",
+        "logical_fully_scheduled",
+    } <= set(student_rows.columns)
+    assert set(student_rows["logical_fully_scheduled"].astype(str).str.lower()) <= {"true", "false"}
 
     request_rows = pd.read_csv(artifact_dir / "request_outcomes.csv", keep_default_na=False)
     assert "candidate_attempts_count" in request_rows.columns

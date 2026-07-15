@@ -54,7 +54,11 @@ These are simulation parameters, not claims of exact current enrollment.
 | 11 | 60% | 35% | 5% |
 | 12 | 33% | 47% | 20% |
 
-`target_course_count` is both the student's desired load and the maximum number of normal-period course slots to fill. An underfilled schedule remains feasible but must be reported.
+`target_course_count` is both the student's desired load and the maximum number
+of normal-period course slots to fill. Greedy comparison artifacts may be
+underfilled and reported for analysis, but a CP-SAT final FEASIBLE or OPTIMAL
+schedule must satisfy Final Schedule Policy Gate v1 before it can be described
+as publishable.
 
 ## 5. Period structure and unscheduled time
 
@@ -351,6 +355,9 @@ The CP-SAT hard policies are:
 - ordinary non-protected students may have at most one unmet logical primary;
 - logical primary requests for courses with approved logical primary demand
   greater than 120 must be assigned.
+- any returned final FEASIBLE or OPTIMAL solution must also satisfy Final
+  Schedule Policy Gate v1: at least five assigned logical courses and at most
+  one logical schedule gap for every student.
 
 The high-demand hard policy uses only logical primary demand. Demand of 120 or
 less does not trigger a full-assignment guarantee. Courses at or below that
@@ -391,7 +398,9 @@ The implementation separates this into two CP-SAT model scopes:
   allocation quality;
 - the Enrichment model contains the full request set, including ranked
   alternates and complete-schedule variables, and fixes the Core incumbent
-  values before optimizing lower-priority goals.
+  values before optimizing lower-priority goals. Final schedule minimum-course
+  and maximum-gap constraints live in this full Enrichment model because they
+  may require ranked alternates or mandatory fallback assignments.
 
 Core primary quality is solved in three distinct stages: math coverage
 violations, primary unmet count, and primary unmet period units. The solver
@@ -448,6 +457,22 @@ After CP-SAT returns selected variables, the solution is replayed into a fresh
 pass all local feasibility checks and internal consistency validation. A
 solution that cannot replay is treated as an internal model error, not as a
 student allocation result.
+
+After replay, any CP-SAT FEASIBLE or OPTIMAL final solution is checked with the
+same Final Schedule Policy Gate v1 evaluator used by benchmark artifacts. If
+the model claims a final solution but the evaluator fails it, that is an
+internal model/evaluator consistency error rather than a normal infeasible
+allocation instance.
+
+Benchmark reports preserve the historical `fully_scheduled_students` field as
+a period-unit metric: it counts students whose assigned period units match the
+target period units. That is not always the same as receiving the target number
+of logical courses because a double-period logical course such as Math 2/3
+Honors Accelerated can fill two period units while counting as one course.
+Logical-course completeness is reported separately with
+`logical_fully_scheduled_students`, `students_with_logical_schedule_gap`, and
+`total_logical_schedule_gap`. Final Schedule Policy Gate v1 uses the logical
+course metrics.
 
 The CP-SAT allocator still does not implement dynamic section planning,
 local repair, swap/displacement, beam search, or website behavior.

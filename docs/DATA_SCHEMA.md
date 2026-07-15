@@ -288,11 +288,18 @@ One row per student after a solver run.
 | student_id | student |
 | primary_unmet_count | count of unmet primary logical courses/blocks |
 | alternate_assigned_count | number of alternates assigned |
-| schedule_complete | true if assigned period units meet the target load |
+| schedule_complete | legacy period-unit metric; true if assigned period units meet the target load |
+| target_logical_course_count | target number of logical courses/blocks |
+| assigned_logical_course_count | assigned logical courses/blocks; double-period courses still count once |
+| logical_schedule_gap_count | `max(target_logical_course_count - assigned_logical_course_count, 0)` |
+| logical_fully_scheduled | true if assigned logical courses meet the target logical course count |
 | earns_next_year_priority | true if this year creates a one-year priority tag |
 
 A student who receives alternates for all missing period units can still have
 `primary_unmet_count > 0` while `schedule_complete=true`.
+For double-period logical courses, period-unit completion and logical-course
+completion can differ; Final Schedule Policy Gate v1 uses the logical-course
+fields.
 
 ### `metrics.csv`
 

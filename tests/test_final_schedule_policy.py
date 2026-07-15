@@ -164,6 +164,9 @@ def test_summary_and_violation_rows_have_stable_schema_and_json_reasons() -> Non
         "minimum_assigned_course_count": 4,
         "maximum_schedule_gap_count": 3,
         "maximum_primary_unmet_count": 2,
+        "logical_fully_scheduled_student_count": 0,
+        "students_with_logical_schedule_gap": 1,
+        "total_logical_schedule_gap": 3,
     }
     assert violation_row(report.violations[0])["violation_reasons"] == (
         '["below_minimum_course_count","schedule_gap_over_limit","ordinary_primary_unmet_over_limit"]'
