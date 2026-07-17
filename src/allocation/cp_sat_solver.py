@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import random
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Iterable
 
 from ortools.sat.python import cp_model
@@ -37,6 +39,7 @@ from .cp_sat_models import (
 from .input_models import CanonicalAllocationInput, CanonicalStudent, LogicalRequest, SourceRequestRow
 from .math_policy import evaluate_math_policy
 from .math_policy_models import MathFallbackRule
+from .persisted_solution import PersistedSolutionSeed, load_persisted_solution_seed
 from .random_baseline import (
     HIGH_DEMAND_PRIMARY_THRESHOLD,
     _build_mandatory_fallback_plans,
@@ -107,6 +110,7 @@ class _StageRun:
     stage_to_stage_hint_used: bool
     incumbent_candidates: tuple["_IncumbentCandidate", ...] = ()
     budget_exhausted: bool = False
+    selected_candidate_sources: tuple[str, ...] = ()
 
 
 @dataclass
@@ -150,6 +154,7 @@ class _HintSeed:
     keys: tuple[_VariableKey, ...] = ()
     replay_policy_pass: bool | None = None
     violation_students: int | None = None
+    persisted: PersistedSolutionSeed | None = None
 
 
 @dataclass(frozen=True)
@@ -164,6 +169,20 @@ class _HintAudit:
     duplicate_keys: int = 0
     replay_policy_pass: bool | None = None
     violation_students: int | None = None
+    auxiliary_variables_derived: int = 0
+    initial_solution_seed_enabled: bool = False
+    initial_solution_seed_role: str = ""
+    initial_solution_seed_source_commit: str = ""
+    initial_solution_seed_source_algorithm: str = ""
+    initial_solution_seed_source_status: str = ""
+    initial_solution_seed_source_policy_pass: bool | None = None
+    initial_solution_seed_manifest_sha256: str = ""
+    initial_solution_seed_request_outcomes_sha256: str = ""
+    initial_solution_seed_provenance_sha256: str = ""
+    initial_solution_seed_fingerprint: tuple[tuple[str, object], ...] = ()
+    initial_solution_seed_hint_coverage: float | None = None
+    initial_solution_seed_unknown_keys: int = 0
+    initial_solution_seed_duplicate_keys: int = 0
 
 
 @dataclass(frozen=True)
@@ -241,6 +260,7 @@ def run_fair_cp_sat_solver(
     stage_to_stage_hints: bool = True,
     enforce_final_schedule_hard_constraints: bool = True,
     logical_schedule_completion_enabled: bool = True,
+    initial_solution_artifact_dir: Path | str | None = None,
 ) -> CpSatAllocationResult:
     """Solve the fixed-section allocation problem with CP-SAT.
 
@@ -255,6 +275,11 @@ def run_fair_cp_sat_solver(
     )
     math_course_ids = tuple(sorted(math_course_ids))
     budget = _GlobalTimeBudget(max_total_time_seconds, started)
+    persisted_seed = (
+        load_persisted_solution_seed(initial_solution_artifact_dir, allocation_input)
+        if initial_solution_artifact_dir is not None
+        else None
+    )
     fallback_plans = _convert_fallback_plans(_build_mandatory_fallback_plans(allocation_input, math_fallback_rules))
     bootstrap_run = _BootstrapRun(
         build=None,
@@ -310,7 +335,18 @@ def run_fair_cp_sat_solver(
         else ()
     )
     external_hint_used = bool(external_hint_keys)
-    if use_constrained_first_hint and enforce_final_schedule_hard_constraints:
+    if persisted_seed is not None:
+        full_model_hint_seed = _HintSeed(
+            source="persisted_feasible_seed",
+            keys=tuple(
+                _VariableKey(request_key, section_id)
+                for request_key, section_id in persisted_seed.selected_assignments
+            ),
+            replay_policy_pass=True,
+            violation_students=0,
+            persisted=persisted_seed,
+        )
+    elif use_constrained_first_hint and enforce_final_schedule_hard_constraints:
         full_model_hint_seed = _constrained_first_full_hint_seed(
             allocation_input,
             math_fallback_rules,
@@ -738,6 +774,26 @@ def run_fair_cp_sat_solver(
                 full_feasibility_run.hint_audit.replay_policy_pass is False
                 and bool(full_feasibility_run.selected_keys)
             ) if full_feasibility_run.hint_audit.source != "none" else None,
+            initial_solution_seed_enabled=full_feasibility_run.hint_audit.initial_solution_seed_enabled,
+            initial_solution_seed_role=full_feasibility_run.hint_audit.initial_solution_seed_role,
+            initial_solution_seed_source_commit=full_feasibility_run.hint_audit.initial_solution_seed_source_commit,
+            initial_solution_seed_source_algorithm=full_feasibility_run.hint_audit.initial_solution_seed_source_algorithm,
+            initial_solution_seed_source_status=full_feasibility_run.hint_audit.initial_solution_seed_source_status,
+            initial_solution_seed_source_policy_pass=full_feasibility_run.hint_audit.initial_solution_seed_source_policy_pass,
+            initial_solution_seed_manifest_sha256=full_feasibility_run.hint_audit.initial_solution_seed_manifest_sha256,
+            initial_solution_seed_request_outcomes_sha256=full_feasibility_run.hint_audit.initial_solution_seed_request_outcomes_sha256,
+            initial_solution_seed_provenance_sha256=full_feasibility_run.hint_audit.initial_solution_seed_provenance_sha256,
+            initial_solution_seed_fingerprint=full_feasibility_run.hint_audit.initial_solution_seed_fingerprint,
+            initial_solution_seed_hint_coverage=full_feasibility_run.hint_audit.initial_solution_seed_hint_coverage,
+            initial_solution_seed_unknown_keys=full_feasibility_run.hint_audit.initial_solution_seed_unknown_keys,
+            initial_solution_seed_duplicate_keys=full_feasibility_run.hint_audit.initial_solution_seed_duplicate_keys,
+            initial_solution_seed_selected_by_stage=tuple(
+                ["full_model_feasibility"] if full_feasibility_run.hint_audit.initial_solution_seed_enabled else []
+            ) + tuple(
+                source
+                for source in core_run.selected_candidate_sources + enrichment_run.selected_candidate_sources
+                if "persisted_feasible_seed" in source
+            ),
         ),
         assignments=baseline_result.assignments,
         mandatory_fallback_outcomes=baseline_result.mandatory_fallback_outcomes,
@@ -958,6 +1014,7 @@ def _run_feasibility_bootstrap(
         solver,
         conditional_on_unproven_incumbent=False,
         fixed_higher_priority_values=(),
+        objective_descriptor_hash=_objective_descriptor_hash(build.model),
         remaining_global_budget_at_start_seconds=remaining_at_start,
         effective_time_limit_seconds=effective_limit,
     )
@@ -1073,6 +1130,7 @@ def _run_full_model_feasibility_incumbent(
         solver,
         conditional_on_unproven_incumbent=False,
         fixed_higher_priority_values=(),
+        objective_descriptor_hash=_objective_descriptor_hash(build.model),
         remaining_global_budget_at_start_seconds=remaining_at_start,
         effective_time_limit_seconds=effective_limit,
     )
@@ -1562,6 +1620,7 @@ def _solve_stage_sequence(
     stage_hint_used = False
     candidates = list(incumbent_candidates)
     prepared_cache: dict[str, tuple[_StageIncumbent, tuple[_VariableKey, ...]] | None] = {}
+    selected_candidate_sources: list[str] = []
 
     if initial_hint_keys:
         _apply_key_hint(build.model, build.assignment_vars, initial_hint_keys)
@@ -1593,6 +1652,9 @@ def _solve_stage_sequence(
             )
             if selected_candidate is not None:
                 _apply_complete_stage_incumbent(build.model, selected_candidate[1])
+                selected_candidate_sources.append(
+                    f"{stage.stage_name.value}:{selected_candidate[0].source}"
+                )
         if stage.sense == "min":
             build.model.Minimize(expr)
         else:
@@ -1614,6 +1676,7 @@ def _solve_stage_sequence(
             solver,
             conditional_on_unproven_incumbent=conditional,
             fixed_higher_priority_values=tuple(fixed_values.items()),
+            objective_descriptor_hash=_objective_descriptor_hash(build.model),
             remaining_global_budget_at_start_seconds=remaining_at_start,
             effective_time_limit_seconds=effective_limit,
         )
@@ -1675,6 +1738,7 @@ def _solve_stage_sequence(
         stage_to_stage_hint_used=stage_hint_used,
         incumbent_candidates=tuple(candidates),
         budget_exhausted=budget.exhausted,
+        selected_candidate_sources=tuple(selected_candidate_sources),
     )
 
 
@@ -2050,6 +2114,7 @@ def _audit_full_model_hint(
         return _HintAudit(source=seed.source)
     unique_keys = set(seed.keys)
     total = len(build.model.Proto().variables)
+    persisted = seed.persisted
     return _HintAudit(
         source=seed.source,
         total_model_variables=total,
@@ -2061,6 +2126,20 @@ def _audit_full_model_hint(
         duplicate_keys=len(seed.keys) - len(unique_keys),
         replay_policy_pass=seed.replay_policy_pass,
         violation_students=seed.violation_students,
+        auxiliary_variables_derived=max(len(values) - len(build.assignment_vars), 0),
+        initial_solution_seed_enabled=persisted is not None,
+        initial_solution_seed_role="full_model_initial_hint" if persisted is not None else "",
+        initial_solution_seed_source_commit=persisted.source_commit if persisted is not None else "",
+        initial_solution_seed_source_algorithm=persisted.source_algorithm if persisted is not None else "",
+        initial_solution_seed_source_status=persisted.source_status if persisted is not None else "",
+        initial_solution_seed_source_policy_pass=persisted.source_policy_pass if persisted is not None else None,
+        initial_solution_seed_manifest_sha256=persisted.manifest_sha256 if persisted is not None else "",
+        initial_solution_seed_request_outcomes_sha256=persisted.request_outcomes_sha256 if persisted is not None else "",
+        initial_solution_seed_provenance_sha256=persisted.provenance_sha256 if persisted is not None else "",
+        initial_solution_seed_fingerprint=(tuple(sorted(persisted.fingerprint.items())) if persisted is not None else ()),
+        initial_solution_seed_hint_coverage=(len(values) / total if total else 0.0) if persisted is not None else None,
+        initial_solution_seed_unknown_keys=(sum(key not in build.assignment_vars for key in unique_keys) if persisted is not None else 0),
+        initial_solution_seed_duplicate_keys=(len(seed.keys) - len(unique_keys) if persisted is not None else 0),
     )
 
 
@@ -2344,6 +2423,7 @@ def _stage_diagnostic(
     *,
     conditional_on_unproven_incumbent: bool,
     fixed_higher_priority_values: tuple[tuple[CpSatStageName, int], ...],
+    objective_descriptor_hash: str = "",
     remaining_global_budget_at_start_seconds: float | None = None,
     effective_time_limit_seconds: float | None = None,
 ) -> CpSatStageDiagnostic:
@@ -2372,7 +2452,27 @@ def _stage_diagnostic(
             if effective_time_limit_seconds is not None
             else None
         ),
+        response_proto_hash=_response_proto_hash(solver),
+        objective_descriptor_hash=objective_descriptor_hash,
     )
+
+
+def _response_proto_hash(solver: cp_model.CpSolver) -> str:
+    """Return a stable identity for the response produced by this solver."""
+    return hashlib.sha256(str(solver.ResponseProto()).encode("utf-8")).hexdigest()
+
+
+def _objective_descriptor_hash(model: cp_model.CpModel) -> str:
+    """Hash only the current objective descriptor, excluding solution hints."""
+    objective = model.Proto().objective
+    descriptor = (
+        tuple(objective.vars),
+        tuple(objective.coeffs),
+        float(objective.offset),
+        float(objective.scaling_factor),
+        tuple(objective.domain),
+    )
+    return hashlib.sha256(repr(descriptor).encode("utf-8")).hexdigest()
 
 
 def _skipped_diagnostic(
@@ -2864,6 +2964,19 @@ def _empty_result(
             full_model_seed_repaired_by_solver=(
                 hint_audit.replay_policy_pass is False and bool(hint_selected_keys)
             ) if hint_audit.source != "none" else None,
+            initial_solution_seed_enabled=hint_audit.initial_solution_seed_enabled,
+            initial_solution_seed_role=hint_audit.initial_solution_seed_role,
+            initial_solution_seed_source_commit=hint_audit.initial_solution_seed_source_commit,
+            initial_solution_seed_source_algorithm=hint_audit.initial_solution_seed_source_algorithm,
+            initial_solution_seed_source_status=hint_audit.initial_solution_seed_source_status,
+            initial_solution_seed_source_policy_pass=hint_audit.initial_solution_seed_source_policy_pass,
+            initial_solution_seed_manifest_sha256=hint_audit.initial_solution_seed_manifest_sha256,
+            initial_solution_seed_request_outcomes_sha256=hint_audit.initial_solution_seed_request_outcomes_sha256,
+            initial_solution_seed_provenance_sha256=hint_audit.initial_solution_seed_provenance_sha256,
+            initial_solution_seed_fingerprint=hint_audit.initial_solution_seed_fingerprint,
+            initial_solution_seed_hint_coverage=hint_audit.initial_solution_seed_hint_coverage,
+            initial_solution_seed_unknown_keys=hint_audit.initial_solution_seed_unknown_keys,
+            initial_solution_seed_duplicate_keys=hint_audit.initial_solution_seed_duplicate_keys,
         ),
     )
 

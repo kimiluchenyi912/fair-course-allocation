@@ -205,6 +205,7 @@ class CpSatBenchmarkOptions:
     use_constrained_first_hint: bool = True
     num_search_workers: int = 1
     logical_schedule_completion_enabled: bool = True
+    initial_solution_artifact_dir: str | Path | None = None
 
 
 @dataclass(frozen=True)
@@ -264,6 +265,19 @@ class BenchmarkAlgorithmResult:
     full_model_seed_policy_pass: bool | None = None
     full_model_seed_violation_students: int | None = None
     full_model_seed_repaired_by_solver: bool | None = None
+    initial_solution_seed_enabled: bool = False
+    initial_solution_seed_role: str = ""
+    initial_solution_seed_source_commit: str = ""
+    initial_solution_seed_source_algorithm: str = ""
+    initial_solution_seed_source_status: str = ""
+    initial_solution_seed_source_policy_pass: bool | None = None
+    initial_solution_seed_manifest_sha256: str = ""
+    initial_solution_seed_request_outcomes_sha256: str = ""
+    initial_solution_seed_provenance_sha256: str = ""
+    initial_solution_seed_hint_coverage: float | None = None
+    initial_solution_seed_unknown_keys: int = 0
+    initial_solution_seed_duplicate_keys: int = 0
+    initial_solution_seed_selected_by_stage: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -457,6 +471,7 @@ def _run_algorithm(
             use_constrained_first_hint=options.use_constrained_first_hint,
             num_search_workers=options.num_search_workers,
             logical_schedule_completion_enabled=options.logical_schedule_completion_enabled,
+            initial_solution_artifact_dir=options.initial_solution_artifact_dir,
         )
     else:  # pragma: no cover - _normalize_algorithms keeps this unreachable.
         raise BenchmarkRunnerError(f"Unsupported benchmark algorithm: {name}")
@@ -596,6 +611,19 @@ def _summarize_result(
             "full_model_seed_policy_pass": stats.full_model_seed_policy_pass,
             "full_model_seed_violation_students": stats.full_model_seed_violation_students,
             "full_model_seed_repaired_by_solver": stats.full_model_seed_repaired_by_solver,
+            "initial_solution_seed_enabled": stats.initial_solution_seed_enabled,
+            "initial_solution_seed_role": stats.initial_solution_seed_role,
+            "initial_solution_seed_source_commit": stats.initial_solution_seed_source_commit,
+            "initial_solution_seed_source_algorithm": stats.initial_solution_seed_source_algorithm,
+            "initial_solution_seed_source_status": stats.initial_solution_seed_source_status,
+            "initial_solution_seed_source_policy_pass": stats.initial_solution_seed_source_policy_pass,
+            "initial_solution_seed_manifest_sha256": stats.initial_solution_seed_manifest_sha256,
+            "initial_solution_seed_request_outcomes_sha256": stats.initial_solution_seed_request_outcomes_sha256,
+            "initial_solution_seed_provenance_sha256": stats.initial_solution_seed_provenance_sha256,
+            "initial_solution_seed_hint_coverage": stats.initial_solution_seed_hint_coverage,
+            "initial_solution_seed_unknown_keys": stats.initial_solution_seed_unknown_keys,
+            "initial_solution_seed_duplicate_keys": stats.initial_solution_seed_duplicate_keys,
+            "initial_solution_seed_selected_by_stage": stats.initial_solution_seed_selected_by_stage,
             "stage_diagnostics_summary": tuple(
             {
                 "stage_name": diagnostic.stage_name.value,
@@ -611,6 +639,8 @@ def _summarize_result(
                     for stage_name, value in diagnostic.fixed_higher_priority_values
                 ),
                 "effective_time_limit_seconds": diagnostic.effective_time_limit_seconds,
+                "response_proto_hash": diagnostic.response_proto_hash,
+                "objective_descriptor_hash": diagnostic.objective_descriptor_hash,
                 "skipped": diagnostic.skipped,
                 "skip_reason": diagnostic.skip_reason,
             }
@@ -1150,6 +1180,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--cp-sat-disable-constrained-first-hint", action="store_true")
     parser.add_argument("--cp-sat-disable-logical-schedule-completion", action="store_true")
     parser.add_argument("--cp-sat-num-search-workers", type=int, default=1)
+    parser.add_argument("--cp-sat-initial-solution-artifact-dir")
     args = parser.parse_args(tuple(argv) if argv is not None else None)
     seeds = ExperimentSeeds(args.data_seed, args.section_seed, args.solver_seed)
     algorithms = tuple(args.algorithms.split(","))
@@ -1174,6 +1205,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 use_constrained_first_hint=not args.cp_sat_disable_constrained_first_hint,
                 num_search_workers=args.cp_sat_num_search_workers,
                 logical_schedule_completion_enabled=not args.cp_sat_disable_logical_schedule_completion,
+                initial_solution_artifact_dir=args.cp_sat_initial_solution_artifact_dir,
             ),
         )
     except (BenchmarkRunnerError, ExperimentManifestError, ValueError) as exc:

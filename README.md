@@ -105,3 +105,9 @@ random,constrained,cp_sat` to request it explicitly. Every benchmark summary
 records the data-generation seed, section-planning seed, solver seed, and
 canonical input fingerprint. A fingerprint mismatch invalidates comparison with
 older benchmark results.
+
+For an explicit, validated full-model search hint, add
+`--cp-sat-initial-solution-artifact-dir <path>` while selecting `cp_sat`.
+The artifact is never discovered automatically. Its hashes, fingerprint,
+request mappings, source policy status, and local replay are checked before the
+normal CP-SAT model runs; it is not a hard constraint or a final assignment.

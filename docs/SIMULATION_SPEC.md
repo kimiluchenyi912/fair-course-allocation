@@ -451,13 +451,17 @@ a constrained-first partial hint plus stage-to-stage incumbent hints. When the
 Final Schedule Policy Gate is enabled, its full-model feasibility stage also
 maps the unchanged constrained-first assignment to a complete 0/1 vector for
 candidate and deterministically derived Boolean variables; unselected
-candidates receive explicit zero hints. Hints are not constraints: CP-SAT may
-repair or ignore them, and the formal hard constraints and objective stages
-remain the source of truth. Metadata records hint source, coverage,
-selected/zero counts, unknown mappings, duplicate keys, the seed's replay
-policy result, and whether a later solver incumbent passed the policy gate.
-Known feasible artifacts may be used only in isolated diagnostics and are not
-production dependencies.
+candidates receive explicit zero hints. An explicit
+`--cp-sat-initial-solution-artifact-dir <path>` opts into a persisted
+`persisted_feasible_seed`. The loader verifies SHA256 sums, source
+FEASIBLE/OPTIMAL status, policy/capacity/consistency summaries, the exact
+canonical fingerprint and request/student universes, then independently
+replays assignments through `AllocationState`. Hints are not constraints:
+CP-SAT may repair, ignore, or improve them, and the formal hard constraints
+and objective stages remain the source of truth. Metadata records the artifact
+hashes, source identity, coverage, unknown/duplicate mappings, and stages that
+selected the candidate. The final exported assignment always comes from the
+current solver response, never directly from the persisted artifact.
 
 The logical schedule completion stage has a controlled disabled mode for
 incumbent diagnostics. Disabling it omits only that enrichment objective stage;

@@ -78,6 +78,10 @@ class CpSatStageDiagnostic:
     skip_reason: str = ""
     remaining_global_budget_at_start_seconds: float | None = field(default=None, compare=False)
     effective_time_limit_seconds: float | None = field(default=None, compare=False)
+    # These hashes bind the reported stage metrics to the response and
+    # objective descriptor used by that stage's Solve call.
+    response_proto_hash: str = field(default="", compare=False)
+    objective_descriptor_hash: str = field(default="", compare=False)
 
 
 @dataclass(frozen=True)
@@ -158,6 +162,20 @@ class CpSatModelStats:
     full_model_seed_policy_pass: bool | None = None
     full_model_seed_violation_students: int | None = None
     full_model_seed_repaired_by_solver: bool | None = None
+    initial_solution_seed_enabled: bool = False
+    initial_solution_seed_role: str = ""
+    initial_solution_seed_source_commit: str = ""
+    initial_solution_seed_source_algorithm: str = ""
+    initial_solution_seed_source_status: str = ""
+    initial_solution_seed_source_policy_pass: bool | None = None
+    initial_solution_seed_manifest_sha256: str = ""
+    initial_solution_seed_request_outcomes_sha256: str = ""
+    initial_solution_seed_provenance_sha256: str = ""
+    initial_solution_seed_fingerprint: tuple[tuple[str, object], ...] = ()
+    initial_solution_seed_hint_coverage: float | None = None
+    initial_solution_seed_unknown_keys: int = 0
+    initial_solution_seed_duplicate_keys: int = 0
+    initial_solution_seed_selected_by_stage: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

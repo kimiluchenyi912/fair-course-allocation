@@ -161,10 +161,14 @@ When Final Schedule Policy Gate v1 is enabled, the solver also runs a
 full-model feasibility-incumbent stage. Its optional deterministic
 `constrained_first_greedy_full` seed supplies a complete hint for candidate and
 derived Boolean variables, including explicit zero values for unselected
-candidates. The seed's own policy result, coverage, unknown keys, and repair
-outcome are metadata only; the seed is never exported as a CP-SAT result or
-treated as a feasibility proof. A logical-schedule-completion stage can be
-disabled for controlled diagnostics without changing hard policies or Core
+candidates. An explicitly supplied `--cp-sat-initial-solution-artifact-dir`
+may provide a separately validated FEASIBLE/OPTIMAL artifact as the
+`persisted_feasible_seed` candidate. The artifact is checked fail-closed by
+SHA256, canonical fingerprint, request/student universes, candidate mappings,
+and independent `AllocationState` replay. Neither seed is a hard constraint,
+final schedule, feasibility proof, or optimality certificate; the current
+solver response remains authoritative. A logical-schedule-completion stage can
+be disabled for controlled diagnostics without changing hard policies or Core
 stages.
 
 Logical primary counts are not simple request-row counts. A Grade 12

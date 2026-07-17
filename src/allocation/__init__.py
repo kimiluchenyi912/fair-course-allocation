@@ -73,6 +73,11 @@ from .math_policy_models import (
     MathPolicyViolationType,
     StudentMathPolicyOutcome,
 )
+from .persisted_solution import (
+    PersistedSolutionArtifactError,
+    PersistedSolutionSeed,
+    load_persisted_solution_seed,
+)
 from .random_baseline import run_seeded_random_baseline
 from .state import AllocationState
 
@@ -109,6 +114,8 @@ __all__ = [
     "MathFallbackRule",
     "MathPolicyReport",
     "MathPolicyViolationType",
+    "PersistedSolutionArtifactError",
+    "PersistedSolutionSeed",
     "PolicyReport",
     "PrimaryRequestStatus",
     "RequestOutcome",
@@ -128,6 +135,7 @@ __all__ = [
     "math_course_ids_from_catalog",
     "parse_math_fallback_rules",
     "primary_request_priority",
+    "load_persisted_solution_seed",
     "run_fair_cp_sat_solver",
     "run_constrained_first_baseline",
     "run_fcfs_baseline",
