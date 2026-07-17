@@ -3,6 +3,8 @@ from __future__ import annotations
 import random
 
 import pandas as pd
+import pytest
+from ortools.sat.python import cp_model
 
 import src.allocation.cp_sat_solver as cp_sat_solver_module
 from src.allocation import (
@@ -679,6 +681,7 @@ def test_stage_diagnostics_record_all_lexicographic_stages() -> None:
         CpSatStageName.MATH_COVERAGE,
         CpSatStageName.PRIMARY_UNMET_COUNT,
         CpSatStageName.PRIMARY_UNMET_PERIOD_UNITS,
+        CpSatStageName.LOGICAL_SCHEDULE_COMPLETION,
         CpSatStageName.ALTERNATE_RANK_1,
         CpSatStageName.ALTERNATE_RANK_2,
         CpSatStageName.ALTERNATE_RANK_3,
@@ -687,7 +690,7 @@ def test_stage_diagnostics_record_all_lexicographic_stages() -> None:
         CpSatStageName.SEEDED_TIE_BREAK,
     ]
     assert [item.model_scope for item in objective_diagnostics[:3]] == [CpSatModelScope.CORE] * 3
-    assert [item.model_scope for item in objective_diagnostics[3:]] == [CpSatModelScope.ENRICHMENT] * 6
+    assert [item.model_scope for item in objective_diagnostics[3:]] == [CpSatModelScope.ENRICHMENT] * 7
     assert all(item.status == CpSatSolveStatus.OPTIMAL for item in result.stage_diagnostics)
 
 
@@ -749,7 +752,7 @@ def test_conditional_continuation_after_feasible_incumbent_is_not_global_optimum
     assert result.solve_status == CpSatSolveStatus.FEASIBLE
     assert result.lexicographic_optimality_proven is False
     assert result.model_stats.conditional_optimization_performed is True
-    assert len(result.stage_diagnostics) == 10
+    assert len(result.stage_diagnostics) == 11
     assert any(item.conditional_on_unproven_incumbent for item in result.stage_diagnostics[3:])
     assert outcome(result, alt_key("STU_1", 1, "ALT1")).status == AlternateRequestStatus.ASSIGNED
 
@@ -815,6 +818,336 @@ def test_stage_to_stage_hints_can_be_disabled() -> None:
 
     assert result.model_stats.stage_to_stage_hint_used is False
     assert result.model_stats.warm_start_strategy == "none"
+
+
+def test_stage_to_stage_hint_records_complete_assignment_incumbent() -> None:
+    data = canonical(
+        [("STU_1", 12, 1, False)],
+        [request_row("STU_1", "CORE_A")],
+    )
+    build = cp_sat_solver_module._build_core_cp_sat_model(data, (), math_ids(), seed=1)
+    solver = cp_sat_solver_module._new_solver(1, 1, False, 1)
+
+    build.model.Maximize(sum(build.assignment_vars.values()))
+    solver.Solve(build.model)
+    solver_selected = {
+        key
+        for key, var in build.assignment_vars.items()
+        if solver.BooleanValue(var)
+    }
+    stale_external_hint = next(key for key in build.assignment_vars if key not in solver_selected)
+
+    cp_sat_solver_module._apply_solution_hint(build.model, build.assignment_vars, solver, (stale_external_hint,))
+    hint = build.model.Proto().solution_hint
+    hinted_by_var_index = dict(zip(hint.vars, hint.values, strict=True))
+
+    assert len(hint.vars) == len(build.model.Proto().variables)
+    assert set(hint.values) == {0, 1}
+    assert hinted_by_var_index[build.assignment_vars[stale_external_hint].Index()] == 0
+
+
+def test_stage_incumbent_capture_includes_auxiliary_variables_and_zeros() -> None:
+    model = cp_model.CpModel()
+    selected = model.NewBoolVar("selected")
+    helper = model.NewBoolVar("helper")
+    model.Add(selected == helper)
+    model.Maximize(selected)
+    solver = cp_sat_solver_module._new_solver(1, 1, False, 1)
+    status = solver.Solve(model)
+
+    assert status in {cp_model.OPTIMAL, cp_model.FEASIBLE}
+    incumbent = cp_sat_solver_module._capture_stage_incumbent(model, solver)
+
+    assert len(incumbent.values_by_name) == len(model.Proto().variables)
+    assert {name for name, _value in incumbent.values_by_name} == {"selected", "helper"}
+    assert len(incumbent.domains_by_name) == len(model.Proto().variables)
+
+
+def test_stage_incumbent_ignores_stale_external_hint_after_formal_stage() -> None:
+    model = cp_model.CpModel()
+    selected = model.NewBoolVar("selected")
+    stale = model.NewBoolVar("stale")
+    model.Maximize(selected)
+    solver = cp_sat_solver_module._new_solver(1, 1, False, 1)
+    solver.Solve(model)
+    incumbent = cp_sat_solver_module._capture_stage_incumbent(model, solver)
+
+    cp_sat_solver_module._apply_solution_hint(
+        model,
+        {},
+        solver,
+        (cp_sat_solver_module._VariableKey("stale", "stale"),),
+        incumbent=incumbent,
+    )
+    hinted = dict(zip(model.Proto().solution_hint.vars, model.Proto().solution_hint.values, strict=True))
+
+    assert hinted[selected.Index()] == 1
+    assert hinted[stale.Index()] == 0
+
+
+def test_stage_incumbent_maps_variables_by_name_when_order_changes() -> None:
+    first = cp_model.CpModel()
+    first_x = first.NewBoolVar("x")
+    first_y = first.NewBoolVar("y")
+    first.Maximize(first_x)
+    solver = cp_sat_solver_module._new_solver(1, 1, False, 1)
+    solver.Solve(first)
+    incumbent = cp_sat_solver_module._capture_stage_incumbent(first, solver)
+
+    second = cp_model.CpModel()
+    second_y = second.NewBoolVar("y")
+    second_x = second.NewBoolVar("x")
+    cp_sat_solver_module._validate_stage_incumbent_for_model(second, incumbent)
+    cp_sat_solver_module._apply_solution_hint(second, {}, solver, (), incumbent=incumbent)
+    hinted = dict(zip(second.Proto().solution_hint.vars, second.Proto().solution_hint.values, strict=True))
+
+    assert hinted[second_x.Index()] == solver.BooleanValue(first_x)
+    assert hinted[second_y.Index()] == solver.BooleanValue(first_y)
+
+
+def test_stage_incumbent_missing_variable_fails_closed() -> None:
+    first = cp_model.CpModel()
+    first_x = first.NewBoolVar("x")
+    first.NewBoolVar("y")
+    first.Maximize(first_x)
+    solver = cp_sat_solver_module._new_solver(1, 1, False, 1)
+    solver.Solve(first)
+    incumbent = cp_sat_solver_module._capture_stage_incumbent(first, solver)
+
+    second = cp_model.CpModel()
+    second.NewBoolVar("x")
+    with pytest.raises(cp_sat_solver_module.CpSatStageIncumbentConsistencyError, match="variable count"):
+        cp_sat_solver_module._validate_stage_incumbent_for_model(second, incumbent)
+
+
+def test_stage_incumbent_domain_change_fails_closed() -> None:
+    first = cp_model.CpModel()
+    first_x = first.NewIntVar(0, 1, "x")
+    first.Maximize(first_x)
+    solver = cp_sat_solver_module._new_solver(1, 1, False, 1)
+    solver.Solve(first)
+    incumbent = cp_sat_solver_module._capture_stage_incumbent(first, solver)
+
+    second = cp_model.CpModel()
+    second.NewIntVar(0, 2, "x")
+    with pytest.raises(cp_sat_solver_module.CpSatStageIncumbentConsistencyError, match="domains"):
+        cp_sat_solver_module._validate_stage_incumbent_for_model(second, incumbent)
+
+
+def test_stage_incumbent_duplicate_variable_name_fails_closed() -> None:
+    model = cp_model.CpModel()
+    model.NewBoolVar("duplicate")
+    model.NewBoolVar("duplicate")
+    solver = cp_sat_solver_module._new_solver(1, 1, False, 1)
+    solver.Solve(model)
+
+    with pytest.raises(cp_sat_solver_module.CpSatStageIncumbentConsistencyError, match="duplicate variable names"):
+        cp_sat_solver_module._capture_stage_incumbent(model, solver)
+
+
+def test_stage_objective_mismatch_fails_closed() -> None:
+    class FakeSolver:
+        def ObjectiveValue(self):
+            return 5.0
+
+        def Value(self, _expression):
+            return 4
+
+    with pytest.raises(cp_sat_solver_module.CpSatStageIncumbentConsistencyError, match="objective mismatch"):
+        cp_sat_solver_module._stage_objective_value(FakeSolver(), 0)
+
+
+def test_locked_incumbent_replay_is_feasible_for_next_stage() -> None:
+    stage_a = cp_model.CpModel()
+    x = stage_a.NewBoolVar("x")
+    y = stage_a.NewBoolVar("y")
+    stage_a.Add(x + y <= 1)
+    stage_a.Maximize(x)
+    solver_a = cp_sat_solver_module._new_solver(1, 1, False, 1)
+    assert solver_a.Solve(stage_a) in {cp_model.OPTIMAL, cp_model.FEASIBLE}
+    incumbent = cp_sat_solver_module._capture_stage_incumbent(stage_a, solver_a)
+
+    stage_b = cp_model.CpModel()
+    y_b = stage_b.NewBoolVar("y")
+    x_b = stage_b.NewBoolVar("x")
+    stage_b.Add(x_b + y_b <= 1)
+    stage_b.Add(x_b == dict(incumbent.values_by_name)["x"])
+    cp_sat_solver_module._apply_solution_hint(stage_b, {}, solver_a, (), incumbent=incumbent)
+    stage_b.Maximize(y_b)
+    solver_b = cp_sat_solver_module._new_solver(1, 1, False, 1)
+
+    assert solver_b.Solve(stage_b) in {cp_model.OPTIMAL, cp_model.FEASIBLE}
+    assert solver_b.BooleanValue(x_b) == bool(dict(incumbent.values_by_name)["x"])
+
+
+def test_locked_incumbent_replay_detects_added_conflict() -> None:
+    stage_a = cp_model.CpModel()
+    x = stage_a.NewBoolVar("x")
+    stage_a.Maximize(x)
+    solver_a = cp_sat_solver_module._new_solver(1, 1, False, 1)
+    assert solver_a.Solve(stage_a) in {cp_model.OPTIMAL, cp_model.FEASIBLE}
+    incumbent = cp_sat_solver_module._capture_stage_incumbent(stage_a, solver_a)
+
+    stage_b = cp_model.CpModel()
+    x_b = stage_b.NewBoolVar("x")
+    stage_b.Add(x_b == 0)
+    stage_b.Add(x_b == dict(incumbent.values_by_name)["x"])
+    cp_sat_solver_module._apply_solution_hint(stage_b, {}, solver_a, (), incumbent=incumbent)
+    stage_b.Maximize(x_b)
+    solver_b = cp_sat_solver_module._new_solver(1, 1, False, 1)
+
+    assert solver_b.Solve(stage_b) == cp_model.INFEASIBLE
+
+
+def test_incumbent_pool_selects_best_current_objective_candidate() -> None:
+    data = canonical(
+        [("STU_1", 12, 2, False)],
+        [request_row("STU_1", "CORE_A"), request_row("STU_1", "CORE_C")],
+    )
+    build = cp_sat_solver_module._build_core_cp_sat_model(data, (), math_ids(), seed=1)
+    one = cp_sat_solver_module._VariableKey("primary:STU_1:CORE_A", "CORE_A_1")
+    two = cp_sat_solver_module._VariableKey("primary:STU_1:CORE_C", "CORE_C_1")
+    candidates = (
+        cp_sat_solver_module._IncumbentCandidate("worse", "formal_stage", CpSatModelScope.CORE, (one,)),
+        cp_sat_solver_module._IncumbentCandidate("better", "formal_stage", CpSatModelScope.CORE, (one, two)),
+    )
+
+    selected = cp_sat_solver_module._select_incumbent_candidate(
+        build,
+        cp_sat_solver_module._SolveStage(CpSatStageName.PRIMARY_UNMET_COUNT, "min"),
+        {},
+        candidates,
+    )
+
+    assert selected is not None
+    assert selected[0].candidate_id == "better"
+    assert selected[2] == 0
+
+
+def test_incumbent_pool_respects_fixed_higher_priority_objective() -> None:
+    data = canonical(
+        [("STU_1", 12, 1, False)],
+        [request_row("STU_1", "MATH1"), request_row("STU_1", "CORE_A")],
+    )
+    build = cp_sat_solver_module._build_core_cp_sat_model(data, (), math_ids(), seed=1)
+    math_key = cp_sat_solver_module._VariableKey("primary:STU_1:MATH1", "MATH1_1")
+    other_key = cp_sat_solver_module._VariableKey("primary:STU_1:CORE_A", "CORE_A_1")
+    candidates = (
+        cp_sat_solver_module._IncumbentCandidate("wrong_math", "formal_stage", CpSatModelScope.CORE, (other_key,)),
+        cp_sat_solver_module._IncumbentCandidate("fixed_math", "persisted_feasible_seed", CpSatModelScope.CORE, (math_key,)),
+    )
+
+    selected = cp_sat_solver_module._select_incumbent_candidate(
+        build,
+        cp_sat_solver_module._SolveStage(CpSatStageName.PRIMARY_UNMET_COUNT, "min"),
+        {CpSatStageName.MATH_COVERAGE: 0},
+        candidates,
+    )
+
+    assert selected is not None
+    assert selected[0].candidate_id == "fixed_math"
+
+
+def test_incumbent_pool_compares_maximize_objectives_correctly() -> None:
+    data = canonical(
+        [("STU_1", 12, 2, False)],
+        [request_row("STU_1", "CORE_A"), request_row("STU_1", "CORE_C")],
+    )
+    build = cp_sat_solver_module._build_core_cp_sat_model(data, (), math_ids(), seed=1)
+    one = cp_sat_solver_module._VariableKey("primary:STU_1:CORE_A", "CORE_A_1")
+    two = cp_sat_solver_module._VariableKey("primary:STU_1:CORE_C", "CORE_C_1")
+    candidates = (
+        cp_sat_solver_module._IncumbentCandidate("one", "formal_stage", CpSatModelScope.CORE, (one,)),
+        cp_sat_solver_module._IncumbentCandidate("two", "formal_stage", CpSatModelScope.CORE, (one, two)),
+    )
+
+    selected = cp_sat_solver_module._select_incumbent_candidate(
+        build,
+        cp_sat_solver_module._SolveStage(CpSatStageName.LOGICAL_SCHEDULE_COMPLETION, "max"),
+        {},
+        candidates,
+    )
+
+    assert selected is not None
+    assert selected[0].candidate_id == "two"
+    assert selected[2] == 2
+
+
+def test_incumbent_pool_tie_break_is_deterministic_and_source_aware() -> None:
+    data = canonical([("STU_1", 12, 1, False)], [request_row("STU_1", "CORE_A")])
+    build = cp_sat_solver_module._build_core_cp_sat_model(data, (), math_ids(), seed=1)
+    selected_key = next(iter(build.assignment_vars))
+    candidates = (
+        cp_sat_solver_module._IncumbentCandidate("formal", "formal_stage", CpSatModelScope.CORE, (selected_key,)),
+        cp_sat_solver_module._IncumbentCandidate(
+            "persisted", "persisted_feasible_seed", CpSatModelScope.CORE, (selected_key,)
+        ),
+    )
+
+    selected = cp_sat_solver_module._select_incumbent_candidate(
+        build,
+        cp_sat_solver_module._SolveStage(CpSatStageName.PRIMARY_UNMET_COUNT, "min"),
+        {},
+        candidates,
+    )
+
+    assert selected is not None
+    assert selected[0].candidate_id == "persisted"
+
+
+def test_core_candidate_cannot_masquerade_as_complete_full_candidate() -> None:
+    data = canonical([("STU_1", 12, 1, False)], [request_row("STU_1", "CORE_A")])
+    build = cp_sat_solver_module._build_enrichment_cp_sat_model(
+        data,
+        (),
+        math_ids(),
+        seed=1,
+        fixed_core_values={},
+        enforce_final_schedule_hard_constraints=False,
+    )
+    selected_key = next(iter(build.assignment_vars))
+    candidate = cp_sat_solver_module._IncumbentCandidate(
+        "core_only", "formal_stage", CpSatModelScope.CORE, (selected_key,)
+    )
+
+    assert cp_sat_solver_module._prepare_incumbent_candidate(build, candidate, {}) is None
+
+
+def test_incumbent_pool_rejects_missing_and_duplicate_candidate_keys() -> None:
+    data = canonical([("STU_1", 12, 1, False)], [request_row("STU_1", "CORE_A")])
+    build = cp_sat_solver_module._build_core_cp_sat_model(data, (), math_ids(), seed=1)
+    valid = next(iter(build.assignment_vars))
+    unknown = cp_sat_solver_module._VariableKey("primary:STU_1:MISSING", "MISSING_1")
+
+    missing = cp_sat_solver_module._IncumbentCandidate("missing", "formal_stage", CpSatModelScope.CORE, (unknown,))
+    duplicate = cp_sat_solver_module._IncumbentCandidate(
+        "duplicate", "formal_stage", CpSatModelScope.CORE, (valid, valid)
+    )
+
+    assert cp_sat_solver_module._prepare_incumbent_candidate(build, missing, {}) is None
+    assert cp_sat_solver_module._prepare_incumbent_candidate(build, duplicate, {}) is None
+
+
+def test_full_model_feasibility_hint_records_complete_candidate_vector() -> None:
+    data = canonical(
+        [("STU_1", 12, 1, False)],
+        [request_row("STU_1", "CORE_A")],
+    )
+    build = cp_sat_solver_module._build_enrichment_cp_sat_model(
+        data,
+        (),
+        math_ids(),
+        seed=1,
+        fixed_core_values={},
+        enforce_final_schedule_hard_constraints=False,
+    )
+    selected_key = next(iter(build.assignment_vars))
+
+    cp_sat_solver_module._apply_complete_key_hint(build.model, build.assignment_vars, (selected_key,))
+    hint = build.model.Proto().solution_hint
+
+    assert len(hint.vars) == len(build.assignment_vars)
+    assert set(hint.values) == {0, 1}
 
 
 def test_external_hint_alone_does_not_report_stage_to_stage_hint_used() -> None:

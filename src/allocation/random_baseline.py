@@ -507,6 +507,9 @@ def _build_student_outcomes(
         assignments = state.student_assignments(student.student_id)
         assigned_units = state.student_used_period_units(student.student_id)
         remaining_units = state.student_remaining_period_units(student.student_id)
+        assigned_logical_identities = {assignment.logical_block_id for assignment in assignments}
+        assigned_logical_count = len(assigned_logical_identities)
+        logical_gap = max(student.target_period_units - assigned_logical_count, 0)
         high_violating = tuple(sorted(outcome.request_key for outcome in primary if outcome.request_key in high_violation_keys))
         result.append(
             StudentOutcome(
@@ -539,6 +542,10 @@ def _build_student_outcomes(
                 protected_fairness_violation=student.student_id in protected_violation_ids,
                 high_demand_guarantee_violation_count=len(high_violating),
                 high_demand_violating_request_keys=high_violating,
+                target_logical_course_count=student.target_period_units,
+                assigned_logical_course_count=assigned_logical_count,
+                logical_schedule_gap_count=logical_gap,
+                logical_fully_scheduled=logical_gap == 0,
             )
         )
     return tuple(result)

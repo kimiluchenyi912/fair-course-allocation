@@ -93,6 +93,10 @@ class StudentOutcome:
     protected_fairness_violation: bool
     high_demand_guarantee_violation_count: int
     high_demand_violating_request_keys: tuple[str, ...]
+    target_logical_course_count: int | None = None
+    assigned_logical_course_count: int | None = None
+    logical_schedule_gap_count: int | None = None
+    logical_fully_scheduled: bool | None = None
 
 
 @dataclass(frozen=True)

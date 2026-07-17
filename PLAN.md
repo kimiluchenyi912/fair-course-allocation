@@ -115,10 +115,13 @@ The fair algorithm will optimize soft goals lexicographically in this order:
 
 1. minimize math coverage violations;
 2. minimize unmet primary requests, then unmet primary period units;
-3. maximize rank-1 alternates, then rank-2 alternates, then rank-3 alternates;
-4. maximize complete target schedules;
-5. minimize total remaining period units;
-6. apply a deterministic seeded tie-break only after substantive goals are
+3. maximize assigned logical courses, equivalently minimizing logical schedule
+   gaps when the Final Schedule Policy Gate v1 maximum-gap hard constraint is
+   enabled;
+4. maximize rank-1 alternates, then rank-2 alternates, then rank-3 alternates;
+5. maximize complete target schedules under the legacy period-unit metric;
+6. minimize total remaining period units;
+7. apply a deterministic seeded tie-break only after substantive goals are
    fixed.
 
 Students with equal priority should be treated using a reproducible lottery.
@@ -129,12 +132,12 @@ as INFEASIBLE.
 The CP-SAT implementation uses a Core/Enrichment decomposition. The Core model
 contains primary requests, mandatory math fallback options, math coverage, and
 hard policy constraints, and solves math coverage, primary unmet count, and
-primary unmet period units as separate stages. The
-Enrichment model then fixes those Core incumbent values and optimizes
-alternates, complete schedules, remaining units, and the seeded tie-break. If a
-stage returns FEASIBLE but not OPTIMAL, the solver may continue lower-priority
-stages conditionally, but the result remains FEASIBLE and is not reported as a
-global lexicographic optimum.
+primary unmet period units as separate stages. The Enrichment model then fixes
+those Core incumbent values and optimizes logical schedule completion,
+alternates, legacy period-unit complete schedules, remaining units, and the
+seeded tie-break. If a stage returns FEASIBLE but not OPTIMAL, the solver may
+continue lower-priority stages conditionally, but the result remains FEASIBLE
+and is not reported as a global lexicographic optimum.
 
 CP-SAT v1.2 adds a primary-only feasibility bootstrap before the Core model.
 The bootstrap enforces the same fixed-section hard policies for primary
@@ -153,6 +156,16 @@ invent objective values.
 CP-SAT warm starts may use constrained-first partial hints and stage-to-stage
 incumbent hints. These hints are search guidance only; they do not relax or
 replace hard constraints.
+
+When Final Schedule Policy Gate v1 is enabled, the solver also runs a
+full-model feasibility-incumbent stage. Its optional deterministic
+`constrained_first_greedy_full` seed supplies a complete hint for candidate and
+derived Boolean variables, including explicit zero values for unselected
+candidates. The seed's own policy result, coverage, unknown keys, and repair
+outcome are metadata only; the seed is never exported as a CP-SAT result or
+treated as a feasibility proof. A logical-schedule-completion stage can be
+disabled for controlled diagnostics without changing hard policies or Core
+stages.
 
 Logical primary counts are not simple request-row counts. A Grade 12
 Government/Economics linked block counts once, and Math 2/3 Honors Accelerated
@@ -199,6 +212,9 @@ fullness. `fully_scheduled_students` is the historical period-unit metric
 based on assigned period units matching the target. Logical schedule
 publishability uses `logical_fully_scheduled_students`,
 `students_with_logical_schedule_gap`, and `total_logical_schedule_gap`.
+For CP-SAT, the logical completion objective and the exported student-level
+logical fields are checked against the actual final solver response; the
+objective bound is bounded by the total configured target logical-course count.
 
 ## 9. Data And Simulation Configuration
 

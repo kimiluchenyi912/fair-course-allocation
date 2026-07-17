@@ -41,10 +41,12 @@ class CpSatBootstrapStatus(str, Enum):
 
 class CpSatStageName(str, Enum):
     FEASIBILITY_BOOTSTRAP = "feasibility_bootstrap"
+    FULL_MODEL_FEASIBILITY_INCUMBENT = "full_model_feasibility_incumbent"
     MATH_COVERAGE = "math_coverage"
     PRIMARY_SATISFACTION = "primary_satisfaction"
     PRIMARY_UNMET_COUNT = "primary_unmet_count"
     PRIMARY_UNMET_PERIOD_UNITS = "primary_unmet_period_units"
+    LOGICAL_SCHEDULE_COMPLETION = "logical_schedule_completion"
     ALTERNATE_RANK_1 = "alternate_rank_1"
     ALTERNATE_RANK_2 = "alternate_rank_2"
     ALTERNATE_RANK_3 = "alternate_rank_3"
@@ -84,6 +86,7 @@ class CpSatObjectiveValues:
     primary_unmet_count: int = 0
     primary_unmet_period_units: int = 0
     primary_penalty: int = 0
+    logical_assigned_course_count: int = 0
     alternate_rank1_assigned: int = 0
     alternate_rank2_assigned: int = 0
     alternate_rank3_assigned: int = 0
@@ -133,6 +136,28 @@ class CpSatModelStats:
     maximum_ordinary_primary_unmet_count: int = MAXIMUM_ORDINARY_PRIMARY_UNMET_COUNT
     maximum_protected_primary_unmet_count: int = MAXIMUM_PROTECTED_PRIMARY_UNMET_COUNT
     post_solve_policy_gate_pass: bool | None = None
+    logical_schedule_completion_objective_enabled: bool = False
+    logical_schedule_completion_stage_status: CpSatSolveStatus | None = None
+    logical_schedule_completion_objective_value: int | None = None
+    logical_schedule_completion_best_bound: int | None = None
+    logical_schedule_completion_conditionally_optimized: bool = False
+    logical_schedule_completion_fixed_value: int | None = None
+    # Hint metadata describes the candidate-assignment variable universe. It
+    # does not imply that auxiliary CP-SAT variables were fixed or that the
+    # hint is a feasible solution.
+    hint_source: str = "none"
+    hint_total_model_variables: int = 0
+    hint_variables_supplied: int = 0
+    hint_coverage_rate: float = 0.0
+    hint_selected_variables: int = 0
+    hint_zero_variables: int = 0
+    hint_unknown_or_unmapped_assignments: int = 0
+    hint_duplicate_keys: int = 0
+    hint_replay_policy_pass: bool | None = None
+    full_model_seed_strategy: str = "none"
+    full_model_seed_policy_pass: bool | None = None
+    full_model_seed_violation_students: int | None = None
+    full_model_seed_repaired_by_solver: bool | None = None
 
 
 @dataclass(frozen=True)

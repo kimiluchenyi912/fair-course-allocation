@@ -421,6 +421,10 @@ def test_cp_sat_can_be_selected_explicitly_on_tiny_fixture(tmp_path) -> None:
     assert row.solve_status == "INFEASIBLE"
     assert row.bootstrap_status is not None
     assert row.final_schedule_policy_pass is None
+    assert "logical_schedule_completion_stage_status" in row.to_dict()
+    assert row.logical_schedule_completion_objective_enabled is True
+    assert row.logical_schedule_completion_stage_status == "INFEASIBLE"
+    assert row.logical_schedule_completion_objective_value is None
 
 
 def test_json_output_contains_seeds_fingerprint_algorithms_and_metrics(tmp_path) -> None:
@@ -571,6 +575,7 @@ def test_output_artifact_dir_writes_default_four_artifacts(tmp_path) -> None:
     assert "period-unit metric" in manifest["fully_scheduled_definition"]
     assert "logical_fully_scheduled" in manifest["logical_fully_scheduled_definition"]
     assert "logical_schedule_gap" in manifest["logical_schedule_gap_definition"]
+    assert "logical_schedule_completion" in manifest["logical_schedule_completion_objective_definition"]
 
     summary_rows = pd.read_csv(artifact_dir / "algorithm_summary.csv", keep_default_na=False)
     assert list(summary_rows["algorithm_name"]) == ["seeded_random_greedy", "constrained_first_greedy"]

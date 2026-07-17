@@ -33,8 +33,8 @@ SEVERITY_ORDER = {
 }
 COURSE_COUNT_SEMANTICS = (
     "target_logical_course_count uses the student's configured target_course_count/target_period_units. "
-    "assigned_logical_course_count counts assignment records, so Math 2/3 Honors Accelerated counts as "
-    "one logical course even though it uses two period units."
+    "assigned_logical_course_count is the replayed logical identity count, so Math 2/3 Honors Accelerated "
+    "counts as one logical course even though it uses two period units."
 )
 
 SUMMARY_FIELDNAMES = (
@@ -256,7 +256,11 @@ class _StudentPolicyView:
 
 
 def _student_view(algorithm_name: str, outcome: Any) -> _StudentPolicyView:
-    target = _int_value(outcome, "target_logical_course_count" if isinstance(outcome, dict) else "target_period_units")
+    if isinstance(outcome, dict):
+        target = _int_value(outcome, "target_logical_course_count")
+    else:
+        target_field = getattr(outcome, "target_logical_course_count", None)
+        target = int(target_field) if target_field is not None else _int_value(outcome, "target_period_units")
     assigned = _assigned_logical_course_count(outcome)
     return _StudentPolicyView(
         algorithm_name=algorithm_name,
@@ -274,6 +278,9 @@ def _student_view(algorithm_name: str, outcome: Any) -> _StudentPolicyView:
 def _assigned_logical_course_count(outcome: Any) -> int:
     if isinstance(outcome, dict):
         return _int_value(outcome, "assigned_logical_course_count")
+    assigned_field = getattr(outcome, "assigned_logical_course_count", None)
+    if assigned_field is not None:
+        return int(assigned_field)
     assignment_keys = _value(outcome, "assignment_keys")
     return len(tuple(assignment_keys))
 

@@ -5,6 +5,7 @@ import pytest
 import src.allocation.cp_sat_solver as cp_sat_solver_module
 from src.allocation import (
     CpSatBootstrapStatus,
+    CpSatStageName,
     CpSatModelStats,
     CpSatSolveStatus,
     MandatoryFallbackStatus,
@@ -93,9 +94,15 @@ def test_final_model_rejects_too_few_logical_courses(target, courses) -> None:
     data = canonical([("STU", 12, target, False)], primary_rows("STU", *courses))
 
     result = run_final_solver(data)
+    full_stage = next(
+        item
+        for item in result.stage_diagnostics
+        if item.stage_name == CpSatStageName.FULL_MODEL_FEASIBILITY_INCUMBENT
+    )
 
     assert result.solve_status == CpSatSolveStatus.INFEASIBLE
     assert result.assignments == ()
+    assert full_stage.status == CpSatSolveStatus.INFEASIBLE
 
 
 def test_ordinary_student_may_have_one_primary_unmet_when_alternate_fills_load() -> None:

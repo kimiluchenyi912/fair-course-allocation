@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 import time
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable
 
 from ortools.sat.python import cp_model
@@ -34,7 +34,7 @@ from .cp_sat_models import (
     CpSatStageDiagnostic,
     CpSatStageName,
 )
-from .input_models import CanonicalAllocationInput, LogicalRequest, SourceRequestRow
+from .input_models import CanonicalAllocationInput, CanonicalStudent, LogicalRequest, SourceRequestRow
 from .math_policy import evaluate_math_policy
 from .math_policy_models import MathFallbackRule
 from .random_baseline import (
@@ -50,6 +50,10 @@ ALGORITHM_NAME = "fair_cp_sat_solver_v1_2"
 
 class CpSatFinalSchedulePolicyConsistencyError(RuntimeError):
     """Raised when a claimed CP-SAT final solution fails the policy gate."""
+
+
+class CpSatStageIncumbentConsistencyError(RuntimeError):
+    """Raised when a formal stage incumbent cannot be carried to the next stage."""
 
 
 @dataclass(frozen=True)
@@ -72,10 +76,13 @@ class _ModelBuild:
     assignment_vars: dict[_VariableKey, cp_model.IntVar]
     assigned_vars: dict[str, cp_model.LinearExpr]
     math_violation_vars: dict[str, cp_model.IntVar]
+    logical_assigned_course_vars: dict[str, cp_model.IntVar]
+    logical_assigned_course_total_var: cp_model.IntVar
     fully_scheduled_vars: dict[str, cp_model.IntVar]
     fallback_plans: tuple[_FallbackPlan, ...]
     math_course_ids: tuple[str, ...]
     requests_by_key: dict[str, LogicalRequest]
+    students_by_id: dict[str, CanonicalStudent]
     candidate_index: dict[str, tuple[str, ...]]
     stage_exprs: dict[CpSatStageName, cp_model.LinearExpr]
     primary_penalty_dominance_base: int
@@ -98,6 +105,7 @@ class _StageRun:
     conditional_optimization_performed: bool
     highest_globally_proven_stage: CpSatStageName | None
     stage_to_stage_hint_used: bool
+    incumbent_candidates: tuple["_IncumbentCandidate", ...] = ()
     budget_exhausted: bool = False
 
 
@@ -122,6 +130,58 @@ class _BootstrapRun:
     time_to_first_hard_feasible_solution_seconds: float | None
     hint_strategy: str
     budget_exhausted: bool = False
+
+
+@dataclass(frozen=True)
+class _FullModelFeasibilityRun:
+    build: _ModelBuild | None
+    solver: cp_model.CpSolver | None
+    status: CpSatSolveStatus
+    diagnostic: CpSatStageDiagnostic | None
+    selected_keys: tuple[_VariableKey, ...]
+    solve_time_seconds: float
+    budget_exhausted: bool = False
+    hint_audit: _HintAudit = field(default_factory=lambda: _HintAudit())
+
+
+@dataclass(frozen=True)
+class _HintSeed:
+    source: str = "none"
+    keys: tuple[_VariableKey, ...] = ()
+    replay_policy_pass: bool | None = None
+    violation_students: int | None = None
+
+
+@dataclass(frozen=True)
+class _HintAudit:
+    source: str = "none"
+    total_model_variables: int = 0
+    variables_supplied: int = 0
+    coverage_rate: float = 0.0
+    selected_variables: int = 0
+    zero_variables: int = 0
+    unknown_or_unmapped_assignments: int = 0
+    duplicate_keys: int = 0
+    replay_policy_pass: bool | None = None
+    violation_students: int | None = None
+
+
+@dataclass(frozen=True)
+class _StageIncumbent:
+    """Complete model solution captured from one successful objective stage."""
+
+    values_by_name: tuple[tuple[str, int], ...]
+    domains_by_name: tuple[tuple[str, tuple[int, ...]], ...]
+
+
+@dataclass(frozen=True)
+class _IncumbentCandidate:
+    candidate_id: str
+    source: str
+    model_scope: CpSatModelScope
+    selected_keys: tuple[_VariableKey, ...]
+    replay_policy_pass: bool | None = None
+    snapshot: _StageIncumbent | None = None
 
 
 @dataclass
@@ -150,6 +210,20 @@ class _GlobalTimeBudget:
             self.exhausted = True
 
 
+def _enrichment_stages(*, logical_schedule_completion_enabled: bool = True) -> tuple[_SolveStage, ...]:
+    stages = (
+        _SolveStage(CpSatStageName.ALTERNATE_RANK_1, "max"),
+        _SolveStage(CpSatStageName.ALTERNATE_RANK_2, "max"),
+        _SolveStage(CpSatStageName.ALTERNATE_RANK_3, "max"),
+        _SolveStage(CpSatStageName.FULLY_SCHEDULED, "max"),
+        _SolveStage(CpSatStageName.REMAINING_PERIOD_UNITS, "min"),
+        _SolveStage(CpSatStageName.SEEDED_TIE_BREAK, "min"),
+    )
+    if logical_schedule_completion_enabled:
+        return (_SolveStage(CpSatStageName.LOGICAL_SCHEDULE_COMPLETION, "max"), *stages)
+    return stages
+
+
 def run_fair_cp_sat_solver(
     allocation_input: CanonicalAllocationInput,
     *,
@@ -166,6 +240,7 @@ def run_fair_cp_sat_solver(
     use_constrained_first_hint: bool = True,
     stage_to_stage_hints: bool = True,
     enforce_final_schedule_hard_constraints: bool = True,
+    logical_schedule_completion_enabled: bool = True,
 ) -> CpSatAllocationResult:
     """Solve the fixed-section allocation problem with CP-SAT.
 
@@ -175,6 +250,9 @@ def run_fair_cp_sat_solver(
     """
 
     started = time.perf_counter()
+    enrichment_stages = _enrichment_stages(
+        logical_schedule_completion_enabled=logical_schedule_completion_enabled
+    )
     math_course_ids = tuple(sorted(math_course_ids))
     budget = _GlobalTimeBudget(max_total_time_seconds, started)
     fallback_plans = _convert_fallback_plans(_build_mandatory_fallback_plans(allocation_input, math_fallback_rules))
@@ -188,6 +266,15 @@ def run_fair_cp_sat_solver(
         time_to_first_hard_feasible_solution_seconds=None,
         hint_strategy="none",
     )
+    full_feasibility_run = _FullModelFeasibilityRun(
+        build=None,
+        solver=None,
+        status=CpSatSolveStatus.SKIPPED,
+        diagnostic=None,
+        selected_keys=(),
+        solve_time_seconds=0.0,
+    )
+    full_model_hint_seed = _HintSeed()
     diagnostics: list[CpSatStageDiagnostic] = []
     try:
         _validate_candidate_index(allocation_input)
@@ -223,6 +310,13 @@ def run_fair_cp_sat_solver(
         else ()
     )
     external_hint_used = bool(external_hint_keys)
+    if use_constrained_first_hint and enforce_final_schedule_hard_constraints:
+        full_model_hint_seed = _constrained_first_full_hint_seed(
+            allocation_input,
+            math_fallback_rules,
+            math_course_ids,
+            seed,
+        )
 
     if use_feasibility_bootstrap:
         bootstrap_run = _run_feasibility_bootstrap(
@@ -273,7 +367,43 @@ def run_fair_cp_sat_solver(
                 final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
             )
 
+    if enforce_final_schedule_hard_constraints:
+        full_feasibility_run = _run_full_model_feasibility_incumbent(
+            allocation_input,
+            fallback_plans,
+            math_course_ids,
+            seed=seed,
+            max_time_seconds=max_time_seconds_per_stage,
+            num_search_workers=num_search_workers,
+            log_search_progress=log_search_progress,
+            initial_hint_seed=full_model_hint_seed,
+            budget=budget,
+        )
+        if full_feasibility_run.diagnostic is not None:
+            diagnostics.append(full_feasibility_run.diagnostic)
+
     core_build = _build_core_cp_sat_model(allocation_input, fallback_plans, math_course_ids, seed)
+    incumbent_candidates: list[_IncumbentCandidate] = []
+    if full_model_hint_seed.keys and full_model_hint_seed.replay_policy_pass is True:
+        incumbent_candidates.append(
+            _IncumbentCandidate(
+                candidate_id="validated_initial_full_seed",
+                source=full_model_hint_seed.source,
+                model_scope=CpSatModelScope.ENRICHMENT,
+                selected_keys=full_model_hint_seed.keys,
+                replay_policy_pass=True,
+            )
+        )
+    if full_feasibility_run.selected_keys:
+        incumbent_candidates.append(
+            _IncumbentCandidate(
+                candidate_id="full_model_feasibility_incumbent",
+                source="full_model_feasibility_incumbent",
+                model_scope=CpSatModelScope.ENRICHMENT,
+                selected_keys=full_feasibility_run.selected_keys,
+                replay_policy_pass=True,
+            )
+        )
     core_initial_hint_source = set(external_hint_keys)
     core_hint_source = "constrained_first_partial" if external_hint_keys else "none"
     if bootstrap_run.selected_keys:
@@ -282,6 +412,13 @@ def run_fair_cp_sat_solver(
             "bootstrap+constrained_first_partial"
             if external_hint_keys
             else "bootstrap"
+        )
+    if full_feasibility_run.selected_keys:
+        core_initial_hint_source.update(full_feasibility_run.selected_keys)
+        core_hint_source = (
+            f"full_model_feasibility_incumbent+{core_hint_source}"
+            if core_hint_source != "none"
+            else "full_model_feasibility_incumbent"
         )
     core_run = _solve_stage_sequence(
         core_build,
@@ -300,18 +437,12 @@ def run_fair_cp_sat_solver(
         initial_fixed_values=(),
         already_conditional=False,
         budget=budget,
+        incumbent_candidates=tuple(incumbent_candidates),
     )
     diagnostics.extend(core_run.diagnostics)
     if core_run.solver is None:
         skipped = _skipped_diagnostics(
-            (
-                _SolveStage(CpSatStageName.ALTERNATE_RANK_1, "max"),
-                _SolveStage(CpSatStageName.ALTERNATE_RANK_2, "max"),
-                _SolveStage(CpSatStageName.ALTERNATE_RANK_3, "max"),
-                _SolveStage(CpSatStageName.FULLY_SCHEDULED, "max"),
-                _SolveStage(CpSatStageName.REMAINING_PERIOD_UNITS, "min"),
-                _SolveStage(CpSatStageName.SEEDED_TIE_BREAK, "min"),
-            ),
+            enrichment_stages,
             reason="time_budget_exhausted" if budget.exhausted else "no_incumbent",
             model_scope=CpSatModelScope.ENRICHMENT,
         )
@@ -332,6 +463,8 @@ def run_fair_cp_sat_solver(
             skipped_stage_count=sum(1 for item in diagnostics if item.skipped),
             core_hint_source=core_hint_source,
             final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+            hint_audit=full_feasibility_run.hint_audit,
+            hint_selected_keys=full_feasibility_run.selected_keys,
         )
 
     required_core_stages = (
@@ -350,19 +483,47 @@ def run_fair_cp_sat_solver(
         final_stage_values = core_run.stage_values
         enrichment_build = None
         skipped = _skipped_diagnostics(
-            (
-                _SolveStage(CpSatStageName.ALTERNATE_RANK_1, "max"),
-                _SolveStage(CpSatStageName.ALTERNATE_RANK_2, "max"),
-                _SolveStage(CpSatStageName.ALTERNATE_RANK_3, "max"),
-                _SolveStage(CpSatStageName.FULLY_SCHEDULED, "max"),
-                _SolveStage(CpSatStageName.REMAINING_PERIOD_UNITS, "min"),
-                _SolveStage(CpSatStageName.SEEDED_TIE_BREAK, "min"),
-            ),
+            enrichment_stages,
             reason="missing_core_objective",
             model_scope=CpSatModelScope.ENRICHMENT,
         )
         diagnostics.extend(skipped)
-        enrichment_run = _StageRun(None, core_run.status, skipped, {}, False, False, None, False)
+        enrichment_run = _StageRun(
+            None,
+            core_run.status,
+            skipped,
+            {},
+            False,
+            False,
+            None,
+            False,
+            core_run.incumbent_candidates,
+        )
+        if enforce_final_schedule_hard_constraints:
+            final_status = (
+                CpSatSolveStatus.INFEASIBLE
+                if core_run.status == CpSatSolveStatus.INFEASIBLE
+                else CpSatSolveStatus.UNKNOWN
+            )
+            return _empty_result(
+                seed,
+                final_status,
+                tuple(diagnostics),
+                core_build,
+                None,
+                bootstrap_run,
+                time.perf_counter() - started,
+                False,
+                external_hint_used=external_hint_used,
+                stage_to_stage_hint_used=core_run.stage_to_stage_hint_used,
+                max_total_time_seconds=max_total_time_seconds,
+                total_budget_exhausted=budget.exhausted,
+                skipped_stage_count=sum(1 for item in diagnostics if item.skipped),
+                core_hint_source=core_hint_source,
+                final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+                hint_audit=full_feasibility_run.hint_audit,
+                hint_selected_keys=full_feasibility_run.selected_keys,
+            )
     else:
         core_selected = _selected_assignments(core_build, core_run.solver)
         enrichment_build = _build_enrichment_cp_sat_model(
@@ -374,19 +535,13 @@ def run_fair_cp_sat_solver(
             enforce_final_schedule_hard_constraints=enforce_final_schedule_hard_constraints,
         )
         enrichment_hint_source = set(external_hint_keys)
+        enrichment_hint_source.update(full_feasibility_run.selected_keys)
         if stage_to_stage_hints:
             enrichment_hint_source.update(core_selected)
         enrichment_hint_keys = tuple(sorted(enrichment_hint_source, key=lambda item: (item.request_key, item.section_id)))
         enrichment_run = _solve_stage_sequence(
             enrichment_build,
-            (
-                _SolveStage(CpSatStageName.ALTERNATE_RANK_1, "max"),
-                _SolveStage(CpSatStageName.ALTERNATE_RANK_2, "max"),
-                _SolveStage(CpSatStageName.ALTERNATE_RANK_3, "max"),
-                _SolveStage(CpSatStageName.FULLY_SCHEDULED, "max"),
-                _SolveStage(CpSatStageName.REMAINING_PERIOD_UNITS, "min"),
-                _SolveStage(CpSatStageName.SEEDED_TIE_BREAK, "min"),
-            ),
+            enrichment_stages,
             max_time_seconds_per_stage=max_time_seconds_per_stage,
             num_search_workers=num_search_workers,
             log_search_progress=log_search_progress,
@@ -397,6 +552,7 @@ def run_fair_cp_sat_solver(
             initial_fixed_values=tuple(core_values.items()),
             already_conditional=not core_run.lexicographic_optimum,
             budget=budget,
+            incumbent_candidates=core_run.incumbent_candidates,
         )
         diagnostics.extend(enrichment_run.diagnostics)
 
@@ -426,6 +582,8 @@ def run_fair_cp_sat_solver(
                     skipped_stage_count=sum(1 for item in diagnostics if item.skipped),
                     core_hint_source=core_hint_source,
                     final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+                    hint_audit=full_feasibility_run.hint_audit,
+                    hint_selected_keys=full_feasibility_run.selected_keys,
                 )
             final_build = core_build
             final_solver = core_run.solver
@@ -451,6 +609,8 @@ def run_fair_cp_sat_solver(
             skipped_stage_count=0,
             core_hint_source=core_hint_source,
             final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+            hint_audit=full_feasibility_run.hint_audit,
+            hint_selected_keys=full_feasibility_run.selected_keys,
         )
 
     request_outcomes = _build_request_outcomes(allocation_input, final_build, final_solver, state)
@@ -478,6 +638,19 @@ def run_fair_cp_sat_solver(
                 f"below_minimum_course={summary.below_minimum_course_count}"
             )
     math_report = evaluate_math_policy(allocation_input, baseline_result, tuple(sorted(math_course_ids)), math_fallback_rules)
+    objective_values = _objective_values(
+        final_build,
+        final_solver,
+        final_stage_values,
+        logical_schedule_completion_enabled=logical_schedule_completion_enabled,
+    )
+    if final_policy_report is not None and logical_schedule_completion_enabled:
+        _validate_logical_completion_consistency(
+            baseline_result.student_outcomes,
+            final_policy_report,
+            objective_values.logical_assigned_course_count,
+            final_stage_values.get(CpSatStageName.LOGICAL_SCHEDULE_COMPLETION),
+        )
     lexicographic_optimum = core_run.lexicographic_optimum and enrichment_run.lexicographic_optimum and enrichment_build is not None
     final_status = CpSatSolveStatus.OPTIMAL if lexicographic_optimum else CpSatSolveStatus.FEASIBLE
     core_proto = core_build.model.Proto()
@@ -490,13 +663,14 @@ def run_fair_cp_sat_solver(
     conditional = core_run.conditional_optimization_performed or enrichment_run.conditional_optimization_performed
     highest_global = enrichment_run.highest_globally_proven_stage or core_run.highest_globally_proven_stage
     skipped_count = sum(1 for item in diagnostics if item.skipped)
+    logical_metadata = _logical_completion_metadata(tuple(diagnostics), final_stage_values)
     return CpSatAllocationResult(
         algorithm_name=ALGORITHM_NAME,
         seed=int(seed),
         solve_status=final_status,
         lexicographic_optimality_proven=lexicographic_optimum,
         stage_diagnostics=tuple(diagnostics),
-        objective_values=_objective_values(final_build, final_solver, final_stage_values),
+        objective_values=objective_values,
         model_stats=CpSatModelStats(
             total_variables=len(core_proto.variables) + enrichment_variable_count,
             total_constraints=len(core_proto.constraints) + enrichment_constraint_count,
@@ -542,6 +716,28 @@ def run_fair_cp_sat_solver(
             post_solve_policy_gate_pass=(
                 final_policy_report.summary.final_schedule_policy_pass if final_policy_report is not None else None
             ),
+            logical_schedule_completion_objective_enabled=logical_metadata["enabled"],
+            logical_schedule_completion_stage_status=logical_metadata["status"],
+            logical_schedule_completion_objective_value=logical_metadata["objective_value"],
+            logical_schedule_completion_best_bound=logical_metadata["best_bound"],
+            logical_schedule_completion_conditionally_optimized=logical_metadata["conditionally_optimized"],
+            logical_schedule_completion_fixed_value=logical_metadata["fixed_value"],
+            hint_source=full_feasibility_run.hint_audit.source,
+            hint_total_model_variables=full_feasibility_run.hint_audit.total_model_variables,
+            hint_variables_supplied=full_feasibility_run.hint_audit.variables_supplied,
+            hint_coverage_rate=full_feasibility_run.hint_audit.coverage_rate,
+            hint_selected_variables=full_feasibility_run.hint_audit.selected_variables,
+            hint_zero_variables=full_feasibility_run.hint_audit.zero_variables,
+            hint_unknown_or_unmapped_assignments=full_feasibility_run.hint_audit.unknown_or_unmapped_assignments,
+            hint_duplicate_keys=full_feasibility_run.hint_audit.duplicate_keys,
+            hint_replay_policy_pass=full_feasibility_run.hint_audit.replay_policy_pass,
+            full_model_seed_strategy=full_feasibility_run.hint_audit.source,
+            full_model_seed_policy_pass=full_feasibility_run.hint_audit.replay_policy_pass,
+            full_model_seed_violation_students=full_feasibility_run.hint_audit.violation_students,
+            full_model_seed_repaired_by_solver=(
+                full_feasibility_run.hint_audit.replay_policy_pass is False
+                and bool(full_feasibility_run.selected_keys)
+            ) if full_feasibility_run.hint_audit.source != "none" else None,
         ),
         assignments=baseline_result.assignments,
         mandatory_fallback_outcomes=baseline_result.mandatory_fallback_outcomes,
@@ -591,6 +787,25 @@ def _build_enrichment_cp_sat_model(
         include_schedule_completion=True,
         fixed_core_values=fixed_core_values,
         enforce_final_schedule_hard_constraints=enforce_final_schedule_hard_constraints,
+    )
+
+
+def _build_full_feasibility_cp_sat_model(
+    allocation_input: CanonicalAllocationInput,
+    fallback_plans: tuple[_FallbackPlan, ...],
+    math_course_ids: tuple[str, ...],
+    seed: int,
+) -> _ModelBuild:
+    return _build_model(
+        allocation_input,
+        fallback_plans,
+        math_course_ids,
+        seed,
+        model_scope=CpSatModelScope.ENRICHMENT,
+        include_alternates=True,
+        include_schedule_completion=True,
+        fixed_core_values=None,
+        enforce_final_schedule_hard_constraints=True,
     )
 
 
@@ -724,7 +939,11 @@ def _run_feasibility_bootstrap(
             budget_exhausted=True,
         )
     if initial_hint_keys:
-        _apply_key_hint(build.model, build.assignment_vars, initial_hint_keys)
+        _apply_complete_key_hint(
+            build.model,
+            build.assignment_vars,
+            _mapped_hint_keys(build.assignment_vars, initial_hint_keys),
+        )
     solver = _new_solver(effective_limit, num_search_workers, log_search_progress, seed)
     solver.parameters.stop_after_first_solution = True
     solve_started = time.perf_counter()
@@ -802,6 +1021,118 @@ def _run_feasibility_bootstrap(
     )
 
 
+def _run_full_model_feasibility_incumbent(
+    allocation_input: CanonicalAllocationInput,
+    fallback_plans: tuple[_FallbackPlan, ...],
+    math_course_ids: tuple[str, ...],
+    *,
+    seed: int,
+    max_time_seconds: float,
+    num_search_workers: int,
+    log_search_progress: bool,
+    initial_hint_seed: _HintSeed,
+    budget: _GlobalTimeBudget,
+) -> _FullModelFeasibilityRun:
+    build = _build_full_feasibility_cp_sat_model(allocation_input, fallback_plans, math_course_ids, seed)
+    hint_audit = _HintAudit(source=initial_hint_seed.source)
+    effective_limit = budget.effective_limit(max_time_seconds)
+    remaining_at_start = budget.remaining()
+    if effective_limit <= 0:
+        return _FullModelFeasibilityRun(
+            build=build,
+            solver=None,
+            status=CpSatSolveStatus.SKIPPED,
+            diagnostic=_skipped_diagnostic(
+                CpSatStageName.FULL_MODEL_FEASIBILITY_INCUMBENT,
+                CpSatModelScope.ENRICHMENT,
+                "time_budget_exhausted",
+                remaining_at_start,
+                effective_limit,
+            ),
+            selected_keys=(),
+            solve_time_seconds=0.0,
+            budget_exhausted=True,
+            hint_audit=hint_audit,
+        )
+    if initial_hint_seed.keys:
+        mapped_keys = _mapped_hint_keys(build.assignment_vars, initial_hint_seed.keys)
+        values, variables = _full_model_hint_values(build, mapped_keys)
+        hint_audit = _audit_full_model_hint(build, initial_hint_seed, values)
+        _apply_complete_model_hint(build, mapped_keys, values=values, variables=variables)
+    solver = _new_solver(effective_limit, num_search_workers, log_search_progress, seed)
+    solver.parameters.stop_after_first_solution = True
+    solve_started = time.perf_counter()
+    raw_status = solver.Solve(build.model)
+    solve_time = time.perf_counter() - solve_started
+    budget.refresh()
+    status = _solve_status(raw_status)
+    diagnostic = _stage_diagnostic(
+        CpSatStageName.FULL_MODEL_FEASIBILITY_INCUMBENT,
+        CpSatModelScope.ENRICHMENT,
+        status,
+        solver,
+        conditional_on_unproven_incumbent=False,
+        fixed_higher_priority_values=(),
+        remaining_global_budget_at_start_seconds=remaining_at_start,
+        effective_time_limit_seconds=effective_limit,
+    )
+    if status in {CpSatSolveStatus.OPTIMAL, CpSatSolveStatus.FEASIBLE}:
+        selected = _selected_assignments(build, solver)
+        try:
+            state = _replay_solution(allocation_input, build, selected)
+            request_outcomes = _build_request_outcomes(allocation_input, build, solver, state)
+            fallback_outcomes = _build_fallback_outcomes(build, solver, state)
+            baseline_result = _finalize_baseline_result(
+                ALGORITHM_NAME,
+                allocation_input,
+                seed,
+                (),
+                state,
+                request_outcomes,
+                fallback_outcomes,
+            )
+            policy_report = evaluate_final_schedule_policy(ALGORITHM_NAME, baseline_result.student_outcomes)
+        except RuntimeError:
+            return _FullModelFeasibilityRun(
+                build=build,
+                solver=solver,
+                status=CpSatSolveStatus.MODEL_INVALID,
+                diagnostic=diagnostic,
+                selected_keys=(),
+                solve_time_seconds=solve_time,
+                hint_audit=hint_audit,
+            )
+        if not policy_report.summary.final_schedule_policy_pass:
+            return _FullModelFeasibilityRun(
+                build=build,
+                solver=solver,
+                status=CpSatSolveStatus.MODEL_INVALID,
+                diagnostic=diagnostic,
+                selected_keys=(),
+                solve_time_seconds=solve_time,
+                hint_audit=hint_audit,
+            )
+        return _FullModelFeasibilityRun(
+            build=build,
+            solver=solver,
+            status=status,
+            diagnostic=diagnostic,
+            selected_keys=selected,
+            solve_time_seconds=solve_time,
+            hint_audit=hint_audit,
+        )
+    return _FullModelFeasibilityRun(
+        build=build,
+        solver=None,
+        status=status,
+        diagnostic=diagnostic,
+        selected_keys=(),
+        solve_time_seconds=solve_time,
+        budget_exhausted=budget.exhausted,
+        hint_audit=hint_audit,
+    )
+
+
 def _build_model(
     allocation_input: CanonicalAllocationInput,
     fallback_plans: tuple[_FallbackPlan, ...],
@@ -876,11 +1207,19 @@ def _build_model(
     else:
         fully_scheduled_vars = {}
         remaining_exprs = {}
+    logical_assigned_course_vars, logical_assigned_course_total_var = _add_logical_assigned_course_vars(
+        model,
+        allocation_input,
+        requests_by_key,
+        assigned_vars,
+    )
     stage_exprs, primary_base = _stage_expressions(
         allocation_input,
         requests_by_key,
         assigned_vars,
         math_violation_vars,
+        logical_assigned_course_vars,
+        logical_assigned_course_total_var,
         fully_scheduled_vars,
         remaining_exprs,
         assignment_vars,
@@ -895,10 +1234,13 @@ def _build_model(
         assignment_vars=assignment_vars,
         assigned_vars=assigned_vars,
         math_violation_vars=math_violation_vars,
+        logical_assigned_course_vars=logical_assigned_course_vars,
+        logical_assigned_course_total_var=logical_assigned_course_total_var,
         fully_scheduled_vars=fully_scheduled_vars,
         fallback_plans=fallback_plans,
         math_course_ids=math_course_ids,
         requests_by_key=requests_by_key,
+        students_by_id=dict(allocation_input.students_by_id),
         candidate_index=candidate_index,
         stage_exprs=stage_exprs,
         primary_penalty_dominance_base=primary_base,
@@ -1003,7 +1345,7 @@ def _add_math_coverage_constraints(
     fallback_plans: tuple[_FallbackPlan, ...],
     assigned_vars: dict[str, cp_model.LinearExpr],
     math_course_ids: tuple[str, ...],
-) -> dict[str, cp_model.IntVar]:
+) -> tuple[dict[str, cp_model.IntVar], cp_model.IntVar]:
     math_set = set(math_course_ids)
     fallback_by_student: dict[str, list[cp_model.IntVar]] = defaultdict(list)
     for plan in fallback_plans:
@@ -1085,11 +1427,41 @@ def _add_schedule_completion_vars(
     return fully_scheduled, remaining_exprs
 
 
+def _add_logical_assigned_course_vars(
+    model: cp_model.CpModel,
+    allocation_input: CanonicalAllocationInput,
+    requests_by_key: dict[str, LogicalRequest],
+    assigned_vars: dict[str, cp_model.LinearExpr],
+) -> dict[str, cp_model.IntVar]:
+    by_student: dict[str, list[cp_model.LinearExpr]] = defaultdict(list)
+    for request in requests_by_key.values():
+        by_student[request.student_id].append(assigned_vars[request.request_key])
+    result: dict[str, cp_model.IntVar] = {}
+    for student in allocation_input.students:
+        count = model.NewIntVar(
+            0,
+            student.target_period_units,
+            f"logical_assigned__{_safe_name(student.student_id)}",
+        )
+        model.Add(count == sum(by_student.get(student.student_id, ())))
+        result[student.student_id] = count
+    # Keep the aggregate objective's theoretical upper bound explicit.  The
+    # per-student domains are authoritative; this redundant aggregate bound
+    # also keeps CP-SAT's reported best bound inside the same metric range.
+    target_total = sum(student.target_period_units for student in allocation_input.students)
+    model.Add(sum(result.values()) <= target_total)
+    total = model.NewIntVar(0, target_total, "logical_assigned_total")
+    model.Add(total == sum(result.values()))
+    return result, total
+
+
 def _stage_expressions(
     allocation_input: CanonicalAllocationInput,
     requests_by_key: dict[str, LogicalRequest],
     assigned_vars: dict[str, cp_model.LinearExpr],
     math_violation_vars: dict[str, cp_model.IntVar],
+    logical_assigned_course_vars: dict[str, cp_model.IntVar],
+    logical_assigned_course_total_var: cp_model.IntVar,
     fully_scheduled_vars: dict[str, cp_model.IntVar],
     remaining_exprs: dict[str, cp_model.LinearExpr],
     assignment_vars: dict[_VariableKey, cp_model.IntVar],
@@ -1108,6 +1480,12 @@ def _stage_expressions(
     for request in allocation_input.logical_requests:
         if request.request_type == "alternate" and request.request_rank is not None and request.request_key in assigned_vars:
             alternates_by_rank[request.request_rank].append(assigned_vars[request.request_key])
+    # Logical completion counts logical request assignments, not period units.
+    # With Final Schedule Policy Gate v1 enabled (maximum logical gap == 1),
+    # maximizing this expression is equivalent to minimizing total logical
+    # schedule gap / gap-student count. The equivalence is intentionally not
+    # assumed by tests that disable the final hard schedule constraints.
+    logical_assigned_courses = logical_assigned_course_total_var
     tie_break = _seeded_tie_break_expr(assignment_vars, seed)
     return (
         {
@@ -1115,6 +1493,7 @@ def _stage_expressions(
             CpSatStageName.PRIMARY_SATISFACTION: primary_penalty,
             CpSatStageName.PRIMARY_UNMET_COUNT: primary_unmet_count,
             CpSatStageName.PRIMARY_UNMET_PERIOD_UNITS: primary_unmet_units,
+            CpSatStageName.LOGICAL_SCHEDULE_COMPLETION: logical_assigned_courses,
             CpSatStageName.ALTERNATE_RANK_1: sum(alternates_by_rank.get(1, ())),
             CpSatStageName.ALTERNATE_RANK_2: sum(alternates_by_rank.get(2, ())),
             CpSatStageName.ALTERNATE_RANK_3: sum(alternates_by_rank.get(3, ())),
@@ -1142,13 +1521,15 @@ def _new_solver(
     workers: int,
     log_search_progress: bool,
     seed: int,
+    *,
+    repair_hint: bool = True,
 ) -> cp_model.CpSolver:
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(max_time_seconds)
     solver.parameters.num_search_workers = int(workers)
     solver.parameters.random_seed = int(seed)
     solver.parameters.log_search_progress = bool(log_search_progress)
-    solver.parameters.repair_hint = True
+    solver.parameters.repair_hint = bool(repair_hint)
     solver.parameters.hint_conflict_limit = 1000
     return solver
 
@@ -1167,6 +1548,7 @@ def _solve_stage_sequence(
     initial_fixed_values: tuple[tuple[CpSatStageName, int], ...],
     already_conditional: bool,
     budget: _GlobalTimeBudget,
+    incumbent_candidates: tuple[_IncumbentCandidate, ...] = (),
 ) -> _StageRun:
     diagnostics: list[CpSatStageDiagnostic] = []
     stage_values: dict[CpSatStageName, int] = {}
@@ -1178,6 +1560,8 @@ def _solve_stage_sequence(
     conditional_performed = already_conditional
     highest_global: CpSatStageName | None = None
     stage_hint_used = False
+    candidates = list(incumbent_candidates)
+    prepared_cache: dict[str, tuple[_StageIncumbent, tuple[_VariableKey, ...]] | None] = {}
 
     if initial_hint_keys:
         _apply_key_hint(build.model, build.assignment_vars, initial_hint_keys)
@@ -1199,11 +1583,27 @@ def _solve_stage_sequence(
             lexicographic_optimum = False
             break
         expr = build.stage_exprs[stage.stage_name]
+        if stage_to_stage_hints:
+            selected_candidate = _select_incumbent_candidate(
+                build,
+                stage,
+                fixed_values,
+                tuple(candidates),
+                prepared_cache,
+            )
+            if selected_candidate is not None:
+                _apply_complete_stage_incumbent(build.model, selected_candidate[1])
         if stage.sense == "min":
             build.model.Minimize(expr)
         else:
             build.model.Maximize(expr)
-        solver = _new_solver(effective_limit, num_search_workers, log_search_progress, seed)
+        solver = _new_solver(
+            effective_limit,
+            num_search_workers,
+            log_search_progress,
+            seed,
+            repair_hint=stage.stage_name != CpSatStageName.LOGICAL_SCHEDULE_COMPLETION,
+        )
         raw_status = solver.Solve(build.model)
         budget.refresh()
         status = _solve_status(raw_status)
@@ -1217,6 +1617,8 @@ def _solve_stage_sequence(
             remaining_global_budget_at_start_seconds=remaining_at_start,
             effective_time_limit_seconds=effective_limit,
         )
+        if stage.stage_name == CpSatStageName.LOGICAL_SCHEDULE_COMPLETION:
+            _validate_logical_completion_bound(diagnostic, _logical_completion_upper_bound(build))
         diagnostics.append(diagnostic)
 
         if status not in {CpSatSolveStatus.OPTIMAL, CpSatSolveStatus.FEASIBLE}:
@@ -1225,10 +1627,20 @@ def _solve_stage_sequence(
             break
 
         incumbent = solver
-        value = int(round(solver.ObjectiveValue()))
+        stage_incumbent = _capture_stage_incumbent(build.model, solver)
+        value = _stage_objective_value(solver, expr)
         stage_values[stage.stage_name] = value
         fixed_values[stage.stage_name] = value
         build.model.Add(expr == value)
+        candidates.append(
+            _IncumbentCandidate(
+                candidate_id=f"formal_{stage.stage_name.value}_{len(candidates)}",
+                source=f"formal_stage:{stage.stage_name.value}",
+                model_scope=build.model_scope,
+                selected_keys=_selected_assignments(build, solver),
+                snapshot=stage_incumbent,
+            )
+        )
 
         if status == CpSatSolveStatus.OPTIMAL and not conditional:
             highest_global = stage.stage_name
@@ -1243,7 +1655,13 @@ def _solve_stage_sequence(
                 break
 
         if stage_to_stage_hints:
-            _apply_solution_hint(build.model, build.assignment_vars, solver, initial_hint_keys)
+            _apply_solution_hint(
+                build.model,
+                build.assignment_vars,
+                solver,
+                initial_hint_keys,
+                incumbent=stage_incumbent,
+            )
             stage_hint_used = True
 
     return _StageRun(
@@ -1255,6 +1673,7 @@ def _solve_stage_sequence(
         conditional_optimization_performed=conditional_performed,
         highest_globally_proven_stage=highest_global,
         stage_to_stage_hint_used=stage_hint_used,
+        incumbent_candidates=tuple(candidates),
         budget_exhausted=budget.exhausted,
     )
 
@@ -1269,6 +1688,404 @@ def _apply_key_hint(
         var = assignment_vars.get(key)
         if var is not None:
             model.AddHint(var, 1)
+
+
+def _select_incumbent_candidate(
+    build: _ModelBuild,
+    stage: _SolveStage,
+    fixed_values: dict[CpSatStageName, int],
+    candidates: tuple[_IncumbentCandidate, ...],
+    prepared_cache: dict[str, tuple[_StageIncumbent, tuple[_VariableKey, ...]] | None] | None = None,
+) -> tuple[_IncumbentCandidate, _StageIncumbent, int] | None:
+    eligible: list[tuple[_IncumbentCandidate, tuple[_VariableKey, ...], int]] = []
+    prepared_cache = prepared_cache if prepared_cache is not None else {}
+    for candidate in candidates:
+        mapped_keys = _mapped_candidate_keys(build, candidate)
+        if mapped_keys is None:
+            continue
+        if any(
+            _selected_stage_objective_value(build, stage_name, mapped_keys) != fixed_value
+            for stage_name, fixed_value in fixed_values.items()
+        ):
+            continue
+        current_value = _selected_stage_objective_value(build, stage.stage_name, mapped_keys)
+        eligible.append((candidate, mapped_keys, current_value))
+    if not eligible:
+        return None
+
+    source_priority = {
+        "persisted_feasible_seed": 0,
+        "full_model_feasibility_incumbent": 1,
+    }
+    if stage.sense == "min":
+        selected_candidate, selected_keys, current_value = min(
+            eligible,
+            key=lambda item: (
+                item[2],
+                source_priority.get(item[0].source, 2),
+                item[0].candidate_id,
+            ),
+        )
+    else:
+        selected_candidate, selected_keys, current_value = min(
+            eligible,
+            key=lambda item: (
+                -item[2],
+                source_priority.get(item[0].source, 2),
+                item[0].candidate_id,
+            ),
+        )
+    if selected_candidate.candidate_id not in prepared_cache:
+        prepared_cache[selected_candidate.candidate_id] = _prepare_incumbent_candidate(
+            build,
+            selected_candidate,
+            {},
+        )
+    prepared = prepared_cache[selected_candidate.candidate_id]
+    if prepared is None:
+        return None
+    incumbent, _prepared_keys = prepared
+    return selected_candidate, incumbent, current_value
+
+
+def _mapped_candidate_keys(
+    build: _ModelBuild,
+    candidate: _IncumbentCandidate,
+) -> tuple[_VariableKey, ...] | None:
+    if candidate.model_scope == CpSatModelScope.CORE and build.model_scope == CpSatModelScope.ENRICHMENT:
+        return None
+    if len(candidate.selected_keys) != len(set(candidate.selected_keys)):
+        return None
+    mapped_keys = tuple(key for key in candidate.selected_keys if key in build.assignment_vars)
+    if candidate.model_scope == build.model_scope and len(mapped_keys) != len(candidate.selected_keys):
+        return None
+    return mapped_keys
+
+
+def _prepare_incumbent_candidate(
+    build: _ModelBuild,
+    candidate: _IncumbentCandidate,
+    fixed_values: dict[CpSatStageName, int],
+) -> tuple[_StageIncumbent, tuple[_VariableKey, ...]] | None:
+    mapped_keys = _mapped_candidate_keys(build, candidate)
+    if mapped_keys is None:
+        return None
+    if candidate.snapshot is not None and candidate.model_scope == build.model_scope:
+        try:
+            _validate_stage_incumbent_for_model(build.model, candidate.snapshot)
+        except CpSatStageIncumbentConsistencyError:
+            return None
+        return candidate.snapshot, mapped_keys
+    try:
+        values, _variables = _full_model_hint_values(build, mapped_keys)
+        incumbent = _stage_incumbent_from_values(build.model, values)
+    except (KeyError, ValueError, CpSatStageIncumbentConsistencyError):
+        return None
+    for stage_name, fixed_value in fixed_values.items():
+        if _selected_stage_objective_value(build, stage_name, mapped_keys) != fixed_value:
+            return None
+    return incumbent, mapped_keys
+
+
+def _apply_complete_stage_incumbent(model: cp_model.CpModel, incumbent: _StageIncumbent) -> None:
+    _validate_stage_incumbent_for_model(model, incumbent)
+    values_by_name = dict(incumbent.values_by_name)
+    _write_hint_values(
+        model,
+        {
+            index: values_by_name[variable.name]
+            for index, variable in enumerate(model.Proto().variables)
+        },
+    )
+
+
+def _selected_stage_objective_value(
+    build: _ModelBuild,
+    stage_name: CpSatStageName,
+    selected_keys: tuple[_VariableKey, ...],
+) -> int:
+    selected = {key for key in selected_keys if key in build.assignment_vars}
+    selected_request_keys = {key.request_key for key in selected}
+    math_set = set(build.math_course_ids)
+
+    def assigned(request_key: str) -> int:
+        return int(request_key in selected_request_keys)
+
+    primary = tuple(request for request in build.requests_by_key.values() if request.request_type == "primary")
+    primary_unmet = sum(1 - assigned(request.request_key) for request in primary)
+    primary_unmet_units = sum(
+        (1 - assigned(request.request_key)) * request.period_units for request in primary
+    )
+    if stage_name == CpSatStageName.PRIMARY_UNMET_COUNT:
+        return primary_unmet
+    if stage_name == CpSatStageName.PRIMARY_UNMET_PERIOD_UNITS:
+        return primary_unmet_units
+    if stage_name == CpSatStageName.PRIMARY_SATISFACTION:
+        max_possible_units = sum(request.period_units for request in primary)
+        return primary_unmet * (max_possible_units + 1) + primary_unmet_units
+    if stage_name == CpSatStageName.MATH_COVERAGE:
+        violations = 0
+        for student_id in build.math_violation_vars:
+            covered = any(
+                key in selected
+                and key.request_key in build.requests_by_key
+                and build.requests_by_key[key.request_key].student_id == student_id
+                and build.requests_by_key[key.request_key].candidate_key in math_set
+                and build.requests_by_key[key.request_key].request_type
+                in {"primary", MANDATORY_FALLBACK_REQUEST_TYPE}
+                for key in selected
+            )
+            violations += int(not covered)
+        return violations
+    if stage_name == CpSatStageName.LOGICAL_SCHEDULE_COMPLETION:
+        return _selected_logical_course_count(build, selected)
+    if stage_name in {
+        CpSatStageName.ALTERNATE_RANK_1,
+        CpSatStageName.ALTERNATE_RANK_2,
+        CpSatStageName.ALTERNATE_RANK_3,
+    }:
+        rank = {
+            CpSatStageName.ALTERNATE_RANK_1: 1,
+            CpSatStageName.ALTERNATE_RANK_2: 2,
+            CpSatStageName.ALTERNATE_RANK_3: 3,
+        }[stage_name]
+        return sum(
+            assigned(request.request_key)
+            for request in build.requests_by_key.values()
+            if request.request_type == "alternate" and request.request_rank == rank
+        )
+    used_units: Counter[str] = Counter()
+    for key in selected:
+        request = build.requests_by_key.get(key.request_key)
+        if request is not None:
+            used_units[request.student_id] += request.period_units
+    if stage_name == CpSatStageName.FULLY_SCHEDULED:
+        return sum(
+            used_units[student.student_id] == student.target_period_units
+            for student in build.students_by_id.values()
+        )
+
+    if stage_name == CpSatStageName.REMAINING_PERIOD_UNITS:
+        return sum(student.target_period_units - used_units[student.student_id] for student in build.students_by_id.values())
+    if stage_name == CpSatStageName.SEEDED_TIE_BREAK:
+        keys = sorted(build.assignment_vars, key=lambda item: (item.request_key, item.section_id))
+        weights = {key: index + 1 for index, key in enumerate(keys)}
+        return sum(weights[key] for key in selected)
+    raise KeyError(f"No candidate objective evaluator for {stage_name.value}")
+
+
+def _selected_logical_course_count(
+    build: _ModelBuild,
+    selected_keys: tuple[_VariableKey, ...],
+) -> int:
+    identities_by_student: dict[str, set[str]] = defaultdict(set)
+    for key in selected_keys:
+        request = build.requests_by_key.get(key.request_key)
+        if request is not None and key in build.assignment_vars:
+            identities_by_student[request.student_id].add(request.candidate_key)
+    return sum(len(identities) for identities in identities_by_student.values())
+
+
+def _logical_completion_upper_bound(build: _ModelBuild) -> int:
+    return sum(student.target_period_units for student in build.students_by_id.values())
+
+
+def _validate_logical_completion_bound(
+    diagnostic: CpSatStageDiagnostic,
+    upper_bound: int,
+) -> None:
+    if diagnostic.objective_value is None or diagnostic.best_objective_bound is None:
+        return
+    objective = diagnostic.objective_value
+    best_bound = diagnostic.best_objective_bound
+    if not 0 <= objective <= best_bound <= upper_bound:
+        raise CpSatStageIncumbentConsistencyError(
+            "CP-SAT logical completion objective bound is inconsistent: "
+            f"objective={objective}, best_bound={best_bound}, target_total={upper_bound}"
+        )
+
+
+def _apply_complete_key_hint(
+    model: cp_model.CpModel,
+    assignment_vars: dict[_VariableKey, cp_model.IntVar],
+    hinted_keys: tuple[_VariableKey, ...],
+) -> None:
+    _clear_hints(model)
+    duplicate_count = len(hinted_keys) - len(set(hinted_keys))
+    if duplicate_count:
+        raise ValueError(f"Duplicate CP-SAT hint keys: {duplicate_count}")
+    unknown = tuple(key for key in hinted_keys if key not in assignment_vars)
+    if unknown:
+        raise ValueError(f"Unmapped CP-SAT hint keys: {unknown[:3]!r}")
+    selected = set(hinted_keys)
+    _write_hint_values(
+        model,
+        {
+            assignment_vars[key].Index(): int(key in selected)
+            for key in sorted(assignment_vars, key=lambda item: (item.request_key, item.section_id))
+        },
+    )
+
+
+def _mapped_hint_keys(
+    assignment_vars: dict[_VariableKey, cp_model.IntVar],
+    hinted_keys: tuple[_VariableKey, ...],
+) -> tuple[_VariableKey, ...]:
+    return tuple(
+        sorted(
+            {key for key in hinted_keys if key in assignment_vars},
+            key=lambda item: (item.request_key, item.section_id),
+        )
+    )
+
+
+def _audit_complete_hint(
+    assignment_vars: dict[_VariableKey, cp_model.IntVar],
+    seed: _HintSeed,
+) -> _HintAudit:
+    if not seed.keys:
+        return _HintAudit(source=seed.source)
+    unique_keys = set(seed.keys)
+    mapped_keys = _mapped_hint_keys(assignment_vars, seed.keys)
+    total = len(assignment_vars)
+    selected = len(mapped_keys)
+    return _HintAudit(
+        source=seed.source,
+        total_model_variables=total,
+        variables_supplied=total,
+        coverage_rate=1.0 if total else 0.0,
+        selected_variables=selected,
+        zero_variables=max(total - selected, 0),
+        unknown_or_unmapped_assignments=sum(key not in assignment_vars for key in unique_keys),
+        duplicate_keys=len(seed.keys) - len(unique_keys),
+        replay_policy_pass=seed.replay_policy_pass,
+        violation_students=seed.violation_students,
+    )
+
+
+def _full_model_hint_values(
+    build: _ModelBuild,
+    selected_keys: tuple[_VariableKey, ...],
+) -> tuple[dict[int, int], dict[int, cp_model.IntVar]]:
+    """Derive all auxiliary Boolean values implied by a known assignment.
+
+    The assignment vector is the source of truth.  ``assigned_*``, math
+    violation, and legacy full-schedule indicators are deterministic helper
+    variables in this model, so hinting them is safe and keeps the hint a
+    search suggestion rather than adding constraints.
+    """
+    selected = set(selected_keys)
+    values: dict[int, int] = {}
+    variables: dict[int, cp_model.IntVar] = {}
+
+    def add(var: cp_model.IntVar, value: int) -> None:
+        index = var.Index()
+        existing = values.get(index)
+        if existing is not None and existing != int(value):
+            raise ValueError(f"Conflicting hint value for CP-SAT variable index {index}")
+        values[index] = int(value)
+        variables[index] = var
+
+    for key, var in build.assignment_vars.items():
+        add(var, int(key in selected))
+
+    for request_key, expression in build.assigned_vars.items():
+        if isinstance(expression, cp_model.IntVar):
+            add(expression, int(any(key.request_key == request_key for key in selected)))
+
+    math_set = set(build.math_course_ids)
+    for student_id, var in build.math_violation_vars.items():
+        covered = any(
+            key in selected
+            and build.requests_by_key[key.request_key].student_id == student_id
+            and build.requests_by_key[key.request_key].candidate_key in math_set
+            and build.requests_by_key[key.request_key].request_type in {
+                "primary",
+                MANDATORY_FALLBACK_REQUEST_TYPE,
+            }
+            for key in selected
+            if key.request_key in build.requests_by_key
+        )
+        add(var, int(not covered))
+
+    logical_identities_by_student: dict[str, set[str]] = defaultdict(set)
+    for key in selected:
+        request = build.requests_by_key.get(key.request_key)
+        if request is not None:
+            logical_identities_by_student[request.student_id].add(request.candidate_key)
+    for student_id, var in build.logical_assigned_course_vars.items():
+        add(var, len(logical_identities_by_student[student_id]))
+    add(
+        build.logical_assigned_course_total_var,
+        sum(len(identities) for identities in logical_identities_by_student.values()),
+    )
+
+    used_units: Counter[str] = Counter()
+    for key in selected:
+        request = build.requests_by_key.get(key.request_key)
+        if request is not None:
+            used_units[request.student_id] += request.period_units
+    for student_id, var in build.fully_scheduled_vars.items():
+        student = build.students_by_id[student_id]
+        add(var, int(used_units[student_id] == student.target_period_units))
+
+    expected = len(build.model.Proto().variables)
+    for index, proto_var in enumerate(build.model.Proto().variables):
+        if index in values:
+            continue
+        if len(proto_var.domain) == 2 and proto_var.domain[0] == proto_var.domain[1]:
+            add(build.model.GetIntVarFromProtoIndex(index), int(proto_var.domain[0]))
+    if len(values) != expected:
+        missing = expected - len(values)
+        raise ValueError(f"Known assignment did not map {missing} CP-SAT model variables")
+    return values, variables
+
+
+def _audit_full_model_hint(
+    build: _ModelBuild,
+    seed: _HintSeed,
+    values: dict[int, int],
+) -> _HintAudit:
+    if not seed.keys:
+        return _HintAudit(source=seed.source)
+    unique_keys = set(seed.keys)
+    total = len(build.model.Proto().variables)
+    return _HintAudit(
+        source=seed.source,
+        total_model_variables=total,
+        variables_supplied=len(values),
+        coverage_rate=(len(values) / total) if total else 0.0,
+        selected_variables=sum(value == 1 for value in values.values()),
+        zero_variables=sum(value == 0 for value in values.values()),
+        unknown_or_unmapped_assignments=sum(key not in build.assignment_vars for key in unique_keys),
+        duplicate_keys=len(seed.keys) - len(unique_keys),
+        replay_policy_pass=seed.replay_policy_pass,
+        violation_students=seed.violation_students,
+    )
+
+
+def _apply_complete_model_hint(
+    build: _ModelBuild,
+    selected_keys: tuple[_VariableKey, ...],
+    *,
+    values: dict[int, int] | None = None,
+    variables: dict[int, cp_model.IntVar] | None = None,
+) -> None:
+    if len(selected_keys) != len(set(selected_keys)):
+        raise ValueError("Duplicate CP-SAT full-model hint keys")
+    unknown = tuple(key for key in selected_keys if key not in build.assignment_vars)
+    if unknown:
+        raise ValueError(f"Unmapped CP-SAT full-model hint keys: {unknown[:3]!r}")
+    if values is None or variables is None:
+        values, variables = _full_model_hint_values(build, selected_keys)
+    del variables
+    expected = set(range(len(build.model.Proto().variables)))
+    if set(values) != expected:
+        raise ValueError(
+            "Complete CP-SAT model hint does not cover every model variable: "
+            f"expected {len(expected)}, got {len(values)}"
+        )
+    _write_hint_values(build.model, values)
 
 
 def _selected_bootstrap_assignments(
@@ -1323,23 +2140,140 @@ def _apply_solution_hint(
     assignment_vars: dict[_VariableKey, cp_model.IntVar],
     solver: cp_model.CpSolver,
     extra_hint_keys: tuple[_VariableKey, ...],
+    *,
+    incumbent: _StageIncumbent | None = None,
 ) -> None:
-    _clear_hints(model)
-    selected = set(extra_hint_keys)
-    selected.update(
-        key
-        for key in assignment_vars
-        if solver.BooleanValue(assignment_vars[key])
+    del assignment_vars, extra_hint_keys
+    incumbent = incumbent or _capture_stage_incumbent(model, solver)
+    _validate_stage_incumbent_for_model(model, incumbent)
+    values_by_name = dict(incumbent.values_by_name)
+    _write_hint_values(
+        model,
+        {
+            index: values_by_name[variable.name]
+            for index, variable in enumerate(model.Proto().variables)
+        },
     )
-    for key in sorted(assignment_vars, key=lambda item: (item.request_key, item.section_id)):
-        if key in selected:
-            model.AddHint(assignment_vars[key], 1)
+
+
+def _capture_stage_incumbent(
+    model: cp_model.CpModel,
+    solver: cp_model.CpSolver,
+) -> _StageIncumbent:
+    proto = model.Proto()
+    expected = len(proto.variables)
+    response_values = tuple(int(value) for value in solver.ResponseProto().solution)
+    if response_values and len(response_values) != expected:
+        raise CpSatStageIncumbentConsistencyError(
+            "CP-SAT stage response has an incomplete solution vector: "
+            f"expected {expected}, got {len(response_values)}"
+        )
+    values = tuple(int(solver.Value(model.GetIntVarFromProtoIndex(index))) for index in range(expected))
+    if response_values and values != response_values:
+        raise CpSatStageIncumbentConsistencyError(
+            "CP-SAT stage response vector does not match CpSolver.Value()"
+        )
+    names = tuple(variable.name for variable in proto.variables)
+    if len(names) != len(set(names)):
+        raise CpSatStageIncumbentConsistencyError("CP-SAT stage model contains duplicate variable names")
+    domains = tuple(tuple(int(value) for value in variable.domain) for variable in proto.variables)
+    for index, (value, domain) in enumerate(zip(values, domains, strict=True)):
+        if not _value_in_domain(value, domain):
+            raise CpSatStageIncumbentConsistencyError(
+                f"CP-SAT stage incumbent value {value} is outside variable domain at index {index}"
+            )
+    return _stage_incumbent_from_values(model, values)
+
+
+def _stage_incumbent_from_values(
+    model: cp_model.CpModel,
+    values: tuple[int, ...] | dict[int, int],
+) -> _StageIncumbent:
+    variables = model.Proto().variables
+    ordered_values = tuple(
+        int(values[index]) if isinstance(values, dict) else int(values[index])
+        for index in range(len(variables))
+    )
+    names = tuple(variable.name for variable in variables)
+    if len(names) != len(set(names)):
+        raise CpSatStageIncumbentConsistencyError("CP-SAT stage model contains duplicate variable names")
+    domains = tuple(tuple(int(value) for value in variable.domain) for variable in variables)
+    for index, (value, domain) in enumerate(zip(ordered_values, domains, strict=True)):
+        if not _value_in_domain(value, domain):
+            raise CpSatStageIncumbentConsistencyError(
+                f"CP-SAT stage incumbent value {value} is outside variable domain at index {index}"
+            )
+    return _StageIncumbent(
+        values_by_name=tuple(sorted(zip(names, ordered_values, strict=True))),
+        domains_by_name=tuple(sorted(zip(names, domains, strict=True))),
+    )
+
+
+def _validate_stage_incumbent_for_model(
+    model: cp_model.CpModel,
+    incumbent: _StageIncumbent,
+) -> None:
+    variables = model.Proto().variables
+    if len(variables) != len(incumbent.values_by_name):
+        raise CpSatStageIncumbentConsistencyError(
+            "CP-SAT next-stage variable count changed: "
+            f"incumbent={len(incumbent.values_by_name)}, next_stage={len(variables)}"
+        )
+    values_by_name = dict(incumbent.values_by_name)
+    incumbent_domains = dict(incumbent.domains_by_name)
+    names = tuple(variable.name for variable in variables)
+    if len(names) != len(set(names)):
+        raise CpSatStageIncumbentConsistencyError("CP-SAT next-stage model contains duplicate variable names")
+    if set(names) != set(values_by_name):
+        raise CpSatStageIncumbentConsistencyError(
+            "CP-SAT next-stage variable mapping changed; stable variable names are required"
+        )
+    for variable in variables:
+        domain = tuple(int(value) for value in variable.domain)
+        if domain != incumbent_domains[variable.name]:
+            raise CpSatStageIncumbentConsistencyError(
+                "CP-SAT next-stage variable domains changed for the previous incumbent: "
+                f"{variable.name}"
+            )
+        if not _value_in_domain(values_by_name[variable.name], domain):
+            raise CpSatStageIncumbentConsistencyError(
+                "CP-SAT next-stage incumbent value is outside the variable domain: "
+                f"{variable.name}"
+            )
+
+
+def _value_in_domain(value: int, domain: tuple[int, ...]) -> bool:
+    return any(lower <= value <= upper for lower, upper in zip(domain[::2], domain[1::2], strict=True))
+
+
+def _stage_objective_value(
+    solver: cp_model.CpSolver,
+    expression: cp_model.LinearExpr,
+) -> int:
+    solver_value = float(solver.ObjectiveValue())
+    replayed_value = int(solver.Value(expression))
+    normalized_value = int(round(solver_value))
+    if normalized_value != replayed_value:
+        raise CpSatStageIncumbentConsistencyError(
+            "CP-SAT stage objective mismatch: "
+            f"solver={normalized_value}, replay={replayed_value}"
+        )
+    return replayed_value
 
 
 def _clear_hints(model: cp_model.CpModel) -> None:
     if not hasattr(model, "ClearHints"):
         raise RuntimeError("OR-Tools CpModel.ClearHints() is required for safe stage-to-stage hints")
     model.ClearHints()
+
+
+def _write_hint_values(model: cp_model.CpModel, values_by_index: dict[int, int]) -> None:
+    """Write a deterministic complete or partial hint without repeated API calls."""
+    _clear_hints(model)
+    hint = model.Proto().solution_hint
+    for index in sorted(values_by_index):
+        hint.vars.append(int(index))
+        hint.values.append(int(values_by_index[index]))
 
 
 def _constrained_first_partial_hint_keys(
@@ -1367,6 +2301,39 @@ def _constrained_first_partial_hint_keys(
         if assignment.student_id not in excluded_students
     )
     return tuple(sorted(hinted, key=lambda item: (item.request_key, item.section_id)))
+
+
+def _constrained_first_full_hint_seed(
+    allocation_input: CanonicalAllocationInput,
+    math_fallback_rules: tuple[MathFallbackRule, ...],
+    math_course_ids: tuple[str, ...],
+    seed: int,
+) -> _HintSeed:
+    """Build a complete candidate-vector seed from the unchanged greedy result.
+
+    The returned assignment keys are only a hint.  In particular, a greedy
+    policy failure is recorded as metadata and is never converted into a hard
+    constraint for the CP-SAT model.
+    """
+    from .constrained_first_baseline import run_constrained_first_baseline
+
+    greedy = run_constrained_first_baseline(
+        allocation_input,
+        seed,
+        math_fallback_rules=math_fallback_rules,
+        math_course_ids=math_course_ids,
+    )
+    policy_report = evaluate_final_schedule_policy(greedy.algorithm_name, greedy.student_outcomes)
+    keys = tuple(
+        _VariableKey(assignment.request_key, assignment.linked_section_group_id)
+        for assignment in greedy.assignments
+    )
+    return _HintSeed(
+        source="constrained_first_greedy_full",
+        keys=tuple(sorted(keys, key=lambda item: (item.request_key, item.section_id))),
+        replay_policy_pass=policy_report.summary.final_schedule_policy_pass,
+        violation_students=policy_report.summary.violating_student_count,
+    )
 
 
 def _stage_diagnostic(
@@ -1636,6 +2603,8 @@ def _objective_values(
     build: _ModelBuild,
     solver: cp_model.CpSolver,
     stage_values: dict[CpSatStageName, int],
+    *,
+    logical_schedule_completion_enabled: bool = True,
 ) -> CpSatObjectiveValues:
     del stage_values
     stage_exprs = build.stage_exprs
@@ -1647,6 +2616,11 @@ def _objective_values(
         primary_unmet_count=primary_unmet_count,
         primary_unmet_period_units=primary_unmet_units,
         primary_penalty=primary_penalty,
+        logical_assigned_course_count=(
+            _solver_int_value(solver, stage_exprs[CpSatStageName.LOGICAL_SCHEDULE_COMPLETION])
+            if logical_schedule_completion_enabled
+            else 0
+        ),
         alternate_rank1_assigned=_solver_int_value(solver, stage_exprs[CpSatStageName.ALTERNATE_RANK_1]),
         alternate_rank2_assigned=_solver_int_value(solver, stage_exprs[CpSatStageName.ALTERNATE_RANK_2]),
         alternate_rank3_assigned=_solver_int_value(solver, stage_exprs[CpSatStageName.ALTERNATE_RANK_3]),
@@ -1656,11 +2630,120 @@ def _objective_values(
     )
 
 
+def _validate_logical_completion_consistency(
+    student_outcomes,
+    final_policy_report,
+    objective_value: int,
+    fixed_stage_value: int | None,
+) -> None:
+    student_outcomes = tuple(student_outcomes)
+    assigned_logical = sum(
+        int(outcome.assigned_logical_course_count)
+        if outcome.assigned_logical_course_count is not None
+        else len(outcome.assignment_keys)
+        for outcome in student_outcomes
+    )
+    target_logical = sum(
+        int(outcome.target_logical_course_count)
+        if outcome.target_logical_course_count is not None
+        else int(outcome.target_period_units)
+        for outcome in student_outcomes
+    )
+    total_gap = sum(
+        max(
+            (
+                int(outcome.target_logical_course_count)
+                if outcome.target_logical_course_count is not None
+                else int(outcome.target_period_units)
+            )
+            - (
+                int(outcome.assigned_logical_course_count)
+                if outcome.assigned_logical_course_count is not None
+                else len(outcome.assignment_keys)
+            ),
+            0,
+        )
+        for outcome in student_outcomes
+    )
+    over_target = tuple(
+        outcome.student_id
+        for outcome in student_outcomes
+        if (
+            int(outcome.assigned_logical_course_count)
+            if outcome.assigned_logical_course_count is not None
+            else len(outcome.assignment_keys)
+        )
+        > (
+            int(outcome.target_logical_course_count)
+            if outcome.target_logical_course_count is not None
+            else int(outcome.target_period_units)
+        )
+    )
+    if over_target:
+        raise CpSatFinalSchedulePolicyConsistencyError(
+            "CP-SAT logical schedule metrics are inconsistent: assigned logical courses exceed target "
+            f"for students {over_target[:3]!r}"
+        )
+    if assigned_logical + total_gap != target_logical:
+        raise CpSatFinalSchedulePolicyConsistencyError(
+            "CP-SAT logical schedule metrics are inconsistent: "
+            f"assigned={assigned_logical}, gap={total_gap}, target_total={target_logical}"
+        )
+    summary = final_policy_report.summary
+    if summary.logical_fully_scheduled_student_count + summary.students_with_logical_schedule_gap != len(student_outcomes):
+        raise CpSatFinalSchedulePolicyConsistencyError(
+            "CP-SAT logical schedule metrics are inconsistent: "
+            "logical_fully_scheduled + students_with_logical_schedule_gap != total_students"
+        )
+    if summary.maximum_schedule_gap_count <= MAXIMUM_SCHEDULE_GAP_COUNT:
+        if summary.total_logical_schedule_gap != summary.students_with_logical_schedule_gap:
+            raise CpSatFinalSchedulePolicyConsistencyError(
+                "CP-SAT logical schedule metrics are inconsistent under max-gap hard policy: "
+                "total_logical_schedule_gap != students_with_logical_schedule_gap"
+            )
+    if summary.total_logical_schedule_gap != total_gap:
+        raise CpSatFinalSchedulePolicyConsistencyError(
+            "CP-SAT logical schedule metrics are inconsistent with replayed outcomes: "
+            f"summary_gap={summary.total_logical_schedule_gap}, replay_gap={total_gap}"
+        )
+    if objective_value != assigned_logical:
+        raise CpSatFinalSchedulePolicyConsistencyError(
+            "CP-SAT logical completion objective does not match replayed assignments: "
+            f"objective={objective_value}, replay={assigned_logical}"
+        )
+    if fixed_stage_value is not None and fixed_stage_value != assigned_logical:
+        raise CpSatFinalSchedulePolicyConsistencyError(
+            "CP-SAT logical completion fixed stage value does not match replayed assignments: "
+            f"fixed={fixed_stage_value}, replay={assigned_logical}"
+        )
+
+
+def _logical_completion_metadata(
+    diagnostics: tuple[CpSatStageDiagnostic, ...],
+    stage_values: dict[CpSatStageName, int],
+) -> dict[str, object]:
+    diagnostic = next(
+        (item for item in diagnostics if item.stage_name == CpSatStageName.LOGICAL_SCHEDULE_COMPLETION),
+        None,
+    )
+    return {
+        "enabled": diagnostic is not None,
+        "status": diagnostic.status if diagnostic is not None else None,
+        "objective_value": diagnostic.objective_value if diagnostic is not None else None,
+        "best_bound": diagnostic.best_objective_bound if diagnostic is not None else None,
+        "conditionally_optimized": (
+            diagnostic.conditional_on_unproven_incumbent if diagnostic is not None else False
+        ),
+        "fixed_value": stage_values.get(CpSatStageName.LOGICAL_SCHEDULE_COMPLETION),
+    }
+
+
 def _objective_vector(stage_values: dict[CpSatStageName, int]) -> tuple[tuple[CpSatStageName, int], ...]:
     order = (
         CpSatStageName.MATH_COVERAGE,
         CpSatStageName.PRIMARY_UNMET_COUNT,
         CpSatStageName.PRIMARY_UNMET_PERIOD_UNITS,
+        CpSatStageName.LOGICAL_SCHEDULE_COMPLETION,
         CpSatStageName.ALTERNATE_RANK_1,
         CpSatStageName.ALTERNATE_RANK_2,
         CpSatStageName.ALTERNATE_RANK_3,
@@ -1698,6 +2781,8 @@ def _empty_result(
     skipped_stage_count: int,
     core_hint_source: str,
     final_schedule_hard_constraints_enabled: bool = True,
+    hint_audit: _HintAudit | None = None,
+    hint_selected_keys: tuple[_VariableKey, ...] = (),
 ) -> CpSatAllocationResult:
     proto = build.model.Proto() if build is not None else None
     other_proto = other_build.model.Proto() if other_build is not None else None
@@ -1710,6 +2795,8 @@ def _empty_result(
     build_time = build.build_time_seconds if build is not None else 0.0
     other_build_time = other_build.build_time_seconds if other_build is not None else 0.0
     total_build_time = build_time + other_build_time + _bootstrap_build_time(bootstrap_run)
+    logical_metadata = _logical_completion_metadata(diagnostics, {})
+    hint_audit = hint_audit or _HintAudit()
     return CpSatAllocationResult(
         algorithm_name=ALGORITHM_NAME,
         seed=int(seed),
@@ -1756,6 +2843,27 @@ def _empty_result(
             external_hint_used=external_hint_used,
             stage_to_stage_hint_used=stage_to_stage_hint_used,
             final_schedule_hard_constraints_enabled=final_schedule_hard_constraints_enabled,
+            logical_schedule_completion_objective_enabled=logical_metadata["enabled"],
+            logical_schedule_completion_stage_status=logical_metadata["status"],
+            logical_schedule_completion_objective_value=logical_metadata["objective_value"],
+            logical_schedule_completion_best_bound=logical_metadata["best_bound"],
+            logical_schedule_completion_conditionally_optimized=logical_metadata["conditionally_optimized"],
+            logical_schedule_completion_fixed_value=logical_metadata["fixed_value"],
+            hint_source=hint_audit.source,
+            hint_total_model_variables=hint_audit.total_model_variables,
+            hint_variables_supplied=hint_audit.variables_supplied,
+            hint_coverage_rate=hint_audit.coverage_rate,
+            hint_selected_variables=hint_audit.selected_variables,
+            hint_zero_variables=hint_audit.zero_variables,
+            hint_unknown_or_unmapped_assignments=hint_audit.unknown_or_unmapped_assignments,
+            hint_duplicate_keys=hint_audit.duplicate_keys,
+            hint_replay_policy_pass=hint_audit.replay_policy_pass,
+            full_model_seed_strategy=hint_audit.source,
+            full_model_seed_policy_pass=hint_audit.replay_policy_pass,
+            full_model_seed_violation_students=hint_audit.violation_students,
+            full_model_seed_repaired_by_solver=(
+                hint_audit.replay_policy_pass is False and bool(hint_selected_keys)
+            ) if hint_audit.source != "none" else None,
         ),
     )
 

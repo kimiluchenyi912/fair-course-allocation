@@ -300,6 +300,10 @@ A student who receives alternates for all missing period units can still have
 For double-period logical courses, period-unit completion and logical-course
 completion can differ; Final Schedule Policy Gate v1 uses the logical-course
 fields.
+For CP-SAT results, these explicit student-level logical fields are derived
+from the actual final solver response after replay. The logical completion
+objective uses bounded per-student counters, and its best bound must not exceed
+the sum of all target logical course counts.
 
 ### `metrics.csv`
 
@@ -317,6 +321,23 @@ Core fields:
 - max_unmet_primary;
 - assignment_churn_rate;
 - solve_time_seconds.
+
+CP-SAT benchmark summaries may also include stage metadata for
+`logical_schedule_completion`: whether the objective was enabled, stage
+status, objective value, best bound, whether it was conditional on prior
+unproven incumbent values, and the fixed value passed to lower-priority
+stages. This objective uses assigned logical-course count, not legacy
+period-unit `fully_scheduled`.
+
+CP-SAT summaries may also include full-model hint metadata. The hint variable
+universe is the model's Boolean variable set: `hint_source`,
+`hint_total_model_variables`, `hint_variables_supplied`,
+`hint_coverage_rate`, `hint_selected_variables`, `hint_zero_variables`,
+`hint_unknown_or_unmapped_assignments`, `hint_duplicate_keys`, and
+`hint_replay_policy_pass`. `full_model_seed_policy_pass` and
+`full_model_seed_repaired_by_solver` distinguish the unchanged seed's own
+policy result from a later CP-SAT incumbent. A hint is search guidance, never a
+hard assignment constraint or a feasibility proof.
 
 ### `generation_summary.csv`
 

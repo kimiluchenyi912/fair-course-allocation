@@ -204,6 +204,7 @@ class CpSatBenchmarkOptions:
     use_feasibility_bootstrap: bool = True
     use_constrained_first_hint: bool = True
     num_search_workers: int = 1
+    logical_schedule_completion_enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -244,6 +245,25 @@ class BenchmarkAlgorithmResult:
     logical_fully_scheduled_students: int | None = None
     students_with_logical_schedule_gap: int | None = None
     total_logical_schedule_gap: int | None = None
+    logical_schedule_completion_objective_enabled: bool | None = None
+    logical_schedule_completion_stage_status: str | None = None
+    logical_schedule_completion_objective_value: int | None = None
+    logical_schedule_completion_best_bound: int | None = None
+    logical_schedule_completion_conditionally_optimized: bool | None = None
+    logical_schedule_completion_fixed_value: int | None = None
+    hint_source: str | None = None
+    hint_total_model_variables: int | None = None
+    hint_variables_supplied: int | None = None
+    hint_coverage_rate: float | None = None
+    hint_selected_variables: int | None = None
+    hint_zero_variables: int | None = None
+    hint_unknown_or_unmapped_assignments: int | None = None
+    hint_duplicate_keys: int | None = None
+    hint_replay_policy_pass: bool | None = None
+    full_model_seed_strategy: str | None = None
+    full_model_seed_policy_pass: bool | None = None
+    full_model_seed_violation_students: int | None = None
+    full_model_seed_repaired_by_solver: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -436,6 +456,7 @@ def _run_algorithm(
             use_feasibility_bootstrap=options.use_feasibility_bootstrap,
             use_constrained_first_hint=options.use_constrained_first_hint,
             num_search_workers=options.num_search_workers,
+            logical_schedule_completion_enabled=options.logical_schedule_completion_enabled,
         )
     else:  # pragma: no cover - _normalize_algorithms keeps this unreachable.
         raise BenchmarkRunnerError(f"Unsupported benchmark algorithm: {name}")
@@ -550,13 +571,46 @@ def _summarize_result(
             "conditional_optimization_performed": stats.conditional_optimization_performed,
             "skipped_stage_count": stats.skipped_stage_count,
             "bootstrap_status": stats.bootstrap_status.value,
+            "logical_schedule_completion_objective_enabled": stats.logical_schedule_completion_objective_enabled,
+            "logical_schedule_completion_stage_status": (
+                stats.logical_schedule_completion_stage_status.value
+                if stats.logical_schedule_completion_stage_status is not None
+                else None
+            ),
+            "logical_schedule_completion_objective_value": stats.logical_schedule_completion_objective_value,
+            "logical_schedule_completion_best_bound": stats.logical_schedule_completion_best_bound,
+            "logical_schedule_completion_conditionally_optimized": (
+                stats.logical_schedule_completion_conditionally_optimized
+            ),
+            "logical_schedule_completion_fixed_value": stats.logical_schedule_completion_fixed_value,
+            "hint_source": stats.hint_source,
+            "hint_total_model_variables": stats.hint_total_model_variables,
+            "hint_variables_supplied": stats.hint_variables_supplied,
+            "hint_coverage_rate": stats.hint_coverage_rate,
+            "hint_selected_variables": stats.hint_selected_variables,
+            "hint_zero_variables": stats.hint_zero_variables,
+            "hint_unknown_or_unmapped_assignments": stats.hint_unknown_or_unmapped_assignments,
+            "hint_duplicate_keys": stats.hint_duplicate_keys,
+            "hint_replay_policy_pass": stats.hint_replay_policy_pass,
+            "full_model_seed_strategy": stats.full_model_seed_strategy,
+            "full_model_seed_policy_pass": stats.full_model_seed_policy_pass,
+            "full_model_seed_violation_students": stats.full_model_seed_violation_students,
+            "full_model_seed_repaired_by_solver": stats.full_model_seed_repaired_by_solver,
             "stage_diagnostics_summary": tuple(
             {
                 "stage_name": diagnostic.stage_name.value,
                 "model_scope": diagnostic.model_scope.value,
                 "status": diagnostic.status.value,
+                "objective_value": diagnostic.objective_value,
+                "best_objective_bound": diagnostic.best_objective_bound,
+                "wall_time_seconds": diagnostic.wall_time_seconds,
                 "optimum_proven": diagnostic.optimum_proven,
                 "conditional_on_unproven_incumbent": diagnostic.conditional_on_unproven_incumbent,
+                "fixed_higher_priority_values": tuple(
+                    (stage_name.value, value)
+                    for stage_name, value in diagnostic.fixed_higher_priority_values
+                ),
+                "effective_time_limit_seconds": diagnostic.effective_time_limit_seconds,
                 "skipped": diagnostic.skipped,
                 "skip_reason": diagnostic.skip_reason,
             }
@@ -818,10 +872,26 @@ def _student_outcome_rows(
                     "assigned_course_count": outcome.assigned_period_units,
                     "schedule_gap_count": max(outcome.target_period_units - outcome.assigned_period_units, 0),
                     "assigned_alternate_count": outcome.alternate_assigned_count,
-                    "target_logical_course_count": outcome.target_period_units,
-                    "assigned_logical_course_count": len(outcome.assignment_keys),
-                    "logical_schedule_gap_count": max(outcome.target_period_units - len(outcome.assignment_keys), 0),
-                    "logical_fully_scheduled": len(outcome.assignment_keys) >= outcome.target_period_units,
+                    "target_logical_course_count": (
+                        outcome.target_logical_course_count
+                        if outcome.target_logical_course_count is not None
+                        else outcome.target_period_units
+                    ),
+                    "assigned_logical_course_count": (
+                        outcome.assigned_logical_course_count
+                        if outcome.assigned_logical_course_count is not None
+                        else len(outcome.assignment_keys)
+                    ),
+                    "logical_schedule_gap_count": (
+                        outcome.logical_schedule_gap_count
+                        if outcome.logical_schedule_gap_count is not None
+                        else max(outcome.target_period_units - len(outcome.assignment_keys), 0)
+                    ),
+                    "logical_fully_scheduled": (
+                        outcome.logical_fully_scheduled
+                        if outcome.logical_fully_scheduled is not None
+                        else len(outcome.assignment_keys) >= outcome.target_period_units
+                    ),
                 }
             )
     return tuple(sorted(rows, key=lambda row: (row["algorithm_name"], row["student_id"])))
@@ -1043,6 +1113,13 @@ def _benchmark_manifest_payload(suite: BenchmarkSuiteResult, written_files: tupl
             "assigned_logical_course_count, 0); Final Schedule Policy Gate v1 uses this "
             "logical-course gap, not the legacy period-unit gap."
         ),
+        "logical_schedule_completion_objective_definition": (
+            "CP-SAT logical_schedule_completion maximizes assigned logical-course count after "
+            "higher-priority math coverage and primary objective values are fixed. With Final "
+            "Schedule Policy Gate v1 enabled, maximum logical schedule gap is 1, so maximizing "
+            "assigned logical courses is equivalent to minimizing total logical schedule gap "
+            "conditionally on the fixed higher-priority incumbent values."
+        ),
         "final_schedule_policy_limitation": (
             "A benchmark algorithm may complete successfully while failing the final schedule policy gate. "
             "A failed gate means the result is not eligible to be described or exported as a publishable "
@@ -1071,6 +1148,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--cp-sat-bootstrap-time-seconds", type=float)
     parser.add_argument("--cp-sat-disable-feasibility-bootstrap", action="store_true")
     parser.add_argument("--cp-sat-disable-constrained-first-hint", action="store_true")
+    parser.add_argument("--cp-sat-disable-logical-schedule-completion", action="store_true")
     parser.add_argument("--cp-sat-num-search-workers", type=int, default=1)
     args = parser.parse_args(tuple(argv) if argv is not None else None)
     seeds = ExperimentSeeds(args.data_seed, args.section_seed, args.solver_seed)
@@ -1095,6 +1173,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 use_feasibility_bootstrap=not args.cp_sat_disable_feasibility_bootstrap,
                 use_constrained_first_hint=not args.cp_sat_disable_constrained_first_hint,
                 num_search_workers=args.cp_sat_num_search_workers,
+                logical_schedule_completion_enabled=not args.cp_sat_disable_logical_schedule_completion,
             ),
         )
     except (BenchmarkRunnerError, ExperimentManifestError, ValueError) as exc:

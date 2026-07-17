@@ -384,12 +384,13 @@ Soft goals are solved lexicographically:
 
 1. minimize math coverage violations;
 2. minimize primary unmet count, then primary unmet period units;
-3. maximize rank-1 alternates;
-4. maximize rank-2 alternates;
-5. maximize rank-3 alternates;
-6. maximize fully scheduled students;
-7. minimize total remaining period units;
-8. apply a deterministic seeded assignment tie-break.
+3. maximize assigned logical courses;
+4. maximize rank-1 alternates;
+5. maximize rank-2 alternates;
+6. maximize rank-3 alternates;
+7. maximize fully scheduled students under the legacy period-unit metric;
+8. minimize total remaining period units;
+9. apply a deterministic seeded assignment tie-break.
 
 The implementation separates this into two CP-SAT model scopes:
 
@@ -405,6 +406,19 @@ The implementation separates this into two CP-SAT model scopes:
 Core primary quality is solved in three distinct stages: math coverage
 violations, primary unmet count, and primary unmet period units. The solver
 does not collapse count and units into one large-weight objective.
+
+After the Core incumbent values are fixed, Enrichment first optimizes logical
+schedule completion by maximizing assigned logical-course count across primary,
+mandatory fallback, and ranked alternate assignments. This expression counts
+Math 2/3 Honors Accelerated and linked semester groups once and does not use
+period units. With Final Schedule Policy Gate v1 enabled, the hard maximum
+logical gap is one, so maximizing assigned logical courses is equivalent to
+minimizing total logical schedule gap and the number of students with a
+logical gap, conditional on the higher-priority incumbent values already fixed.
+It is intentionally placed above alternate-rank preference quality so the
+solver does not choose a lower-rank complete logical schedule merely to protect
+rank labels, but it cannot reduce primary satisfaction because primary
+objective values are fixed first.
 
 CP-SAT v1.2 adds a primary-only feasibility bootstrap before the Core model.
 The bootstrap creates only primary request-section assignment variables plus
@@ -433,9 +447,22 @@ malformed, not that the school policy problem is infeasible. If bootstrap ends
 `UNKNOWN` without an incumbent, the solver falls back to the Core stages.
 
 The solver may use solution hints to speed search. The default warm start uses
-a constrained-first partial hint plus stage-to-stage incumbent hints. Hints are
-not constraints: CP-SAT may repair or ignore them, and the formal hard
-constraints and objective stages remain the source of truth.
+a constrained-first partial hint plus stage-to-stage incumbent hints. When the
+Final Schedule Policy Gate is enabled, its full-model feasibility stage also
+maps the unchanged constrained-first assignment to a complete 0/1 vector for
+candidate and deterministically derived Boolean variables; unselected
+candidates receive explicit zero hints. Hints are not constraints: CP-SAT may
+repair or ignore them, and the formal hard constraints and objective stages
+remain the source of truth. Metadata records hint source, coverage,
+selected/zero counts, unknown mappings, duplicate keys, the seed's replay
+policy result, and whether a later solver incumbent passed the policy gate.
+Known feasible artifacts may be used only in isolated diagnostics and are not
+production dependencies.
+
+The logical schedule completion stage has a controlled disabled mode for
+incumbent diagnostics. Disabling it omits only that enrichment objective stage;
+it does not change hard constraints, Core objectives, or the meaning of
+FEASIBLE, OPTIMAL, UNKNOWN, or INFEASIBLE.
 
 The solver also supports an optional global time budget. Each stage receives
 the smaller of its per-stage limit and the remaining global budget. When the
@@ -463,6 +490,18 @@ same Final Schedule Policy Gate v1 evaluator used by benchmark artifacts. If
 the model claims a final solution but the evaluator fails it, that is an
 internal model/evaluator consistency error rather than a normal infeasible
 allocation instance.
+
+The logical completion objective value must match the raw logical-course counts
+from the actual final CP-SAT `ResponseProto` solution after replay. The model
+uses one bounded logical-assigned counter per student, so the objective and its
+best bound satisfy `objective <= best_bound <= sum(target_logical_course_count)`.
+The exported student-level logical fields are the metric authority; raw
+assignment-row counts are not a substitute because linked and double-period
+requests can have different row/unit representations. Under the final hard
+max-gap policy, the evaluator also checks that logical-full students plus
+logical-gap students equals total students, that no student exceeds its target,
+and that total logical gap equals the replayed target-minus-assigned total. A
+mismatch is treated as an internal solver/evaluator consistency error.
 
 Benchmark reports preserve the historical `fully_scheduled_students` field as
 a period-unit metric: it counts students whose assigned period units match the
