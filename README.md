@@ -111,3 +111,29 @@ For an explicit, validated full-model search hint, add
 The artifact is never discovered automatically. Its hashes, fingerprint,
 request mappings, source policy status, and local replay are checked before the
 normal CP-SAT model runs; it is not a hard constraint or a final assignment.
+
+## Scenario robustness benchmark v1
+
+Run the frozen normal-year development suite with the four Greedy baselines.
+Keep generated inputs and benchmark artifacts outside the repository:
+
+```bash
+python -m src.robustness_runner \
+  --split development \
+  --output-dir /tmp/fca_robustness_v1_development
+```
+
+Use `--max-scenarios 1` for a smoke run or `--dry-run` to inspect selected
+scenario IDs without generating data. The suite records separate
+`data_generation_seed`, `section_planning_seed`, and `algorithm_seed` values,
+canonical input fingerprints, input difficulty descriptors, per-scenario
+results, aggregate distributions, and paired algorithm deltas. The runner
+rejects CP-SAT selection; this phase is Greedy-only and does not change any
+generator, section-planning, capacity, or allocation semantics.
+
+The manifest contains 12 development scenarios and 8 holdout scenarios.
+Holdout evaluation requires `--split holdout --confirm-holdout-evaluation`.
+Development results are for tuning and robustness measurement only; they are
+not a generalization proof. Use `--resume` only when cached scenario
+provenance, suite hash, configuration fingerprint, and scenario specification
+all match.

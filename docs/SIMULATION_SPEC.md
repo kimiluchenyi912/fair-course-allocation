@@ -569,6 +569,43 @@ seed, generated and section input paths, canonical counts,
 canonical-input/file/configuration hashes, and an optional Git commit. If
 verification fails, do not run the benchmark or solver.
 
+### Scenario Robustness Benchmark v1
+
+`data/scenarios/normal_year_robustness_v1.json` is a frozen manifest for the
+first multi-seed normal-year measurement suite. It contains one stable
+development reference, eleven additional development scenarios, and eight
+holdout scenarios. Each entry records three separate roles:
+
+- `data_generation_seed` controls synthetic students and approved requests;
+- `section_planning_seed` controls fixed section counts and period layout;
+- `algorithm_seed` controls the allocation baseline tie-break.
+
+The reference uses data seed `2026`, section seed `2026`, and algorithm seed
+`20260630`. The solver/allocation seed must never be substituted for either
+input seed. The manifest also requires unique data/section seed pairs,
+canonical reference counts, and a canonical-input hash.
+
+`python -m src.robustness_runner` runs the selected development scenarios with
+seeded random Greedy, first-come-first-served Greedy, grade-priority Greedy,
+and constrained-first Greedy. CP-SAT is intentionally rejected by this runner
+and remains an explicit, separate benchmark choice. It writes scenario inputs,
+input difficulty descriptors, benchmark artifacts, aggregate distributions,
+and paired comparisons outside the repository when given an external output
+directory. Cached scenarios are reused only after fail-closed provenance
+checks. Holdout execution requires explicit confirmation and is not a tuning
+default.
+
+Difficulty descriptors are calculated from canonical allocation input, not raw
+CSV row counts. They describe student load, candidate flexibility,
+course-level demand/capacity ratios, and period candidate concentration. A
+capacity-only shortfall is a per-logical-course lower bound; it is not a proof
+of globally unmet demand. Development results support reproducible comparison
+and tuning audits, not claims of generalization to unseen schools or years.
+This Phase A suite is normal-year only: it does not include stress scenarios
+or capacity shocks. A later Phase B may add those scenario families, and a
+later Phase C may add multi-scenario CP-SAT and explicitly confirmed holdout
+evaluation.
+
 ## 14. Solver priorities
 
 Use lexicographic optimization:

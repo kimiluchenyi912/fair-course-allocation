@@ -246,6 +246,20 @@ The next stages are:
 7. Section-planning diagnostics and scenario comparison
 8. Lightweight website only after the model and metrics are tested
 
+Scenario Robustness Benchmark v1 is now available as a separate Greedy-only
+measurement layer. It uses the frozen manifest in
+`data/scenarios/normal_year_robustness_v1.json`, keeps data-generation,
+section-planning, and algorithm seeds distinct, and writes generated inputs
+and results to an external output directory. The development split contains
+the stable reference plus eleven independent normal-year seeds; the eight
+holdout scenarios require explicit confirmation and must not be used for
+ordinary tuning. This layer does not alter generator semantics, section
+planning, capacities, period layout, baseline algorithms, or CP-SAT behavior.
+Its summaries describe observed development variation and are not a
+generalization proof. This Phase A suite has no stress scenarios, capacity
+shocks, multi-scenario CP-SAT runs, or holdout results; those belong to later
+explicitly scoped phases.
+
 ## 11. Version 1 Completion Criteria
 
 Version 1 is complete when:
