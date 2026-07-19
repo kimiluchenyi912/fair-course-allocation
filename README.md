@@ -137,3 +137,25 @@ Development results are for tuning and robustness measurement only; they are
 not a generalization proof. Use `--resume` only when cached scenario
 provenance, suite hash, configuration fingerprint, and scenario specification
 all match.
+
+## Scenario Robustness Benchmark v1 Phase B
+
+Run the development-only stress suite against persistent Phase A artifacts:
+
+```bash
+python -m src.stress_robustness_runner \
+  --split development \
+  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/stress-development-v1
+```
+
+Phase B contains 12 ordinary stress scenarios and 3 deliberately structural
+negative controls in development, plus 8 holdout definitions that are not
+run by default. It runs the four Greedy baselines only. Transforms are
+deterministic and schema-aware, and write before/after canonical fingerprints,
+transformation reports, certificates, paired normal/stress metrics, aggregate
+summaries, and SHA-256 artifact manifests. A structural negative's expected
+policy failure is diagnostic output, not a runner crash or publishable
+allocation. In the negative summary, `policy_fail_count=4` means four Greedy
+result rows failed policy, not four individual violations. This phase does not
+run CP-SAT or holdout scenarios and does not change generator,
+section-planning, capacity, period-layout, or policy semantics.

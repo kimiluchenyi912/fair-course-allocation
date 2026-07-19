@@ -415,6 +415,12 @@ The files in `data/sample/` belong to the earlier prerequisite-centered toy
 model. They are retained for reference but are not authoritative inputs for
 the new scheduling simulation.
 
+Stress-transform outputs may add `request_id` to `requests.csv`. It is a
+stable, non-empty identifier for an original or cloned CSV row and is used
+only for transformation provenance and audit reports. It does not replace the
+canonical logical request key, which continues to be derived from student,
+request type, course, request group, and linked-block semantics.
+
 New development should use `data/config/` for configuration and
 `data/templates/` for table shapes.
 

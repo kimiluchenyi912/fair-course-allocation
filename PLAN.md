@@ -260,6 +260,17 @@ generalization proof. This Phase A suite has no stress scenarios, capacity
 shocks, multi-scenario CP-SAT runs, or holdout results; those belong to later
 explicitly scoped phases.
 
+Scenario Robustness Benchmark v1 Phase B adds a separate development-only
+stress layer: 12 ordinary stress scenarios plus 3 structural negative
+controls. Deterministic transforms operate on persistent Phase A inputs and
+carry fail-closed protected-no-candidate, minimum-load, or global-capacity
+certificates. The four Greedy baselines run; CP-SAT and holdout evaluation
+remain explicitly excluded. Results are diagnostics and paired development
+comparisons, not a generalization claim, and transformed inputs remain
+outside Git. In a negative summary, `policy_fail_count=4` means that all four
+Greedy result rows failed policy; it is not a count of four individual
+violations.
+
 ## 11. Version 1 Completion Criteria
 
 Version 1 is complete when:

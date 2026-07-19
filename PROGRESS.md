@@ -26,6 +26,14 @@
   including uniform 50% waitlist expansion, stable-year Calc D capacity
   override, Math 2/3 consecutive-period layout, Gov/Econ linked semester rows,
   planner diagnostics, CLI output, and pytest coverage.
+- Added Scenario Robustness Benchmark Suite v1 Phase B. The development-only
+  stress layer applies deterministic schema-aware enrollment, popular-course,
+  alternate, capacity, and logical-section transforms to persistent Phase A
+  inputs, runs the four Greedy baselines, and writes paired diagnostics and
+  SHA-256 guarded artifacts outside Git.
+- Added fail-closed structural negative certificates for protected primary
+  no-candidate, minimum logical load with at most four choices, and global
+  logical capacity deficit scenarios.
 
 ## Current Direction
 
@@ -45,6 +53,6 @@ authoritative input model for new development.
 
 ## Next Step
 
-Review section-planning diagnostics and request probability assumptions, then
-build baseline allocation checks before implementing the CP-SAT fixed-section
-solver.
+Review the normal and stress development artifacts before explicitly freezing a
+holdout/CP-SAT Phase C evaluation. Do not treat ordinary stress results as a
+generalization claim or structural negative policy failures as runner errors.

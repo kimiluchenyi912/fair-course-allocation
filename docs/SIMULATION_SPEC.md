@@ -606,6 +606,40 @@ or capacity shocks. A later Phase B may add those scenario families, and a
 later Phase C may add multi-scenario CP-SAT and explicitly confirmed holdout
 evaluation.
 
+### Scenario Robustness Benchmark v1 Phase B
+
+Phase B is a development-only stress diagnostic. Its frozen manifest contains
+12 ordinary stress scenarios and 3 artificial structural-infeasibility
+controls, plus 8 holdout definitions that are not run by default. Ordinary
+scenarios have `expected_feasibility=unknown`; structural controls use explicit
+certificates and are not evidence about ordinary-year feasibility.
+
+The transform layer reads a persistent normal-year scenario and writes a new
+scenario directory atomically. It never edits the base artifact. Enrollment
+and popular-course clones copy complete student/request profiles. Alternate
+ranks are preserved. Capacity changes are applied once per logical section,
+so linked Gov/Econ semester rows are not double counted. The optional
+`request_id` column added to transformed CSVs is provenance for cloned rows;
+canonical request identity remains defined by the existing student/course,
+request-group, and linked-block semantics.
+
+Every transformed scenario records before/after canonical fingerprints, row
+and logical-section changes, selected IDs, parameters, transform order, a
+deterministic replay hash, and validation status. Structural certificates are
+rechecked against the transformed canonical input. The global capacity
+certificate counts one capacity per logical section, deduplicates linked
+semester rows, and ignores periods as a strict upper-bound proof.
+
+The Phase B runner uses the four Greedy baselines only. It writes ordinary
+stress aggregates separately from negative-control summaries, and pairs each
+ordinary scenario with its already-persisted normal result. A policy failure
+in a structural negative is expected diagnostic output, not a runner crash;
+`policy_fail_count=4` means four Greedy result rows failed policy, not four
+individual violations. Unexpected schema, provenance, or integrity failures
+are runner failures. No
+CP-SAT multiscenario evidence, holdout evidence, or generalization claim is
+made in Phase B.
+
 ## 14. Solver priorities
 
 Use lexicographic optimization:
