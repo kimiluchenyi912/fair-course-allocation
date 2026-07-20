@@ -271,6 +271,35 @@ outside Git. In a negative summary, `policy_fail_count=4` means that all four
 Greedy result rows failed policy; it is not a count of four individual
 violations.
 
+### Scenario Robustness Benchmark v1 Phase C
+
+Phase C freezes the current production CP-SAT configuration for a development-
+only evaluation. It consumes the persisted Phase A and Phase B artifacts and
+does not regenerate inputs, rerun Greedy, reapply transforms, or alter the
+solver model, hard policies, objective order, stage order, seeds, workers, or
+time budgets. The evaluation manifest includes 12 normal development scenarios,
+12 ordinary stress scenarios, and 3 structural negative controls. The 16
+normal/stress holdout scenarios are absent from the manifest and remain unrun.
+
+The runner uses solver seed `20260630`, one worker, 30-second bootstrap and
+per-stage budgets, a 300-second total budget, and no external persisted seed.
+It preserves `UNKNOWN` versus `INFEASIBLE` and `FEASIBLE` versus
+`OPTIMAL`, requires every exported assignment to pass the final schedule
+policy and consistency replay, and validates negative certificates before
+solving. A development result is measurement/debugging evidence, not a final
+test or a generalization claim. Stress scenarios are controlled perturbations,
+not a complete model of real-world disruptions. The Phase C artifact is written
+outside Git and supports fail-closed resume.
+
+The Phase C status audit can rebuild summaries from existing raw stage traces
+without invoking CP-SAT. Only the full-model feasibility stage can establish a
+global hard-model infeasibility proof. Bootstrap/core-stage `INFEASIBLE` results
+remain scoped and non-global; later fixed-objective stages are reported as
+lexicographic-stage infeasibility. Structural certificates and solver proofs
+are separate. Holdout readiness is blocked when a majority of normal
+development scenarios have no publishable assignment, including the current
+0/12 cold-start result.
+
 ## 11. Version 1 Completion Criteria
 
 Version 1 is complete when:

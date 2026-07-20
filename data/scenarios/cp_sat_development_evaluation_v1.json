@@ -1,0 +1,108 @@
+{
+  "evaluation_name": "cp_sat_development_evaluation",
+  "evaluation_version": "v1",
+  "source_normal_suite": {
+    "artifact_dir": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/normal-development-v1",
+    "manifest_sha256": "9e4cc9ddf6e6b4f367f139048319c09a74c8e993aa8c8a44678c10ef45e1f095",
+    "sha256sums_sha256": "9e24470e55e85f005b35c347ceaeaa15082b1da84c58af16e5fe75704be73b6d"
+  },
+  "source_stress_suite": {
+    "artifact_dir": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/stress-development-v1",
+    "manifest_sha256": "cb26f2a0e1f2287f7d941b44d6e006212fbb3d3cb13c5755c18ca48f282e397c",
+    "sha256sums_sha256": "952bab5ef05f7079a872bc22cc610d26a8fa94ab45f99e5bcff167fa0a6cde14"
+  },
+  "source_git_commit": "49c88476d42deed668afb3726a0abecdfc23e890",
+  "split": "development",
+  "solver_configuration": {
+    "algorithm": "cp_sat",
+    "solver_seed": 20260630,
+    "workers": 1,
+    "bootstrap_time_limit_seconds": 30,
+    "per_stage_time_limit_seconds": 30,
+    "total_time_limit_seconds": 300,
+    "use_feasibility_bootstrap": true,
+    "use_constrained_first_hint": true,
+    "logical_schedule_completion_enabled": true,
+    "initial_solution_artifact_dir": null,
+    "external_persisted_seed": false,
+    "stage_order": [
+      "feasibility_bootstrap",
+      "full_model_feasibility_incumbent",
+      "math_coverage",
+      "primary_unmet_count",
+      "primary_unmet_period_units",
+      "logical_schedule_completion",
+      "alternate_rank_1",
+      "alternate_rank_2",
+      "alternate_rank_3",
+      "fully_scheduled",
+      "remaining_period_units",
+      "seeded_tie_break"
+    ],
+    "objective_order": [
+      "math_coverage",
+      "primary_unmet_count",
+      "primary_unmet_period_units",
+      "logical_schedule_completion",
+      "alternate_rank_1",
+      "alternate_rank_2",
+      "alternate_rank_3",
+      "fully_scheduled",
+      "remaining_period_units",
+      "seeded_tie_break"
+    ]
+  },
+  "scenario_groups": {
+    "normal": [
+      "normal_dev_reference_2026", "normal_dev_01", "normal_dev_02",
+      "normal_dev_03", "normal_dev_04", "normal_dev_05", "normal_dev_06",
+      "normal_dev_07", "normal_dev_08", "normal_dev_09", "normal_dev_10",
+      "normal_dev_11"
+    ],
+    "stress": [
+      "stress_dev_enrollment_surge_05", "stress_dev_enrollment_surge_10",
+      "stress_dev_popular_surge_10", "stress_dev_popular_surge_20",
+      "stress_dev_alternate_drop_25", "stress_dev_alternate_drop_50",
+      "stress_dev_capacity_minus_05", "stress_dev_capacity_minus_10",
+      "stress_dev_top_section_outage_1", "stress_dev_top_section_outage_3",
+      "stress_dev_combined_moderate", "stress_dev_combined_severe"
+    ],
+    "negative": [
+      "infeasible_dev_protected_primary_no_candidate",
+      "infeasible_dev_min_load_max_four",
+      "infeasible_dev_global_capacity_deficit"
+    ]
+  },
+  "scenarios": [
+    {"scenario_id": "normal_dev_reference_2026", "group": "normal", "source_suite": "normal", "source_scenario_id": "normal_dev_reference_2026", "paired_normal_scenario_id": "normal_dev_reference_2026", "expected_feasibility": "unknown"},
+    {"scenario_id": "normal_dev_01", "group": "normal", "source_suite": "normal", "source_scenario_id": "normal_dev_01", "paired_normal_scenario_id": "normal_dev_01", "expected_feasibility": "unknown"},
+    {"scenario_id": "normal_dev_02", "group": "normal", "source_suite": "normal", "source_scenario_id": "normal_dev_02", "paired_normal_scenario_id": "normal_dev_02", "expected_feasibility": "unknown"},
+    {"scenario_id": "normal_dev_03", "group": "normal", "source_suite": "normal", "source_scenario_id": "normal_dev_03", "paired_normal_scenario_id": "normal_dev_03", "expected_feasibility": "unknown"},
+    {"scenario_id": "normal_dev_04", "group": "normal", "source_suite": "normal", "source_scenario_id": "normal_dev_04", "paired_normal_scenario_id": "normal_dev_04", "expected_feasibility": "unknown"},
+    {"scenario_id": "normal_dev_05", "group": "normal", "source_suite": "normal", "source_scenario_id": "normal_dev_05", "paired_normal_scenario_id": "normal_dev_05", "expected_feasibility": "unknown"},
+    {"scenario_id": "normal_dev_06", "group": "normal", "source_suite": "normal", "source_scenario_id": "normal_dev_06", "paired_normal_scenario_id": "normal_dev_06", "expected_feasibility": "unknown"},
+    {"scenario_id": "normal_dev_07", "group": "normal", "source_suite": "normal", "source_scenario_id": "normal_dev_07", "paired_normal_scenario_id": "normal_dev_07", "expected_feasibility": "unknown"},
+    {"scenario_id": "normal_dev_08", "group": "normal", "source_suite": "normal", "source_scenario_id": "normal_dev_08", "paired_normal_scenario_id": "normal_dev_08", "expected_feasibility": "unknown"},
+    {"scenario_id": "normal_dev_09", "group": "normal", "source_suite": "normal", "source_scenario_id": "normal_dev_09", "paired_normal_scenario_id": "normal_dev_09", "expected_feasibility": "unknown"},
+    {"scenario_id": "normal_dev_10", "group": "normal", "source_suite": "normal", "source_scenario_id": "normal_dev_10", "paired_normal_scenario_id": "normal_dev_10", "expected_feasibility": "unknown"},
+    {"scenario_id": "normal_dev_11", "group": "normal", "source_suite": "normal", "source_scenario_id": "normal_dev_11", "paired_normal_scenario_id": "normal_dev_11", "expected_feasibility": "unknown"},
+    {"scenario_id": "stress_dev_enrollment_surge_05", "group": "stress", "source_suite": "stress", "source_scenario_id": "stress_dev_enrollment_surge_05", "paired_normal_scenario_id": "normal_dev_01", "expected_feasibility": "unknown"},
+    {"scenario_id": "stress_dev_enrollment_surge_10", "group": "stress", "source_suite": "stress", "source_scenario_id": "stress_dev_enrollment_surge_10", "paired_normal_scenario_id": "normal_dev_02", "expected_feasibility": "unknown"},
+    {"scenario_id": "stress_dev_popular_surge_10", "group": "stress", "source_suite": "stress", "source_scenario_id": "stress_dev_popular_surge_10", "paired_normal_scenario_id": "normal_dev_03", "expected_feasibility": "unknown"},
+    {"scenario_id": "stress_dev_popular_surge_20", "group": "stress", "source_suite": "stress", "source_scenario_id": "stress_dev_popular_surge_20", "paired_normal_scenario_id": "normal_dev_04", "expected_feasibility": "unknown"},
+    {"scenario_id": "stress_dev_alternate_drop_25", "group": "stress", "source_suite": "stress", "source_scenario_id": "stress_dev_alternate_drop_25", "paired_normal_scenario_id": "normal_dev_05", "expected_feasibility": "unknown"},
+    {"scenario_id": "stress_dev_alternate_drop_50", "group": "stress", "source_suite": "stress", "source_scenario_id": "stress_dev_alternate_drop_50", "paired_normal_scenario_id": "normal_dev_06", "expected_feasibility": "unknown"},
+    {"scenario_id": "stress_dev_capacity_minus_05", "group": "stress", "source_suite": "stress", "source_scenario_id": "stress_dev_capacity_minus_05", "paired_normal_scenario_id": "normal_dev_07", "expected_feasibility": "unknown"},
+    {"scenario_id": "stress_dev_capacity_minus_10", "group": "stress", "source_suite": "stress", "source_scenario_id": "stress_dev_capacity_minus_10", "paired_normal_scenario_id": "normal_dev_08", "expected_feasibility": "unknown"},
+    {"scenario_id": "stress_dev_top_section_outage_1", "group": "stress", "source_suite": "stress", "source_scenario_id": "stress_dev_top_section_outage_1", "paired_normal_scenario_id": "normal_dev_09", "expected_feasibility": "unknown"},
+    {"scenario_id": "stress_dev_top_section_outage_3", "group": "stress", "source_suite": "stress", "source_scenario_id": "stress_dev_top_section_outage_3", "paired_normal_scenario_id": "normal_dev_10", "expected_feasibility": "unknown"},
+    {"scenario_id": "stress_dev_combined_moderate", "group": "stress", "source_suite": "stress", "source_scenario_id": "stress_dev_combined_moderate", "paired_normal_scenario_id": "normal_dev_11", "expected_feasibility": "unknown"},
+    {"scenario_id": "stress_dev_combined_severe", "group": "stress", "source_suite": "stress", "source_scenario_id": "stress_dev_combined_severe", "paired_normal_scenario_id": "normal_dev_reference_2026", "expected_feasibility": "unknown"},
+    {"scenario_id": "infeasible_dev_protected_primary_no_candidate", "group": "negative", "source_suite": "stress", "source_scenario_id": "infeasible_dev_protected_primary_no_candidate", "paired_normal_scenario_id": "normal_dev_01", "expected_feasibility": "structurally_infeasible"},
+    {"scenario_id": "infeasible_dev_min_load_max_four", "group": "negative", "source_suite": "stress", "source_scenario_id": "infeasible_dev_min_load_max_four", "paired_normal_scenario_id": "normal_dev_02", "expected_feasibility": "structurally_infeasible"},
+    {"scenario_id": "infeasible_dev_global_capacity_deficit", "group": "negative", "source_suite": "stress", "source_scenario_id": "infeasible_dev_global_capacity_deficit", "paired_normal_scenario_id": "normal_dev_03", "expected_feasibility": "structurally_infeasible"}
+  ],
+  "holdout_execution_allowed": false,
+  "tuning_allowed": false,
+  "notes": "Development-only CP-SAT measurement. Holdout scenarios remain frozen and are intentionally absent from this manifest. UNKNOWN is not INFEASIBLE and FEASIBLE is not OPTIMAL."
+}

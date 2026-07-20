@@ -640,6 +640,46 @@ are runner failures. No
 CP-SAT multiscenario evidence, holdout evidence, or generalization claim is
 made in Phase B.
 
+### Phase C: Frozen CP-SAT development evaluation
+
+Phase C is a separate measurement layer over the persisted Phase A normal and
+Phase B stress development artifacts. Its frozen manifest is
+`data/scenarios/cp_sat_development_evaluation_v1.json`. The manifest contains
+12 normal development scenarios, 12 ordinary stress scenarios, and 3
+structural negative controls. It contains no holdout scenario IDs. Normal and
+stress holdouts remain unviewed, unrun, and unavailable for tuning.
+
+The runner calls the formal `run_fair_cp_sat_solver` entry point directly. It
+does not regenerate students, re-run section planning, reapply transforms, run
+Greedy again, or copy CP-SAT model-building logic. Its configuration is frozen:
+solver seed `20260630`, one worker, 30-second bootstrap, 30 seconds per stage,
+300 seconds total, and no external persisted seed. The production stage order,
+objective order, per-stage trace, response hashes, status, bounds, and policy
+replay are exported. `UNKNOWN` means no incumbent was returned within budget;
+it is not `INFEASIBLE`. `FEASIBLE` means an incumbent without a proof of
+optimality; it is not `OPTIMAL`.
+
+For ordinary scenarios, a final assignment is publishable only if it comes from
+the current CP-SAT response and passes Final Schedule Policy Gate v1 and
+consistency checks. Missing assignments have null quality metrics. Negative
+scenarios validate their structural certificate before solving and must never
+produce a publishable assignment. This phase reports development behavior and
+controlled stress degradation only; it is not a final test, does not prove
+generalization, and does not claim that stress transforms cover all real-world
+perturbations. Capacity-only shortfall and negative certificates are diagnostics
+under their stated proof assumptions, not global optimization certificates for
+ordinary scenarios.
+
+Phase C status reporting keeps the raw OR-Tools terminal status and the stage
+that produced it. Only `full_model_feasibility_incumbent=INFEASIBLE` sets
+`solver_global_infeasibility_proven`; bootstrap/core or later fixed-objective
+stage failures do not. A later stage with fixed prior objectives is reported
+as `LEXICOGRAPHIC_STAGE_INFEASIBLE`, while structural negative certificates
+are recorded separately from solver proof. Missing assignments retain null
+quality metrics. Holdout readiness is blocked when a majority of normal
+development scenarios lack publishable assignments, so a vacuous policy pass
+cannot make a 0/12 development result ready for holdout.
+
 ## 14. Solver priorities
 
 Use lexicographic optimization:

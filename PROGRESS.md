@@ -34,6 +34,18 @@
 - Added fail-closed structural negative certificates for protected primary
   no-candidate, minimum logical load with at most four choices, and global
   logical capacity deficit scenarios.
+- Added the frozen Phase C CP-SAT development evaluation manifest and runner.
+  It consumes the persisted normal/stress development artifacts, verifies
+  canonical fingerprints and source SHA-256 manifests, calls the formal CP-SAT
+  solver with its frozen seed/budget configuration, records stage traces and
+  null-safe metrics, supports fail-closed resume, and writes evaluation
+  artifacts outside Git. Holdout scenarios remain unrun.
+- Added the Phase C status-semantics audit. Existing raw traces can be
+  classified without CP-SAT reruns, distinguishing full-model proof,
+  fixed-objective-stage infeasibility, bootstrap/core-stage outcomes, UNKNOWN,
+  and structural certificates. Holdout readiness now fails closed for a
+  majority of normal scenarios without publishable assignments; the current
+  cold-start result is 0/12 and is not evidence of global model infeasibility.
 
 ## Current Direction
 
@@ -53,6 +65,9 @@ authoritative input model for new development.
 
 ## Next Step
 
-Review the normal and stress development artifacts before explicitly freezing a
-holdout/CP-SAT Phase C evaluation. Do not treat ordinary stress results as a
-generalization claim or structural negative policy failures as runner errors.
+Review the Phase C CP-SAT development artifact and its status audit before
+explicitly approving any holdout evaluation. Do not treat UNKNOWN as
+INFEASIBLE, FEASIBLE as OPTIMAL, lexicographic-stage or bootstrap
+INFEASIBLE as a full-model proof, ordinary stress results as a generalization
+claim, or structural negative certificates as evidence about ordinary-year
+feasibility.

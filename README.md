@@ -159,3 +159,39 @@ allocation. In the negative summary, `policy_fail_count=4` means four Greedy
 result rows failed policy, not four individual violations. This phase does not
 run CP-SAT or holdout scenarios and does not change generator,
 section-planning, capacity, period-layout, or policy semantics.
+
+## Scenario Robustness Benchmark v1 Phase C: CP-SAT development evaluation
+
+Phase C uses only the persisted Phase A and Phase B development artifacts. It
+runs the production CP-SAT entry point with the frozen configuration in
+`data/scenarios/cp_sat_development_evaluation_v1.json`: solver seed
+`20260630`, one worker, 30-second bootstrap, 30 seconds per stage, 300
+seconds total, and no external persisted seed.
+
+```bash
+python -m src.cp_sat_robustness_runner \
+  --group all \
+  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1
+```
+
+Use `--dry-run` to inspect development IDs or `--verify-only` to validate
+source hashes and canonical fingerprints without solving. Phase C does not
+regenerate inputs, rerun Greedy, or run normal/stress holdouts. `UNKNOWN` is
+not `INFEASIBLE`, and `FEASIBLE` is not `OPTIMAL`; development results
+are not a final test or proof of generalization. See
+`docs/CP_SAT_ROBUSTNESS_EVALUATION.md` for the output contract.
+
+To audit an existing Phase C artifact without a solver rerun, write a separate
+audited summary directory:
+
+```bash
+python -m src.cp_sat_robustness_runner \
+  --audit-source-dir /path/to/cp-sat-development-v1 \
+  --audit-output-dir /path/to/cp-sat-development-v1-audited
+```
+
+The audit distinguishes full-model infeasibility proof, fixed-objective-stage
+infeasibility, bootstrap/core-stage results without a global proof, and
+`UNKNOWN` without a final assignment. Holdout readiness requires usable normal
+development assignments; a vacuous policy pass with zero assignments is not
+enough.
