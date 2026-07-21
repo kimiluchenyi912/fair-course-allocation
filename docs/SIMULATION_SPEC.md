@@ -680,6 +680,60 @@ quality metrics. Holdout readiness is blocked when a majority of normal
 development scenarios lack publishable assignments, so a vacuous policy pass
 cannot make a 0/12 development result ready for holdout.
 
+### Cold-start feasibility recovery Phase A
+
+`data/scenarios/cp_sat_cold_start_recovery_v1.json` defines a separate
+development-only recovery measurement. It keeps data generation and section
+planning in the persisted normal suite and uses solver seed `20260630`, one
+worker, 30-second internal repair, 30-second bootstrap/per-stage limits, and
+a 300-second total budget. `data_generation_seed` and
+`section_planning_seed` remain the source metadata values; the solver seed is
+never used to regenerate either input.
+
+The recovery path calls the official constrained-first Greedy baseline only
+to create an internal hint. It checks candidate coverage, duplicate and
+out-of-domain keys, structural replay, and a deterministic assignment hash.
+The hint is not a policy oracle, hard constraint, final assignment, or
+optimality proof. The full hard model remains unchanged. Only the explicit
+`internal_repair_feasibility` stage enables `repair_hint`; later stages keep
+their existing semantics. A valid solver response must pass the Final
+Schedule Policy Gate and consistency replay before it can seed or become the
+exported assignment. `UNKNOWN` with no incumbent remains distinct from
+`INFEASIBLE`; a validated incumbent retained after later stage uncertainty is
+reported separately as `UNKNOWN_WITH_VALIDATED_INCUMBENT`.
+
+The runner evaluates the stable reference first and stops if it is not
+publishable. It does not run the remaining normal scenarios, stress scenarios,
+or holdout scenarios after that gate fails. Recovery artifacts are written
+outside Git and include stage results, internal hint diagnostics, model
+invariance hashes, paired comparisons with Phase C and constrained-first, and
+an explicit readiness assessment. Any result is development diagnostics only;
+it does not prove generalization or global infeasibility.
+
+### Cold-start feasibility recovery Phase B
+
+`data/scenarios/cp_sat_cold_start_repair_probe_v1.json` defines a single
+stable-reference development probe. It reuses the persisted input whose
+canonical fingerprint is `2630 / 25106 / 17216 / 7890 / 463 / 482 / 165481`.
+Data generation and section planning remain seed `2026`; only the allocation
+solver uses seed `20260630`. The probe uses one worker and a 300-second total
+budget, with no external persisted seed, no legacy bootstrap, no later stage,
+and no stress or holdout execution.
+
+The probe builds the same full hard model and applies an unweighted Hamming
+distance objective only to its candidate assignment Boolean variables. A
+constrained-first Greedy result supplies a complete candidate hint, but the
+hint is advisory and is never encoded as an assignment constraint. Model
+component hashes after stripping objective and solution hint must match the
+no-distance model. Artifacts record the hint footprint, parameter audit,
+response hash, time to first solution, assignment changes, stage status and
+bound, and final policy/consistency validation. The exported assignment must
+come from the repair stage's solver response. `FEASIBLE` is an incumbent
+without an optimality proof; `UNKNOWN` is not `INFEASIBLE`.
+
+This is a development diagnostic, not a generalization claim and not a change
+to generator, section planning, capacity, period layout, or policy semantics.
+
 ## 14. Solver priorities
 
 Use lexicographic optimization:

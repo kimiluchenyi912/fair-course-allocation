@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import copy
 import random
 import time
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Iterable
 
@@ -155,6 +156,7 @@ class _HintSeed:
     replay_policy_pass: bool | None = None
     violation_students: int | None = None
     persisted: PersistedSolutionSeed | None = None
+    internal_audit: "_HintAudit | None" = None
 
 
 @dataclass(frozen=True)
@@ -183,6 +185,74 @@ class _HintAudit:
     initial_solution_seed_hint_coverage: float | None = None
     initial_solution_seed_unknown_keys: int = 0
     initial_solution_seed_duplicate_keys: int = 0
+    assignment_hash: str = ""
+    candidate_variables: int = 0
+    candidate_variables_hinted: int = 0
+    candidate_coverage_rate: float = 0.0
+    unhinted_variables: int = 0
+    out_of_domain_keys: int = 0
+    structural_issue_count: int = 0
+    primary_assigned: int | None = None
+    primary_unmet: int | None = None
+    logical_assigned: int | None = None
+    logical_gap: int | None = None
+    logical_full: int | None = None
+    gap_over_1: int | None = None
+    below_five: int | None = None
+    policy_violation_count: int | None = None
+    runtime_seconds: float = field(default=0.0, compare=False)
+
+
+@dataclass(frozen=True)
+class _InternalRepairRun:
+    build: _ModelBuild | None
+    solver: cp_model.CpSolver | None
+    status: CpSatSolveStatus
+    diagnostic: CpSatStageDiagnostic | None
+    selected_keys: tuple[_VariableKey, ...]
+    solve_time_seconds: float
+    hint_audit: _HintAudit = field(default_factory=lambda: _HintAudit())
+    model_before_hint_hash: str = ""
+    model_after_hint_hash: str = ""
+    model_invariance_equal: bool | None = None
+    model_invariance_without_distance_hash: str = ""
+    model_invariance_distance_stripped_hash: str = ""
+    model_invariance_distance_stripped_equal: bool | None = None
+    variable_hash: str = ""
+    domain_hash: str = ""
+    constraint_hash: str = ""
+    candidate_mapping_hash: str = ""
+    objective_strategy: str = "none"
+    time_to_first_solution_seconds: float | None = None
+    hamming_distance: int | None = None
+    greedy_assignments_removed: int | None = None
+    new_assignments_added: int | None = None
+    changed_students: int | None = None
+    changed_requests: int | None = None
+    changed_sections: int | None = None
+    response_proto_hash: str = ""
+    validation_failure: str = ""
+    validated: bool = False
+    baseline_result: object | None = None
+
+
+class _FirstSolutionCapture(cp_model.CpSolverSolutionCallback):
+    """Capture the first complete CP-SAT response without becoming the result."""
+
+    def __init__(self, build: _ModelBuild) -> None:
+        super().__init__()
+        self.build = build
+        self.selected_keys: tuple[_VariableKey, ...] = ()
+        self.time_to_first_solution_seconds: float | None = None
+
+    def on_solution_callback(self) -> None:
+        self.selected_keys = tuple(
+            key
+            for key in sorted(self.build.assignment_vars, key=lambda item: (item.request_key, item.section_id))
+            if self.BooleanValue(self.build.assignment_vars[key])
+        )
+        self.time_to_first_solution_seconds = float(self.WallTime())
+        self.StopSearch()
 
 
 @dataclass(frozen=True)
@@ -261,6 +331,10 @@ def run_fair_cp_sat_solver(
     enforce_final_schedule_hard_constraints: bool = True,
     logical_schedule_completion_enabled: bool = True,
     initial_solution_artifact_dir: Path | str | None = None,
+    internal_feasibility_hint_strategy: str = "none",
+    internal_repair_time_seconds: float | None = None,
+    internal_repair_objective_strategy: str = "none",
+    stop_after_first_valid_solution: bool = False,
 ) -> CpSatAllocationResult:
     """Solve the fixed-section allocation problem with CP-SAT.
 
@@ -270,6 +344,21 @@ def run_fair_cp_sat_solver(
     """
 
     started = time.perf_counter()
+    if internal_feasibility_hint_strategy not in {"none", "constrained_first"}:
+        raise ValueError(
+            "internal_feasibility_hint_strategy must be 'none' or 'constrained_first'"
+        )
+    if internal_repair_objective_strategy not in {"none", "hamming_to_constrained_first"}:
+        raise ValueError(
+            "internal_repair_objective_strategy must be 'none' or "
+            "'hamming_to_constrained_first'"
+        )
+    if internal_repair_objective_strategy != "none" and internal_feasibility_hint_strategy != "constrained_first":
+        raise ValueError("internal repair objective requires the constrained_first internal hint")
+    if stop_after_first_valid_solution and internal_repair_objective_strategy == "none":
+        raise ValueError("stop_after_first_valid_solution requires an internal repair objective")
+    if internal_feasibility_hint_strategy != "none" and not enforce_final_schedule_hard_constraints:
+        raise ValueError("internal feasibility recovery requires final schedule hard constraints")
     enrichment_stages = _enrichment_stages(
         logical_schedule_completion_enabled=logical_schedule_completion_enabled
     )
@@ -292,6 +381,14 @@ def run_fair_cp_sat_solver(
         hint_strategy="none",
     )
     full_feasibility_run = _FullModelFeasibilityRun(
+        build=None,
+        solver=None,
+        status=CpSatSolveStatus.SKIPPED,
+        diagnostic=None,
+        selected_keys=(),
+        solve_time_seconds=0.0,
+    )
+    internal_repair_run = _InternalRepairRun(
         build=None,
         solver=None,
         status=CpSatSolveStatus.SKIPPED,
@@ -354,7 +451,86 @@ def run_fair_cp_sat_solver(
             seed,
         )
 
-    if use_feasibility_bootstrap:
+    if internal_feasibility_hint_strategy == "constrained_first":
+        internal_repair_run = _run_internal_repair_feasibility(
+            allocation_input,
+            fallback_plans,
+            math_course_ids,
+            seed=seed,
+            max_time_seconds=(
+                internal_repair_time_seconds
+                if internal_repair_time_seconds is not None
+                else max_time_seconds_per_stage
+            ),
+            num_search_workers=num_search_workers,
+            log_search_progress=log_search_progress,
+            budget=budget,
+            objective_strategy=internal_repair_objective_strategy,
+            stop_after_first_solution=stop_after_first_valid_solution,
+        )
+        if internal_repair_run.diagnostic is not None:
+            diagnostics.append(internal_repair_run.diagnostic)
+        if internal_repair_objective_strategy != "none":
+            if internal_repair_run.validated:
+                return _validated_internal_repair_result(
+                    allocation_input=allocation_input,
+                    seed=seed,
+                    math_course_ids=math_course_ids,
+                    math_fallback_rules=math_fallback_rules,
+                    diagnostics=tuple(diagnostics),
+                    internal_repair_run=internal_repair_run,
+                    bootstrap_run=bootstrap_run,
+                    max_total_time_seconds=max_total_time_seconds,
+                    total_budget_exhausted=budget.exhausted,
+                    logical_schedule_completion_enabled=logical_schedule_completion_enabled,
+                    final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+                    solve_status=internal_repair_run.status,
+                )
+            return _empty_result(
+                seed,
+                internal_repair_run.status if internal_repair_run.status in {
+                    CpSatSolveStatus.INFEASIBLE,
+                    CpSatSolveStatus.MODEL_INVALID,
+                    CpSatSolveStatus.FEASIBLE,
+                    CpSatSolveStatus.OPTIMAL,
+                } else CpSatSolveStatus.UNKNOWN,
+                tuple(diagnostics),
+                internal_repair_run.build,
+                None,
+                bootstrap_run,
+                time.perf_counter() - started,
+                False,
+                external_hint_used=False,
+                stage_to_stage_hint_used=False,
+                max_total_time_seconds=max_total_time_seconds,
+                total_budget_exhausted=budget.exhausted,
+                skipped_stage_count=0,
+                core_hint_source="none",
+                final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+                internal_repair_run=internal_repair_run,
+            )
+        if internal_repair_run.status in {CpSatSolveStatus.INFEASIBLE, CpSatSolveStatus.MODEL_INVALID}:
+            return _empty_result(
+                seed,
+                internal_repair_run.status,
+                tuple(diagnostics),
+                internal_repair_run.build,
+                None,
+                bootstrap_run,
+                time.perf_counter() - started,
+                False,
+                external_hint_used=external_hint_used,
+                stage_to_stage_hint_used=False,
+                max_total_time_seconds=max_total_time_seconds,
+                total_budget_exhausted=budget.exhausted,
+                skipped_stage_count=0,
+                core_hint_source="none",
+                final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+                internal_repair_run=internal_repair_run,
+            )
+
+    repair_validated = internal_repair_run.validated
+    if use_feasibility_bootstrap and not repair_validated:
         bootstrap_run = _run_feasibility_bootstrap(
             allocation_input,
             seed=seed,
@@ -383,6 +559,7 @@ def run_fair_cp_sat_solver(
                 skipped_stage_count=0,
                 core_hint_source="none",
                 final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+                internal_repair_run=internal_repair_run,
             )
         if bootstrap_run.status == CpSatBootstrapStatus.MODEL_INVALID:
             return _empty_result(
@@ -401,25 +578,46 @@ def run_fair_cp_sat_solver(
                 skipped_stage_count=0,
                 core_hint_source="none",
                 final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+                internal_repair_run=internal_repair_run,
             )
 
     if enforce_final_schedule_hard_constraints:
-        full_feasibility_run = _run_full_model_feasibility_incumbent(
-            allocation_input,
-            fallback_plans,
-            math_course_ids,
-            seed=seed,
-            max_time_seconds=max_time_seconds_per_stage,
-            num_search_workers=num_search_workers,
-            log_search_progress=log_search_progress,
-            initial_hint_seed=full_model_hint_seed,
-            budget=budget,
-        )
+        if repair_validated:
+            full_feasibility_run = _FullModelFeasibilityRun(
+                build=None,
+                solver=None,
+                status=CpSatSolveStatus.SKIPPED,
+                diagnostic=None,
+                selected_keys=(),
+                solve_time_seconds=0.0,
+            )
+        else:
+            full_feasibility_run = _run_full_model_feasibility_incumbent(
+                allocation_input,
+                fallback_plans,
+                math_course_ids,
+                seed=seed,
+                max_time_seconds=max_time_seconds_per_stage,
+                num_search_workers=num_search_workers,
+                log_search_progress=log_search_progress,
+                initial_hint_seed=full_model_hint_seed,
+                budget=budget,
+            )
         if full_feasibility_run.diagnostic is not None:
             diagnostics.append(full_feasibility_run.diagnostic)
 
     core_build = _build_core_cp_sat_model(allocation_input, fallback_plans, math_course_ids, seed)
     incumbent_candidates: list[_IncumbentCandidate] = []
+    if internal_repair_run.selected_keys and internal_repair_run.validated:
+        incumbent_candidates.append(
+            _IncumbentCandidate(
+                candidate_id="internal_repair_feasibility",
+                source="internal_repair_feasibility",
+                model_scope=CpSatModelScope.ENRICHMENT,
+                selected_keys=internal_repair_run.selected_keys,
+                replay_policy_pass=True,
+            )
+        )
     if full_model_hint_seed.keys and full_model_hint_seed.replay_policy_pass is True:
         incumbent_candidates.append(
             _IncumbentCandidate(
@@ -442,6 +640,13 @@ def run_fair_cp_sat_solver(
         )
     core_initial_hint_source = set(external_hint_keys)
     core_hint_source = "constrained_first_partial" if external_hint_keys else "none"
+    if internal_repair_run.selected_keys:
+        core_initial_hint_source.update(internal_repair_run.selected_keys)
+        core_hint_source = (
+            f"internal_repair_feasibility+{core_hint_source}"
+            if core_hint_source != "none"
+            else "internal_repair_feasibility"
+        )
     if bootstrap_run.selected_keys:
         core_initial_hint_source.update(bootstrap_run.selected_keys)
         core_hint_source = (
@@ -477,6 +682,20 @@ def run_fair_cp_sat_solver(
     )
     diagnostics.extend(core_run.diagnostics)
     if core_run.solver is None:
+        if internal_repair_run.validated:
+            return _validated_internal_repair_result(
+                allocation_input=allocation_input,
+                seed=seed,
+                math_course_ids=math_course_ids,
+                math_fallback_rules=math_fallback_rules,
+                diagnostics=tuple(diagnostics),
+                internal_repair_run=internal_repair_run,
+                bootstrap_run=bootstrap_run,
+                max_total_time_seconds=max_total_time_seconds,
+                total_budget_exhausted=budget.exhausted,
+                logical_schedule_completion_enabled=logical_schedule_completion_enabled,
+                final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+            )
         skipped = _skipped_diagnostics(
             enrichment_stages,
             reason="time_budget_exhausted" if budget.exhausted else "no_incumbent",
@@ -501,6 +720,7 @@ def run_fair_cp_sat_solver(
             final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
             hint_audit=full_feasibility_run.hint_audit,
             hint_selected_keys=full_feasibility_run.selected_keys,
+            internal_repair_run=internal_repair_run,
         )
 
     required_core_stages = (
@@ -536,6 +756,20 @@ def run_fair_cp_sat_solver(
             core_run.incumbent_candidates,
         )
         if enforce_final_schedule_hard_constraints:
+            if internal_repair_run.validated:
+                return _validated_internal_repair_result(
+                    allocation_input=allocation_input,
+                    seed=seed,
+                    math_course_ids=math_course_ids,
+                    math_fallback_rules=math_fallback_rules,
+                    diagnostics=tuple(diagnostics),
+                    internal_repair_run=internal_repair_run,
+                    bootstrap_run=bootstrap_run,
+                    max_total_time_seconds=max_total_time_seconds,
+                    total_budget_exhausted=budget.exhausted,
+                    logical_schedule_completion_enabled=logical_schedule_completion_enabled,
+                    final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+                )
             final_status = (
                 CpSatSolveStatus.INFEASIBLE
                 if core_run.status == CpSatSolveStatus.INFEASIBLE
@@ -559,6 +793,7 @@ def run_fair_cp_sat_solver(
                 final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
                 hint_audit=full_feasibility_run.hint_audit,
                 hint_selected_keys=full_feasibility_run.selected_keys,
+                internal_repair_run=internal_repair_run,
             )
     else:
         core_selected = _selected_assignments(core_build, core_run.solver)
@@ -572,6 +807,7 @@ def run_fair_cp_sat_solver(
         )
         enrichment_hint_source = set(external_hint_keys)
         enrichment_hint_source.update(full_feasibility_run.selected_keys)
+        enrichment_hint_source.update(internal_repair_run.selected_keys)
         if stage_to_stage_hints:
             enrichment_hint_source.update(core_selected)
         enrichment_hint_keys = tuple(sorted(enrichment_hint_source, key=lambda item: (item.request_key, item.section_id)))
@@ -597,6 +833,20 @@ def run_fair_cp_sat_solver(
         final_stage_values = {**core_run.stage_values, **enrichment_run.stage_values}
         if final_solver is None:
             if enforce_final_schedule_hard_constraints:
+                if internal_repair_run.validated:
+                    return _validated_internal_repair_result(
+                        allocation_input=allocation_input,
+                        seed=seed,
+                        math_course_ids=math_course_ids,
+                        math_fallback_rules=math_fallback_rules,
+                        diagnostics=tuple(diagnostics),
+                        internal_repair_run=internal_repair_run,
+                        bootstrap_run=bootstrap_run,
+                        max_total_time_seconds=max_total_time_seconds,
+                        total_budget_exhausted=budget.exhausted,
+                        logical_schedule_completion_enabled=logical_schedule_completion_enabled,
+                        final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
+                    )
                 final_status = (
                     CpSatSolveStatus.INFEASIBLE
                     if enrichment_run.status == CpSatSolveStatus.INFEASIBLE
@@ -620,6 +870,7 @@ def run_fair_cp_sat_solver(
                     final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
                     hint_audit=full_feasibility_run.hint_audit,
                     hint_selected_keys=full_feasibility_run.selected_keys,
+                    internal_repair_run=internal_repair_run,
                 )
             final_build = core_build
             final_solver = core_run.solver
@@ -647,6 +898,7 @@ def run_fair_cp_sat_solver(
             final_schedule_hard_constraints_enabled=enforce_final_schedule_hard_constraints,
             hint_audit=full_feasibility_run.hint_audit,
             hint_selected_keys=full_feasibility_run.selected_keys,
+            internal_repair_run=internal_repair_run,
         )
 
     request_outcomes = _build_request_outcomes(allocation_input, final_build, final_solver, state)
@@ -794,12 +1046,199 @@ def run_fair_cp_sat_solver(
                 for source in core_run.selected_candidate_sources + enrichment_run.selected_candidate_sources
                 if "persisted_feasible_seed" in source
             ),
+            internal_feasibility_hint_strategy=internal_feasibility_hint_strategy,
+            internal_repair_objective_strategy=internal_repair_run.objective_strategy,
+            internal_repair_hint_enabled=internal_feasibility_hint_strategy == "constrained_first",
+            internal_repair_status=(internal_repair_run.status if internal_feasibility_hint_strategy != "none" else None),
+            internal_repair_incumbent_found=bool(internal_repair_run.validated),
+            internal_repair_runtime_seconds=round(internal_repair_run.solve_time_seconds, 6),
+            internal_repair_time_to_first_solution_seconds=internal_repair_run.time_to_first_solution_seconds,
+            internal_repair_hamming_distance=internal_repair_run.hamming_distance,
+            internal_repair_greedy_assignments_removed=internal_repair_run.greedy_assignments_removed,
+            internal_repair_new_assignments_added=internal_repair_run.new_assignments_added,
+            internal_repair_changed_students=internal_repair_run.changed_students,
+            internal_repair_changed_requests=internal_repair_run.changed_requests,
+            internal_repair_changed_sections=internal_repair_run.changed_sections,
+            internal_repair_response_proto_hash=internal_repair_run.response_proto_hash,
+            internal_repair_validation_failure=internal_repair_run.validation_failure,
+            internal_hint_assignment_hash=internal_repair_run.hint_audit.assignment_hash,
+            internal_hint_primary_assigned=internal_repair_run.hint_audit.primary_assigned,
+            internal_hint_primary_unmet=internal_repair_run.hint_audit.primary_unmet,
+            internal_hint_logical_assigned=internal_repair_run.hint_audit.logical_assigned,
+            internal_hint_logical_gap=internal_repair_run.hint_audit.logical_gap,
+            internal_hint_logical_full=internal_repair_run.hint_audit.logical_full,
+            internal_hint_gap_over_1=internal_repair_run.hint_audit.gap_over_1,
+            internal_hint_below_five=internal_repair_run.hint_audit.below_five,
+            internal_hint_policy_violation_count=internal_repair_run.hint_audit.policy_violation_count,
+            internal_hint_structural_issue_count=internal_repair_run.hint_audit.structural_issue_count,
+            internal_hint_candidate_variables=internal_repair_run.hint_audit.candidate_variables,
+            internal_hint_candidate_variables_hinted=internal_repair_run.hint_audit.candidate_variables_hinted,
+            internal_hint_candidate_coverage_rate=internal_repair_run.hint_audit.candidate_coverage_rate,
+            internal_hint_auxiliary_variables_hinted=internal_repair_run.hint_audit.auxiliary_variables_derived,
+            internal_hint_unhinted_variables=internal_repair_run.hint_audit.unhinted_variables,
+            internal_hint_duplicate_keys=internal_repair_run.hint_audit.duplicate_keys,
+            internal_hint_out_of_domain_keys=internal_repair_run.hint_audit.out_of_domain_keys,
+            model_invariance_before_hint_hash=internal_repair_run.model_before_hint_hash,
+            model_invariance_after_hint_hash=internal_repair_run.model_after_hint_hash,
+            model_invariance_equal=internal_repair_run.model_invariance_equal,
+            model_invariance_without_distance_hash=internal_repair_run.model_invariance_without_distance_hash,
+            model_invariance_distance_stripped_hash=internal_repair_run.model_invariance_distance_stripped_hash,
+            model_invariance_distance_stripped_equal=internal_repair_run.model_invariance_distance_stripped_equal,
+            internal_repair_variable_hash=internal_repair_run.variable_hash,
+            internal_repair_domain_hash=internal_repair_run.domain_hash,
+            internal_repair_constraint_hash=internal_repair_run.constraint_hash,
+            internal_repair_candidate_mapping_hash=internal_repair_run.candidate_mapping_hash,
         ),
         assignments=baseline_result.assignments,
         mandatory_fallback_outcomes=baseline_result.mandatory_fallback_outcomes,
         request_outcomes=baseline_result.request_outcomes,
         student_outcomes=baseline_result.student_outcomes,
         policy_report=baseline_result.policy_report,
+        math_policy_report=math_report,
+        section_roster_summary=baseline_result.section_roster_summary,
+        consistency_issues=baseline_result.consistency_issues,
+    )
+
+
+def _validated_internal_repair_result(
+    *,
+    allocation_input: CanonicalAllocationInput,
+    seed: int,
+    math_course_ids: tuple[str, ...],
+    math_fallback_rules: tuple[MathFallbackRule, ...],
+    diagnostics: tuple[CpSatStageDiagnostic, ...],
+    internal_repair_run: _InternalRepairRun,
+    bootstrap_run: _BootstrapRun,
+    max_total_time_seconds: float | None,
+    total_budget_exhausted: bool,
+    logical_schedule_completion_enabled: bool,
+    final_schedule_hard_constraints_enabled: bool,
+    solve_status: CpSatSolveStatus | None = None,
+) -> CpSatAllocationResult:
+    """Preserve a validated repair incumbent when later stages have no answer."""
+    if not internal_repair_run.validated or internal_repair_run.build is None or internal_repair_run.solver is None:
+        raise ValueError("validated internal repair result is unavailable")
+    baseline_result = internal_repair_run.baseline_result
+    if baseline_result is None:
+        raise ValueError("validated internal repair result has no replayed baseline")
+    build = internal_repair_run.build
+    solver = internal_repair_run.solver
+    final_policy = evaluate_final_schedule_policy(ALGORITHM_NAME, baseline_result.student_outcomes)
+    objective_values = _objective_values(
+        build,
+        solver,
+        {},
+        logical_schedule_completion_enabled=logical_schedule_completion_enabled,
+    )
+    if logical_schedule_completion_enabled:
+        _validate_logical_completion_consistency(
+            baseline_result.student_outcomes,
+            final_policy,
+            objective_values.logical_assigned_course_count,
+            None,
+        )
+    math_report = evaluate_math_policy(
+        allocation_input,
+        baseline_result,
+        tuple(sorted(math_course_ids)),
+        math_fallback_rules,
+    )
+    proto = build.model.Proto()
+    hint = internal_repair_run.hint_audit
+    return CpSatAllocationResult(
+        algorithm_name=ALGORITHM_NAME,
+        seed=int(seed),
+        solve_status=solve_status or CpSatSolveStatus.UNKNOWN_WITH_VALIDATED_INCUMBENT,
+        lexicographic_optimality_proven=False,
+        stage_diagnostics=diagnostics,
+        objective_values=objective_values,
+        model_stats=CpSatModelStats(
+            total_variables=len(proto.variables),
+            total_constraints=len(proto.constraints),
+            build_time_seconds=round(build.build_time_seconds, 6),
+            solve_time_seconds=round(internal_repair_run.solve_time_seconds, 6),
+            enrichment_model_variable_count=len(proto.variables),
+            enrichment_model_constraint_count=len(proto.constraints),
+            bootstrap_enabled=bootstrap_run.status != CpSatBootstrapStatus.DISABLED,
+            bootstrap_status=bootstrap_run.status,
+            bootstrap_variable_count=_bootstrap_variable_count(bootstrap_run),
+            bootstrap_constraint_count=_bootstrap_constraint_count(bootstrap_run),
+            bootstrap_build_time_seconds=round(_bootstrap_build_time(bootstrap_run), 6),
+            bootstrap_solve_time_seconds=round(bootstrap_run.solve_time_seconds, 6),
+            bootstrap_hint_strategy=bootstrap_run.hint_strategy,
+            bootstrap_incumbent_found=bootstrap_run.status == CpSatBootstrapStatus.FEASIBLE_FOUND,
+            max_total_time_seconds=max_total_time_seconds,
+            total_budget_exhausted=total_budget_exhausted,
+            skipped_stage_count=sum(item.skipped for item in diagnostics),
+            enrichment_build_time_seconds=round(build.build_time_seconds, 6),
+            total_build_time_seconds=round(build.build_time_seconds, 6),
+            total_solve_time_seconds=round(internal_repair_run.solve_time_seconds, 6),
+            warm_start_strategy="internal_repair_feasibility",
+            external_hint_used=False,
+            stage_to_stage_hint_used=False,
+            final_schedule_hard_constraints_enabled=final_schedule_hard_constraints_enabled,
+            post_solve_policy_gate_pass=final_policy.summary.final_schedule_policy_pass,
+            logical_schedule_completion_objective_enabled=False,
+            hint_source=hint.source,
+            hint_total_model_variables=hint.total_model_variables,
+            hint_variables_supplied=hint.variables_supplied,
+            hint_coverage_rate=hint.coverage_rate,
+            hint_selected_variables=hint.selected_variables,
+            hint_zero_variables=hint.zero_variables,
+            hint_unknown_or_unmapped_assignments=hint.unknown_or_unmapped_assignments,
+            hint_duplicate_keys=hint.duplicate_keys,
+            hint_replay_policy_pass=hint.replay_policy_pass,
+            full_model_seed_strategy=hint.source,
+            full_model_seed_policy_pass=hint.replay_policy_pass,
+            full_model_seed_violation_students=hint.violation_students,
+            internal_feasibility_hint_strategy="constrained_first",
+            internal_repair_objective_strategy=internal_repair_run.objective_strategy,
+            internal_repair_hint_enabled=True,
+            internal_repair_status=internal_repair_run.status,
+            internal_repair_incumbent_found=True,
+            internal_repair_runtime_seconds=round(internal_repair_run.solve_time_seconds, 6),
+            internal_repair_time_to_first_solution_seconds=internal_repair_run.time_to_first_solution_seconds,
+            internal_repair_hamming_distance=internal_repair_run.hamming_distance,
+            internal_repair_greedy_assignments_removed=internal_repair_run.greedy_assignments_removed,
+            internal_repair_new_assignments_added=internal_repair_run.new_assignments_added,
+            internal_repair_changed_students=internal_repair_run.changed_students,
+            internal_repair_changed_requests=internal_repair_run.changed_requests,
+            internal_repair_changed_sections=internal_repair_run.changed_sections,
+            internal_repair_response_proto_hash=internal_repair_run.response_proto_hash,
+            internal_repair_validation_failure=internal_repair_run.validation_failure,
+            internal_hint_assignment_hash=hint.assignment_hash,
+            internal_hint_primary_assigned=hint.primary_assigned,
+            internal_hint_primary_unmet=hint.primary_unmet,
+            internal_hint_logical_assigned=hint.logical_assigned,
+            internal_hint_logical_gap=hint.logical_gap,
+            internal_hint_logical_full=hint.logical_full,
+            internal_hint_gap_over_1=hint.gap_over_1,
+            internal_hint_below_five=hint.below_five,
+            internal_hint_policy_violation_count=hint.policy_violation_count,
+            internal_hint_structural_issue_count=hint.structural_issue_count,
+            internal_hint_candidate_variables=hint.candidate_variables,
+            internal_hint_candidate_variables_hinted=hint.candidate_variables_hinted,
+            internal_hint_candidate_coverage_rate=hint.candidate_coverage_rate,
+            internal_hint_auxiliary_variables_hinted=hint.auxiliary_variables_derived,
+            internal_hint_unhinted_variables=hint.unhinted_variables,
+            internal_hint_duplicate_keys=hint.duplicate_keys,
+            internal_hint_out_of_domain_keys=hint.out_of_domain_keys,
+            model_invariance_before_hint_hash=internal_repair_run.model_before_hint_hash,
+            model_invariance_after_hint_hash=internal_repair_run.model_after_hint_hash,
+            model_invariance_equal=internal_repair_run.model_invariance_equal,
+            model_invariance_without_distance_hash=internal_repair_run.model_invariance_without_distance_hash,
+            model_invariance_distance_stripped_hash=internal_repair_run.model_invariance_distance_stripped_hash,
+            model_invariance_distance_stripped_equal=internal_repair_run.model_invariance_distance_stripped_equal,
+            internal_repair_variable_hash=internal_repair_run.variable_hash,
+            internal_repair_domain_hash=internal_repair_run.domain_hash,
+            internal_repair_constraint_hash=internal_repair_run.constraint_hash,
+            internal_repair_candidate_mapping_hash=internal_repair_run.candidate_mapping_hash,
+        ),
+        assignments=baseline_result.assignments,
+        mandatory_fallback_outcomes=baseline_result.mandatory_fallback_outcomes,
+        request_outcomes=baseline_result.request_outcomes,
+        student_outcomes=baseline_result.student_outcomes,
+        policy_report=final_policy,
         math_policy_report=math_report,
         section_roster_summary=baseline_result.section_roster_summary,
         consistency_issues=baseline_result.consistency_issues,
@@ -935,6 +1374,308 @@ def _validate_candidates_for_request(
             raise ValueError(f"candidate section {section_id} has wrong period units for {request.request_key}")
         if tuple(sorted(section.course_ids)) != tuple(sorted(request.course_ids)):
             raise ValueError(f"candidate section {section_id} has wrong course identity for {request.request_key}")
+
+
+def _run_internal_repair_feasibility(
+    allocation_input: CanonicalAllocationInput,
+    fallback_plans: tuple[_FallbackPlan, ...],
+    math_course_ids: tuple[str, ...],
+    *,
+    seed: int,
+    max_time_seconds: float,
+    num_search_workers: int,
+    log_search_progress: bool,
+    budget: _GlobalTimeBudget,
+    objective_strategy: str = "none",
+    stop_after_first_solution: bool = False,
+) -> _InternalRepairRun:
+    """Try the unchanged full hard model with an internal Greedy hint.
+
+    The constrained-first assignment is deliberately treated as a hint only.
+    It may violate policy, but it must be structurally replayable.  Only the
+    CP-SAT response can become a validated incumbent or final assignment.
+    """
+    hint_seed = _constrained_first_full_hint_seed(
+        allocation_input,
+        tuple(
+            MathFallbackRule(
+                plan.source_request.candidate_key,
+                plan.fallback_request.candidate_key,
+                "mandatory_fallback",
+                True,
+                "internal_repair",
+            )
+            for plan in fallback_plans
+        ),
+        math_course_ids,
+        seed,
+    )
+    build = _build_full_feasibility_cp_sat_model(
+        allocation_input,
+        fallback_plans,
+        math_course_ids,
+        seed,
+    )
+    effective_limit = budget.effective_limit(max_time_seconds)
+    remaining_at_start = budget.remaining()
+    if effective_limit <= 0:
+        return _InternalRepairRun(
+            build=build,
+            solver=None,
+            status=CpSatSolveStatus.SKIPPED,
+            diagnostic=_skipped_diagnostic(
+                CpSatStageName.INTERNAL_REPAIR_FEASIBILITY,
+                CpSatModelScope.ENRICHMENT,
+                "time_budget_exhausted",
+                remaining_at_start,
+                effective_limit,
+            ),
+            selected_keys=(),
+            solve_time_seconds=0.0,
+            hint_audit=hint_seed.internal_audit or _HintAudit(source=hint_seed.source),
+            model_invariance_equal=None,
+            objective_strategy=objective_strategy,
+        )
+
+    without_distance_hash = _model_proto_without_solution_hint_hash(build.model)
+    if objective_strategy == "hamming_to_constrained_first":
+        distance = _hamming_distance_expression(build, hint_seed.keys)
+        build.model.Minimize(distance)
+    before_hint_hash = _model_proto_without_solution_hint_hash(build.model)
+    # The objective is appended after the base model is built and before any
+    # hint is written. Reusing the base hash avoids a second huge proto copy.
+    distance_stripped_hash = without_distance_hash
+    variable_hash, domain_hash, constraint_hash, candidate_mapping_hash = _model_component_hashes(build)
+    mapped_keys = _mapped_hint_keys(build.assignment_vars, hint_seed.keys)
+    values, variables = _full_model_hint_values(build, mapped_keys, require_complete=False)
+    hint_audit = _audit_full_model_hint(build, hint_seed, values)
+    hint_audit = replace(
+        hint_audit,
+        assignment_hash=hint_seed.internal_audit.assignment_hash if hint_seed.internal_audit else "",
+        candidate_variables=len(build.assignment_vars),
+        candidate_variables_hinted=sum(index in values for index in (var.Index() for var in build.assignment_vars.values())),
+        candidate_coverage_rate=(
+            sum(index in values for index in (var.Index() for var in build.assignment_vars.values()))
+            / len(build.assignment_vars)
+            if build.assignment_vars
+            else 1.0
+        ),
+        unhinted_variables=max(len(build.model.Proto().variables) - len(values), 0),
+        out_of_domain_keys=sum(key not in build.assignment_vars for key in set(hint_seed.keys)),
+        primary_assigned=hint_seed.internal_audit.primary_assigned if hint_seed.internal_audit else None,
+        primary_unmet=hint_seed.internal_audit.primary_unmet if hint_seed.internal_audit else None,
+        logical_assigned=hint_seed.internal_audit.logical_assigned if hint_seed.internal_audit else None,
+        logical_gap=hint_seed.internal_audit.logical_gap if hint_seed.internal_audit else None,
+        logical_full=hint_seed.internal_audit.logical_full if hint_seed.internal_audit else None,
+        gap_over_1=hint_seed.internal_audit.gap_over_1 if hint_seed.internal_audit else None,
+        below_five=hint_seed.internal_audit.below_five if hint_seed.internal_audit else None,
+        policy_violation_count=hint_seed.internal_audit.policy_violation_count if hint_seed.internal_audit else None,
+        structural_issue_count=hint_seed.internal_audit.structural_issue_count if hint_seed.internal_audit else 0,
+        runtime_seconds=hint_seed.internal_audit.runtime_seconds if hint_seed.internal_audit else 0.0,
+    )
+    _apply_complete_model_hint(
+        build,
+        mapped_keys,
+        values=values,
+        variables=variables,
+        allow_partial=True,
+    )
+    after_hash = _model_proto_without_solution_hint_hash(build.model)
+    solver = _new_solver(
+        effective_limit,
+        num_search_workers,
+        log_search_progress,
+        seed,
+        repair_hint=True,
+    )
+    solver.parameters.stop_after_first_solution = bool(stop_after_first_solution)
+    solve_started = time.perf_counter()
+    capture = _FirstSolutionCapture(build) if stop_after_first_solution else None
+    raw_status = (
+        solver.solve(build.model, capture)
+        if capture is not None
+        else solver.Solve(build.model)
+    )
+    solve_time = time.perf_counter() - solve_started
+    budget.refresh()
+    status = _solve_status(raw_status)
+    diagnostic = _stage_diagnostic(
+        CpSatStageName.INTERNAL_REPAIR_FEASIBILITY,
+        CpSatModelScope.ENRICHMENT,
+        status,
+        solver,
+        conditional_on_unproven_incumbent=False,
+        fixed_higher_priority_values=(),
+        objective_descriptor_hash=_objective_descriptor_hash(build.model),
+        remaining_global_budget_at_start_seconds=remaining_at_start,
+        effective_time_limit_seconds=effective_limit,
+        repair_hint_enabled=True,
+        hint_assignment_hash=hint_audit.assignment_hash,
+    )
+    selected = _selected_assignments(build, solver) if status in {CpSatSolveStatus.OPTIMAL, CpSatSolveStatus.FEASIBLE} else ()
+    first_solution_time = capture.time_to_first_solution_seconds if capture is not None else None
+    validation_failure = ""
+    baseline_result = None
+    validated = False
+    if status in {CpSatSolveStatus.OPTIMAL, CpSatSolveStatus.FEASIBLE}:
+        try:
+            state = _replay_solution(allocation_input, build, selected)
+            request_outcomes = _build_request_outcomes(allocation_input, build, solver, state)
+            fallback_outcomes = _build_fallback_outcomes(build, solver, state)
+            baseline_result = _finalize_baseline_result(
+                ALGORITHM_NAME,
+                allocation_input,
+                seed,
+                (),
+                state,
+                request_outcomes,
+                fallback_outcomes,
+            )
+            policy_report = evaluate_final_schedule_policy(ALGORITHM_NAME, baseline_result.student_outcomes)
+            validated = policy_report.summary.final_schedule_policy_pass and not baseline_result.consistency_issues
+            if not validated:
+                validation_failure = (
+                    "policy_or_consistency_failure: "
+                    f"policy_pass={policy_report.summary.final_schedule_policy_pass}, "
+                    f"consistency_issues={len(baseline_result.consistency_issues)}"
+                )
+        except Exception as exc:
+            validation_failure = f"response_replay_failure: {type(exc).__name__}: {exc}"
+    distance_stats = _assignment_distance_stats(
+        allocation_input,
+        hint_seed.keys,
+        selected,
+        build.requests_by_key,
+    )
+    return _InternalRepairRun(
+        build=build,
+        solver=solver if status in {CpSatSolveStatus.OPTIMAL, CpSatSolveStatus.FEASIBLE} else None,
+        status=status,
+        diagnostic=diagnostic,
+        selected_keys=selected if validated else (),
+        solve_time_seconds=solve_time,
+        hint_audit=hint_audit,
+        model_before_hint_hash=before_hint_hash,
+        model_after_hint_hash=after_hash,
+        model_invariance_equal=without_distance_hash == after_hash if objective_strategy == "none" else True,
+        model_invariance_without_distance_hash=without_distance_hash,
+        model_invariance_distance_stripped_hash=distance_stripped_hash,
+        model_invariance_distance_stripped_equal=without_distance_hash == distance_stripped_hash,
+        variable_hash=variable_hash,
+        domain_hash=domain_hash,
+        constraint_hash=constraint_hash,
+        candidate_mapping_hash=candidate_mapping_hash,
+        objective_strategy=objective_strategy,
+        time_to_first_solution_seconds=first_solution_time,
+        hamming_distance=distance_stats["hamming_distance"],
+        greedy_assignments_removed=distance_stats["greedy_assignments_removed"],
+        new_assignments_added=distance_stats["new_assignments_added"],
+        changed_students=distance_stats["changed_students"],
+        changed_requests=distance_stats["changed_requests"],
+        changed_sections=distance_stats["changed_sections"],
+        response_proto_hash=diagnostic.response_proto_hash if diagnostic else "",
+        validation_failure=validation_failure,
+        validated=validated,
+        baseline_result=baseline_result if validated else None,
+    )
+
+
+def _hamming_distance_expression(
+    build: _ModelBuild,
+    greedy_keys: tuple[_VariableKey, ...],
+) -> cp_model.LinearExpr:
+    """Build an unweighted symmetric-difference objective over candidates only."""
+    selected = set(greedy_keys)
+    terms = [
+        (1 - variable) if key in selected else variable
+        for key, variable in sorted(build.assignment_vars.items(), key=lambda item: (item[0].request_key, item[0].section_id))
+    ]
+    return cp_model.LinearExpr.Sum(terms) if terms else 0
+
+
+def _assignment_distance_stats(
+    allocation_input: CanonicalAllocationInput,
+    greedy_keys: tuple[_VariableKey, ...],
+    selected_keys: tuple[_VariableKey, ...],
+    requests_by_key: dict[str, LogicalRequest] | None = None,
+) -> dict[str, int | None]:
+    if not selected_keys:
+        return {
+            "hamming_distance": None,
+            "greedy_assignments_removed": None,
+            "new_assignments_added": None,
+            "changed_students": None,
+            "changed_requests": None,
+            "changed_sections": None,
+        }
+    greedy = set(greedy_keys)
+    selected = set(selected_keys)
+    removed = greedy - selected
+    added = selected - greedy
+    request_by_key = requests_by_key or {
+        request.request_key: request for request in allocation_input.logical_requests
+    }
+    changed_request_keys = {key.request_key for key in removed | added}
+    changed_students = {
+        request_by_key[key.request_key].student_id
+        for key in removed | added
+        if key.request_key in request_by_key
+    }
+    changed_sections = {key.section_id for key in removed | added}
+    return {
+        "hamming_distance": len(removed) + len(added),
+        "greedy_assignments_removed": len(removed),
+        "new_assignments_added": len(added),
+        "changed_students": len(changed_students),
+        "changed_requests": len(changed_request_keys),
+        "changed_sections": len(changed_sections),
+    }
+
+
+def _model_proto_without_objective_and_solution_hint_hash(model: cp_model.CpModel) -> str:
+    proto = copy.deepcopy(model.Proto())
+    proto.solution_hint.vars.clear()
+    proto.solution_hint.values.clear()
+    proto.objective.vars.clear()
+    proto.objective.coeffs.clear()
+    proto.objective.clear_offset()
+    proto.objective.clear_scaling_factor()
+    proto.objective.clear_integer_before_offset()
+    proto.objective.clear_integer_after_offset()
+    proto.objective.clear_integer_scaling_factor()
+    proto.objective.clear_scaling_was_exact()
+    text = str(proto).replace("objective {\n}\n", "").replace("solution_hint {\n}\n", "")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _model_component_hashes(
+    build: _ModelBuild,
+) -> tuple[str, str, str, str]:
+    proto = build.model.Proto()
+    def digest(rows: Iterable[object]) -> str:
+        hasher = hashlib.sha256()
+        for row in rows:
+            hasher.update(repr(row).encode("utf-8"))
+            hasher.update(b"\0")
+        return hasher.hexdigest()
+
+    variable_hash = digest(
+        (str(item.name), tuple(int(value) for value in item.domain))
+        for item in proto.variables
+    )
+    domain_hash = digest(
+        tuple(int(value) for value in item.domain)
+        for item in proto.variables
+    )
+    constraint_hash = digest(str(item) for item in proto.constraints)
+    candidate_mapping_hash = digest(
+        (key.request_key, key.section_id, int(variable.Index()))
+        for key, variable in sorted(
+            build.assignment_vars.items(),
+            key=lambda item: (item[0].request_key, item[0].section_id),
+        )
+    )
+    return variable_hash, domain_hash, constraint_hash, candidate_mapping_hash
 
 
 def _model_invalid_bootstrap_run(hint_strategy: str) -> _BootstrapRun:
@@ -2030,6 +2771,8 @@ def _audit_complete_hint(
 def _full_model_hint_values(
     build: _ModelBuild,
     selected_keys: tuple[_VariableKey, ...],
+    *,
+    require_complete: bool = True,
 ) -> tuple[dict[int, int], dict[int, cp_model.IntVar]]:
     """Derive all auxiliary Boolean values implied by a known assignment.
 
@@ -2099,7 +2842,7 @@ def _full_model_hint_values(
             continue
         if len(proto_var.domain) == 2 and proto_var.domain[0] == proto_var.domain[1]:
             add(build.model.GetIntVarFromProtoIndex(index), int(proto_var.domain[0]))
-    if len(values) != expected:
+    if require_complete and len(values) != expected:
         missing = expected - len(values)
         raise ValueError(f"Known assignment did not map {missing} CP-SAT model variables")
     return values, variables
@@ -2149,6 +2892,7 @@ def _apply_complete_model_hint(
     *,
     values: dict[int, int] | None = None,
     variables: dict[int, cp_model.IntVar] | None = None,
+    allow_partial: bool = False,
 ) -> None:
     if len(selected_keys) != len(set(selected_keys)):
         raise ValueError("Duplicate CP-SAT full-model hint keys")
@@ -2156,15 +2900,28 @@ def _apply_complete_model_hint(
     if unknown:
         raise ValueError(f"Unmapped CP-SAT full-model hint keys: {unknown[:3]!r}")
     if values is None or variables is None:
-        values, variables = _full_model_hint_values(build, selected_keys)
+        values, variables = _full_model_hint_values(
+            build,
+            selected_keys,
+            require_complete=not allow_partial,
+        )
     del variables
     expected = set(range(len(build.model.Proto().variables)))
-    if set(values) != expected:
+    if not allow_partial and set(values) != expected:
         raise ValueError(
             "Complete CP-SAT model hint does not cover every model variable: "
             f"expected {len(expected)}, got {len(values)}"
         )
     _write_hint_values(build.model, values)
+
+
+def _model_proto_without_solution_hint_hash(model: cp_model.CpModel) -> str:
+    """Hash model structure while excluding the mutable CP-SAT hint field."""
+    proto = copy.deepcopy(model.Proto())
+    proto.solution_hint.vars.clear()
+    proto.solution_hint.values.clear()
+    text = str(proto).replace("solution_hint {\n}\n", "")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _selected_bootstrap_assignments(
@@ -2396,6 +3153,7 @@ def _constrained_first_full_hint_seed(
     """
     from .constrained_first_baseline import run_constrained_first_baseline
 
+    started = time.perf_counter()
     greedy = run_constrained_first_baseline(
         allocation_input,
         seed,
@@ -2407,12 +3165,61 @@ def _constrained_first_full_hint_seed(
         _VariableKey(assignment.request_key, assignment.linked_section_group_id)
         for assignment in greedy.assignments
     )
+    primary_outcomes = tuple(
+        item
+        for item in getattr(greedy, "request_outcomes", ())
+        if item.request_type == "primary"
+    )
+    logical_assigned = sum(int(item.assigned_logical_course_count or 0) for item in greedy.student_outcomes)
+    target_logical = sum(
+        int(item.target_logical_course_count or item.target_period_units)
+        for item in greedy.student_outcomes
+    )
+    logical_gap = sum(
+        max(
+            int(item.target_logical_course_count or item.target_period_units)
+            - int(item.assigned_logical_course_count or 0),
+            0,
+        )
+        for item in greedy.student_outcomes
+    )
+    final_policy = evaluate_final_schedule_policy(ALGORITHM_NAME, greedy.student_outcomes)
+    internal_audit = _HintAudit(
+        source="constrained_first_internal",
+        assignment_hash=_assignment_records_hash(greedy.assignments),
+        duplicate_keys=len(keys) - len(set(keys)),
+        primary_assigned=sum(item.status == PrimaryRequestStatus.ASSIGNED for item in primary_outcomes),
+        primary_unmet=sum(item.status != PrimaryRequestStatus.ASSIGNED for item in primary_outcomes),
+        logical_assigned=logical_assigned,
+        logical_gap=logical_gap,
+        logical_full=sum(gap == 0 for gap in (
+            int(item.logical_schedule_gap_count or 0) for item in greedy.student_outcomes
+        )),
+        gap_over_1=sum(int(item.logical_schedule_gap_count or 0) > 1 for item in greedy.student_outcomes),
+        below_five=sum(int(item.assigned_logical_course_count or 0) < 5 for item in greedy.student_outcomes),
+        policy_violation_count=final_policy.summary.violating_student_count,
+        structural_issue_count=len(getattr(greedy, "consistency_issues", ())),
+        runtime_seconds=time.perf_counter() - started,
+    )
     return _HintSeed(
         source="constrained_first_greedy_full",
         keys=tuple(sorted(keys, key=lambda item: (item.request_key, item.section_id))),
         replay_policy_pass=policy_report.summary.final_schedule_policy_pass,
         violation_students=policy_report.summary.violating_student_count,
+        internal_audit=internal_audit,
     )
+
+
+def _assignment_records_hash(assignments: Iterable[object]) -> str:
+    rows = sorted(
+        (
+            str(item.request_key),
+            str(item.linked_section_group_id),
+            str(getattr(item, "assignment_key", "")),
+        )
+        for item in assignments
+    )
+    return hashlib.sha256(repr(rows).encode("utf-8")).hexdigest()
 
 
 def _stage_diagnostic(
@@ -2426,6 +3233,8 @@ def _stage_diagnostic(
     objective_descriptor_hash: str = "",
     remaining_global_budget_at_start_seconds: float | None = None,
     effective_time_limit_seconds: float | None = None,
+    repair_hint_enabled: bool = False,
+    hint_assignment_hash: str = "",
 ) -> CpSatStageDiagnostic:
     has_solution = status in {CpSatSolveStatus.OPTIMAL, CpSatSolveStatus.FEASIBLE}
     objective = int(round(solver.ObjectiveValue())) if has_solution else None
@@ -2454,6 +3263,8 @@ def _stage_diagnostic(
         ),
         response_proto_hash=_response_proto_hash(solver),
         objective_descriptor_hash=objective_descriptor_hash,
+        repair_hint_enabled=repair_hint_enabled,
+        hint_assignment_hash=hint_assignment_hash,
     )
 
 
@@ -2883,6 +3694,7 @@ def _empty_result(
     final_schedule_hard_constraints_enabled: bool = True,
     hint_audit: _HintAudit | None = None,
     hint_selected_keys: tuple[_VariableKey, ...] = (),
+    internal_repair_run: _InternalRepairRun | None = None,
 ) -> CpSatAllocationResult:
     proto = build.model.Proto() if build is not None else None
     other_proto = other_build.model.Proto() if other_build is not None else None
@@ -2897,6 +3709,14 @@ def _empty_result(
     total_build_time = build_time + other_build_time + _bootstrap_build_time(bootstrap_run)
     logical_metadata = _logical_completion_metadata(diagnostics, {})
     hint_audit = hint_audit or _HintAudit()
+    internal_repair_run = internal_repair_run or _InternalRepairRun(
+        build=None,
+        solver=None,
+        status=CpSatSolveStatus.SKIPPED,
+        diagnostic=None,
+        selected_keys=(),
+        solve_time_seconds=0.0,
+    )
     return CpSatAllocationResult(
         algorithm_name=ALGORITHM_NAME,
         seed=int(seed),
@@ -2977,6 +3797,52 @@ def _empty_result(
             initial_solution_seed_hint_coverage=hint_audit.initial_solution_seed_hint_coverage,
             initial_solution_seed_unknown_keys=hint_audit.initial_solution_seed_unknown_keys,
             initial_solution_seed_duplicate_keys=hint_audit.initial_solution_seed_duplicate_keys,
+            internal_feasibility_hint_strategy=(
+                "constrained_first" if internal_repair_run.diagnostic is not None else "none"
+            ),
+            internal_repair_objective_strategy=internal_repair_run.objective_strategy,
+            internal_repair_hint_enabled=internal_repair_run.diagnostic is not None,
+            internal_repair_status=(
+                internal_repair_run.status if internal_repair_run.diagnostic is not None else None
+            ),
+            internal_repair_incumbent_found=internal_repair_run.validated,
+            internal_repair_runtime_seconds=round(internal_repair_run.solve_time_seconds, 6),
+            internal_repair_time_to_first_solution_seconds=internal_repair_run.time_to_first_solution_seconds,
+            internal_repair_hamming_distance=internal_repair_run.hamming_distance,
+            internal_repair_greedy_assignments_removed=internal_repair_run.greedy_assignments_removed,
+            internal_repair_new_assignments_added=internal_repair_run.new_assignments_added,
+            internal_repair_changed_students=internal_repair_run.changed_students,
+            internal_repair_changed_requests=internal_repair_run.changed_requests,
+            internal_repair_changed_sections=internal_repair_run.changed_sections,
+            internal_repair_response_proto_hash=internal_repair_run.response_proto_hash,
+            internal_repair_validation_failure=internal_repair_run.validation_failure,
+            internal_hint_assignment_hash=internal_repair_run.hint_audit.assignment_hash,
+            internal_hint_primary_assigned=internal_repair_run.hint_audit.primary_assigned,
+            internal_hint_primary_unmet=internal_repair_run.hint_audit.primary_unmet,
+            internal_hint_logical_assigned=internal_repair_run.hint_audit.logical_assigned,
+            internal_hint_logical_gap=internal_repair_run.hint_audit.logical_gap,
+            internal_hint_logical_full=internal_repair_run.hint_audit.logical_full,
+            internal_hint_gap_over_1=internal_repair_run.hint_audit.gap_over_1,
+            internal_hint_below_five=internal_repair_run.hint_audit.below_five,
+            internal_hint_policy_violation_count=internal_repair_run.hint_audit.policy_violation_count,
+            internal_hint_structural_issue_count=internal_repair_run.hint_audit.structural_issue_count,
+            internal_hint_candidate_variables=internal_repair_run.hint_audit.candidate_variables,
+            internal_hint_candidate_variables_hinted=internal_repair_run.hint_audit.candidate_variables_hinted,
+            internal_hint_candidate_coverage_rate=internal_repair_run.hint_audit.candidate_coverage_rate,
+            internal_hint_auxiliary_variables_hinted=internal_repair_run.hint_audit.auxiliary_variables_derived,
+            internal_hint_unhinted_variables=internal_repair_run.hint_audit.unhinted_variables,
+            internal_hint_duplicate_keys=internal_repair_run.hint_audit.duplicate_keys,
+            internal_hint_out_of_domain_keys=internal_repair_run.hint_audit.out_of_domain_keys,
+            model_invariance_before_hint_hash=internal_repair_run.model_before_hint_hash,
+            model_invariance_after_hint_hash=internal_repair_run.model_after_hint_hash,
+            model_invariance_equal=internal_repair_run.model_invariance_equal,
+            model_invariance_without_distance_hash=internal_repair_run.model_invariance_without_distance_hash,
+            model_invariance_distance_stripped_hash=internal_repair_run.model_invariance_distance_stripped_hash,
+            model_invariance_distance_stripped_equal=internal_repair_run.model_invariance_distance_stripped_equal,
+            internal_repair_variable_hash=internal_repair_run.variable_hash,
+            internal_repair_domain_hash=internal_repair_run.domain_hash,
+            internal_repair_constraint_hash=internal_repair_run.constraint_hash,
+            internal_repair_candidate_mapping_hash=internal_repair_run.candidate_mapping_hash,
         ),
     )
 

@@ -1,5 +1,20 @@
 # Fair Course Allocation
 
+## CP-SAT cold-start recovery
+
+Run the development-only internal constrained-first recovery gate. It uses
+the persisted normal inputs, evaluates the stable reference first, and writes
+artifacts outside the repository:
+
+```bash
+python -m src.cp_sat_robustness_runner \
+  --recovery-manifest data/scenarios/cp_sat_cold_start_recovery_v1.json \
+  --recovery-output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-recovery-v1
+```
+
+The internal Greedy result is a hint only. The recovery runner does not run
+stress or holdout scenarios after a failed stable-reference gate.
+
 ## Configuration validation
 
 Run the Version 1 configuration and template validator:
@@ -195,3 +210,25 @@ infeasibility, bootstrap/core-stage results without a global proof, and
 `UNKNOWN` without a final assignment. Holdout readiness requires usable normal
 development assignments; a vacuous policy pass with zero assignments is not
 enough.
+
+## Cold-start feasibility recovery Phase B
+
+Run the one-scenario distance-guided repair probe against the persisted stable
+reference. It writes all artifacts outside the repository and refuses to
+overwrite a non-empty output directory:
+
+```bash
+python -m src.cp_sat_repair_probe \
+  --manifest data/scenarios/cp_sat_cold_start_repair_probe_v1.json \
+  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-repair-probe-v1
+```
+
+The probe uses data seed `2026`, section seed `2026`, solver seed `20260630`,
+one worker, and a 300-second budget. It runs only the full hard model's
+`internal_repair_feasibility` stage. The constrained-first assignment is an
+internal hint; the unweighted Hamming objective applies only to candidate
+assignment variables, and the hint is not a hard constraint. `FEASIBLE` is not
+`OPTIMAL`, and `UNKNOWN` is not `INFEASIBLE`. The final assignment, when
+available, must come from the repair solver response and pass the final policy
+and consistency checks. The probe is development diagnostics only; it does not
+run stress or holdout scenarios or prove generalization.

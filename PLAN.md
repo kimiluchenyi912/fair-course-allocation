@@ -300,6 +300,44 @@ are separate. Holdout readiness is blocked when a majority of normal
 development scenarios have no publishable assignment, including the current
 0/12 cold-start result.
 
+### Cold-Start Feasibility Recovery v1 Phase A
+
+The recovery experiment is a development-only extension of the same CP-SAT
+runner. It uses `internal_feasibility_hint_strategy=constrained_first` to
+build an internal constrained-first assignment with solver seed `20260630`,
+then supplies that assignment as a complete candidate hint to the unchanged
+full hard model. The greedy assignment is never exported as a solver result,
+never becomes a constraint, and may contain policy violations that are
+recorded as hint diagnostics.
+
+The explicit `internal_repair_feasibility` stage is the only stage that enables
+`repair_hint`. A validated FEASIBLE/OPTIMAL solver response may seed the
+existing lexicographic stages; UNKNOWN without an incumbent falls back to the
+legacy bootstrap/full-feasibility path. Model structure is checked before and
+after hint application with `solution_hint` removed. The recovery manifest
+contains only the 12 normal development scenarios, runs the stable reference
+first, and stops without tuning if that reference has no publishable
+assignment. It does not run stress or holdout scenarios and is not a
+generalization claim.
+
+### Cold-Start Feasibility Recovery v1 Phase B
+
+Phase B is a single stable-reference repair probe over the unchanged full hard
+model. It uses the constrained-first Greedy assignment only as an internal
+hint and adds an explicit, unweighted Hamming-distance objective over the
+candidate assignment variables. The hint is never fixed as a hard constraint,
+and no external persisted seed, legacy bootstrap, later lexicographic stage,
+stress scenario, or holdout scenario is used. The probe keeps data and section
+seeds at `2026`, uses solver seed `20260630`, one worker, and a 300-second
+budget.
+
+The probe records model-invariance hashes, hint coverage, response provenance,
+assignment changes, and final policy/consistency validation in an artifact
+directory outside Git. `FEASIBLE` means a validated incumbent without an
+optimality proof; `UNKNOWN` is not `INFEASIBLE`. This is a development
+diagnostic and does not establish generalization or change generator, section
+planning, capacity, period-layout, or policy semantics.
+
 ## 11. Version 1 Completion Criteria
 
 Version 1 is complete when:

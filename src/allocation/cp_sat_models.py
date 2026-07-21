@@ -28,6 +28,7 @@ class CpSatSolveStatus(str, Enum):
     INFEASIBLE = "INFEASIBLE"
     MODEL_INVALID = "MODEL_INVALID"
     UNKNOWN = "UNKNOWN"
+    UNKNOWN_WITH_VALIDATED_INCUMBENT = "UNKNOWN_WITH_VALIDATED_INCUMBENT"
     SKIPPED = "SKIPPED"
 
 
@@ -41,6 +42,7 @@ class CpSatBootstrapStatus(str, Enum):
 
 class CpSatStageName(str, Enum):
     FEASIBILITY_BOOTSTRAP = "feasibility_bootstrap"
+    INTERNAL_REPAIR_FEASIBILITY = "internal_repair_feasibility"
     FULL_MODEL_FEASIBILITY_INCUMBENT = "full_model_feasibility_incumbent"
     MATH_COVERAGE = "math_coverage"
     PRIMARY_SATISFACTION = "primary_satisfaction"
@@ -82,6 +84,8 @@ class CpSatStageDiagnostic:
     # objective descriptor used by that stage's Solve call.
     response_proto_hash: str = field(default="", compare=False)
     objective_descriptor_hash: str = field(default="", compare=False)
+    repair_hint_enabled: bool = False
+    hint_assignment_hash: str = field(default="", compare=False)
 
 
 @dataclass(frozen=True)
@@ -176,6 +180,48 @@ class CpSatModelStats:
     initial_solution_seed_unknown_keys: int = 0
     initial_solution_seed_duplicate_keys: int = 0
     initial_solution_seed_selected_by_stage: tuple[str, ...] = ()
+    internal_feasibility_hint_strategy: str = "none"
+    internal_repair_objective_strategy: str = "none"
+    internal_repair_hint_enabled: bool = False
+    internal_repair_status: CpSatSolveStatus | None = None
+    internal_repair_incumbent_found: bool = False
+    internal_repair_runtime_seconds: float = field(default=0.0, compare=False)
+    internal_repair_time_to_first_solution_seconds: float | None = field(default=None, compare=False)
+    internal_repair_hamming_distance: int | None = None
+    internal_repair_greedy_assignments_removed: int | None = None
+    internal_repair_new_assignments_added: int | None = None
+    internal_repair_changed_students: int | None = None
+    internal_repair_changed_requests: int | None = None
+    internal_repair_changed_sections: int | None = None
+    internal_repair_response_proto_hash: str = ""
+    internal_repair_validation_failure: str = ""
+    internal_hint_assignment_hash: str = ""
+    internal_hint_primary_assigned: int | None = None
+    internal_hint_primary_unmet: int | None = None
+    internal_hint_logical_assigned: int | None = None
+    internal_hint_logical_gap: int | None = None
+    internal_hint_logical_full: int | None = None
+    internal_hint_gap_over_1: int | None = None
+    internal_hint_below_five: int | None = None
+    internal_hint_policy_violation_count: int | None = None
+    internal_hint_structural_issue_count: int | None = None
+    internal_hint_candidate_variables: int = 0
+    internal_hint_candidate_variables_hinted: int = 0
+    internal_hint_candidate_coverage_rate: float = 0.0
+    internal_hint_auxiliary_variables_hinted: int = 0
+    internal_hint_unhinted_variables: int = 0
+    internal_hint_duplicate_keys: int = 0
+    internal_hint_out_of_domain_keys: int = 0
+    model_invariance_before_hint_hash: str = ""
+    model_invariance_after_hint_hash: str = ""
+    model_invariance_equal: bool | None = None
+    model_invariance_without_distance_hash: str = ""
+    model_invariance_distance_stripped_hash: str = ""
+    model_invariance_distance_stripped_equal: bool | None = None
+    internal_repair_variable_hash: str = ""
+    internal_repair_domain_hash: str = ""
+    internal_repair_constraint_hash: str = ""
+    internal_repair_candidate_mapping_hash: str = ""
 
 
 @dataclass(frozen=True)

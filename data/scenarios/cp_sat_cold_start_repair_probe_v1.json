@@ -1,0 +1,47 @@
+{
+  "evaluation_name": "cp_sat_cold_start_repair_probe",
+  "evaluation_version": "v1",
+  "baseline_evaluation": "cp_sat_cold_start_recovery_v1",
+  "source_normal_suite": {
+    "artifact_dir": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/normal-development-v1",
+    "manifest_sha256": "9e4cc9ddf6e6b4f367f139048319c09a74c8e993aa8c8a44678c10ef45e1f095",
+    "sha256sums_sha256": "9e24470e55e85f005b35c347ceaeaa15082b1da84c58af16e5fe75704be73b6d"
+  },
+  "source_git_commit": "7d15a75807741ca97dbe0c4f45ceecc1cabf56b6",
+  "split": "development",
+  "development_data": true,
+  "holdout_execution_allowed": false,
+  "tuning_allowed": true,
+  "solver_configuration": {
+    "algorithm": "cp_sat",
+    "solver_seed": 20260630,
+    "workers": 1,
+    "bootstrap_time_limit_seconds": 0,
+    "per_stage_time_limit_seconds": 300,
+    "total_time_limit_seconds": 300,
+    "use_feasibility_bootstrap": false,
+    "use_constrained_first_hint": false,
+    "logical_schedule_completion_enabled": false,
+    "initial_solution_artifact_dir": null,
+    "external_persisted_seed": false,
+    "internal_feasibility_hint_strategy": "constrained_first",
+    "internal_repair_objective_strategy": "hamming_to_constrained_first",
+    "stop_after_first_valid_solution": true,
+    "stage_order": ["internal_repair_feasibility"],
+    "objective_order": []
+  },
+  "scenario_groups": {
+    "normal": ["normal_dev_reference_2026"]
+  },
+  "scenarios": [
+    {
+      "scenario_id": "normal_dev_reference_2026",
+      "group": "normal",
+      "source_suite": "normal",
+      "source_scenario_id": "normal_dev_reference_2026",
+      "paired_normal_scenario_id": "normal_dev_reference_2026",
+      "expected_feasibility": "unknown"
+    }
+  ],
+  "notes": "One stable-reference development probe only. The constrained-first assignment is an internal hint; the Hamming objective is unweighted and applies only to this repair stage. No external persisted seed, legacy bootstrap, later lexicographic stage, stress scenario, or holdout is used. UNKNOWN is not INFEASIBLE and FEASIBLE is not OPTIMAL."
+}

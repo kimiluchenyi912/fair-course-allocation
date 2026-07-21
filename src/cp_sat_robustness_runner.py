@@ -23,6 +23,7 @@ from typing import Any, Iterable
 
 import pandas as pd
 import ortools
+from ortools.sat.python import cp_model
 
 from src.allocation import (
     CpSatAllocationResult,
@@ -31,6 +32,20 @@ from src.allocation import (
     math_course_ids_from_catalog,
     run_fair_cp_sat_solver,
 )
+from src.allocation.constrained_first_baseline import run_constrained_first_baseline
+from src.allocation.cp_sat_solver import (
+    _build_full_feasibility_cp_sat_model,
+    _apply_complete_model_hint,
+    _constrained_first_full_hint_seed,
+    _convert_fallback_plans,
+    _full_model_hint_values,
+    _hamming_distance_expression,
+    _mapped_hint_keys,
+    _model_component_hashes,
+    _model_proto_without_objective_and_solution_hint_hash,
+    _model_proto_without_solution_hint_hash,
+)
+from src.allocation.random_baseline import HIGH_DEMAND_PRIMARY_THRESHOLD, _build_mandatory_fallback_plans
 from src.benchmark_runner import _load_math_fallback_rules as _load_benchmark_math_fallback_rules
 from src.experiment_manifest import (
     ExperimentManifestError,
@@ -107,6 +122,10 @@ class SolverConfiguration:
     external_persisted_seed: bool
     stage_order: tuple[str, ...]
     objective_order: tuple[str, ...]
+    internal_feasibility_hint_strategy: str = "none"
+    internal_repair_time_limit_seconds: int = 30
+    internal_repair_objective_strategy: str = "none"
+    stop_after_first_valid_solution: bool = False
 
 
 @dataclass(frozen=True)
@@ -204,6 +223,8 @@ def _solver_configuration(payload: dict[str, Any]) -> SolverConfiguration:
         external_persisted_seed=bool(raw["external_persisted_seed"]),
         stage_order=tuple(str(item) for item in raw["stage_order"]),
         objective_order=tuple(str(item) for item in raw["objective_order"]),
+        internal_repair_objective_strategy=str(raw.get("internal_repair_objective_strategy", "none")),
+        stop_after_first_valid_solution=bool(raw.get("stop_after_first_valid_solution", False)),
     )
     if config.algorithm != "cp_sat" or config.solver_seed != 20260630 or config.workers != 1:
         raise CpSatEvaluationError("evaluation solver configuration is not the frozen CP-SAT configuration")
@@ -280,6 +301,201 @@ def evaluation_manifest_hash(payload_or_path: dict[str, Any] | str | Path) -> st
     if isinstance(payload_or_path, dict):
         return _json_hash(payload_or_path)
     return _sha256_file(Path(payload_or_path))
+
+
+RECOVERY_STAGE_ORDER = (
+    "internal_repair_feasibility",
+    "feasibility_bootstrap",
+    "full_model_feasibility_incumbent",
+    *SOLVER_STAGE_ORDER[2:],
+)
+
+
+def _recovery_solver_configuration(payload: dict[str, Any]) -> SolverConfiguration:
+    raw = payload.get("solver_configuration")
+    if not isinstance(raw, dict):
+        raise CpSatEvaluationError("recovery solver_configuration must be an object")
+    required = {
+        "algorithm", "solver_seed", "workers", "bootstrap_time_limit_seconds",
+        "per_stage_time_limit_seconds", "total_time_limit_seconds",
+        "use_feasibility_bootstrap", "use_constrained_first_hint",
+        "logical_schedule_completion_enabled", "initial_solution_artifact_dir",
+        "external_persisted_seed", "internal_feasibility_hint_strategy",
+        "internal_repair_time_limit_seconds", "stage_order", "objective_order",
+    }
+    missing = sorted(required - set(raw))
+    if missing:
+        raise CpSatEvaluationError("recovery solver_configuration missing: " + ", ".join(missing))
+    config = SolverConfiguration(
+        algorithm=str(raw["algorithm"]),
+        solver_seed=int(raw["solver_seed"]),
+        workers=int(raw["workers"]),
+        bootstrap_time_limit_seconds=int(raw["bootstrap_time_limit_seconds"]),
+        per_stage_time_limit_seconds=int(raw["per_stage_time_limit_seconds"]),
+        total_time_limit_seconds=int(raw["total_time_limit_seconds"]),
+        use_feasibility_bootstrap=bool(raw["use_feasibility_bootstrap"]),
+        use_constrained_first_hint=bool(raw["use_constrained_first_hint"]),
+        logical_schedule_completion_enabled=bool(raw["logical_schedule_completion_enabled"]),
+        initial_solution_artifact_dir=raw["initial_solution_artifact_dir"],
+        external_persisted_seed=bool(raw["external_persisted_seed"]),
+        stage_order=tuple(str(item) for item in raw["stage_order"]),
+        objective_order=tuple(str(item) for item in raw["objective_order"]),
+        internal_feasibility_hint_strategy=str(raw["internal_feasibility_hint_strategy"]),
+        internal_repair_time_limit_seconds=int(raw["internal_repair_time_limit_seconds"]),
+        internal_repair_objective_strategy=str(raw.get("internal_repair_objective_strategy", "none")),
+        stop_after_first_valid_solution=bool(raw.get("stop_after_first_valid_solution", False)),
+    )
+    if (config.algorithm, config.solver_seed, config.workers) != ("cp_sat", 20260630, 1):
+        raise CpSatEvaluationError("recovery solver configuration is not frozen")
+    if (config.bootstrap_time_limit_seconds, config.per_stage_time_limit_seconds, config.total_time_limit_seconds) != (30, 30, 300):
+        raise CpSatEvaluationError("recovery time budgets are not frozen at 30/30/300")
+    if config.internal_repair_time_limit_seconds != 30:
+        raise CpSatEvaluationError("internal repair time budget must be 30 seconds")
+    if config.internal_feasibility_hint_strategy != "constrained_first":
+        raise CpSatEvaluationError("recovery must explicitly use constrained_first internal hint")
+    if config.use_constrained_first_hint:
+        raise CpSatEvaluationError("recovery must disable the legacy constrained-first hint path")
+    if not config.use_feasibility_bootstrap or not config.logical_schedule_completion_enabled:
+        raise CpSatEvaluationError("recovery requires legacy fallback and logical completion enabled")
+    if config.initial_solution_artifact_dir is not None or config.external_persisted_seed:
+        raise CpSatEvaluationError("external persisted seeds are forbidden in recovery")
+    if config.stage_order != RECOVERY_STAGE_ORDER:
+        raise CpSatEvaluationError("recovery stage_order does not match the production recovery order")
+    expected_objectives = tuple(item for item in RECOVERY_STAGE_ORDER if item not in {"internal_repair_feasibility", "feasibility_bootstrap", "full_model_feasibility_incumbent"})
+    if config.objective_order != expected_objectives:
+        raise CpSatEvaluationError("recovery objective_order does not match production objectives")
+    return config
+
+
+def load_recovery_evaluation_manifest(
+    path: str | Path = "data/scenarios/cp_sat_cold_start_recovery_v1.json",
+) -> dict[str, Any]:
+    payload = _read_json(Path(path))
+    required = {
+        "evaluation_name", "evaluation_version", "baseline_evaluation", "source_normal_suite",
+        "source_git_commit", "split", "development_data", "holdout_execution_allowed",
+        "tuning_allowed", "solver_configuration", "scenario_groups", "scenarios", "notes",
+    }
+    missing = sorted(required - set(payload))
+    if missing:
+        raise CpSatEvaluationError("recovery manifest missing: " + ", ".join(missing))
+    if payload["split"] != "development" or payload["development_data"] is not True:
+        raise CpSatEvaluationError("recovery manifest must be development data")
+    if payload["holdout_execution_allowed"] is not False or payload["tuning_allowed"] is not False:
+        raise CpSatEvaluationError("recovery manifest must forbid holdout and tuning")
+    _recovery_solver_configuration(payload)
+    groups = payload["scenario_groups"]
+    scenarios = payload["scenarios"]
+    if not isinstance(groups, dict) or set(groups) != {"normal"} or not isinstance(scenarios, list):
+        raise CpSatEvaluationError("recovery manifest must contain only the normal scenario group")
+    parsed_ids: list[str] = []
+    for raw in scenarios:
+        if not isinstance(raw, dict):
+            raise CpSatEvaluationError("recovery scenario must be an object")
+        fields = {"scenario_id", "group", "source_suite", "source_scenario_id", "paired_normal_scenario_id", "expected_feasibility"}
+        if fields - set(raw):
+            raise CpSatEvaluationError("recovery scenario missing: " + ", ".join(sorted(fields - set(raw))))
+        scenario = EvaluationScenario(**{field: str(raw[field]) for field in fields})
+        if scenario.group != "normal" or scenario.source_suite != "normal" or scenario.expected_feasibility != "unknown":
+            raise CpSatEvaluationError(f"invalid recovery scenario: {scenario.scenario_id}")
+        if scenario.scenario_id in parsed_ids:
+            raise CpSatEvaluationError(f"duplicate recovery scenario: {scenario.scenario_id}")
+        parsed_ids.append(scenario.scenario_id)
+    if parsed_ids != [str(item) for item in groups["normal"]] or len(parsed_ids) != 12:
+        raise CpSatEvaluationError("recovery manifest must contain exactly 12 normal scenarios in order")
+    return payload
+
+
+REPAIR_PROBE_STAGE_ORDER = ("internal_repair_feasibility",)
+
+
+def _repair_probe_solver_configuration(payload: dict[str, Any]) -> SolverConfiguration:
+    raw = payload.get("solver_configuration")
+    if not isinstance(raw, dict):
+        raise CpSatEvaluationError("repair probe solver_configuration must be an object")
+    required = {
+        "algorithm", "solver_seed", "workers", "bootstrap_time_limit_seconds",
+        "per_stage_time_limit_seconds", "total_time_limit_seconds",
+        "use_feasibility_bootstrap", "use_constrained_first_hint",
+        "logical_schedule_completion_enabled", "initial_solution_artifact_dir",
+        "external_persisted_seed", "internal_feasibility_hint_strategy",
+        "internal_repair_objective_strategy", "stop_after_first_valid_solution",
+        "stage_order", "objective_order",
+    }
+    missing = sorted(required - set(raw))
+    if missing:
+        raise CpSatEvaluationError("repair probe solver_configuration missing: " + ", ".join(missing))
+    config = SolverConfiguration(
+        algorithm=str(raw["algorithm"]),
+        solver_seed=int(raw["solver_seed"]),
+        workers=int(raw["workers"]),
+        bootstrap_time_limit_seconds=int(raw["bootstrap_time_limit_seconds"]),
+        per_stage_time_limit_seconds=int(raw["per_stage_time_limit_seconds"]),
+        total_time_limit_seconds=int(raw["total_time_limit_seconds"]),
+        use_feasibility_bootstrap=bool(raw["use_feasibility_bootstrap"]),
+        use_constrained_first_hint=bool(raw["use_constrained_first_hint"]),
+        logical_schedule_completion_enabled=bool(raw["logical_schedule_completion_enabled"]),
+        initial_solution_artifact_dir=raw["initial_solution_artifact_dir"],
+        external_persisted_seed=bool(raw["external_persisted_seed"]),
+        stage_order=tuple(str(item) for item in raw["stage_order"]),
+        objective_order=tuple(str(item) for item in raw["objective_order"]),
+        internal_feasibility_hint_strategy=str(raw["internal_feasibility_hint_strategy"]),
+        internal_repair_time_limit_seconds=int(raw.get("internal_repair_time_limit_seconds", 300)),
+        internal_repair_objective_strategy=str(raw["internal_repair_objective_strategy"]),
+        stop_after_first_valid_solution=bool(raw["stop_after_first_valid_solution"]),
+    )
+    if (config.algorithm, config.solver_seed, config.workers) != ("cp_sat", 20260630, 1):
+        raise CpSatEvaluationError("repair probe solver configuration is not frozen")
+    if config.total_time_limit_seconds != 300 or config.per_stage_time_limit_seconds != 300:
+        raise CpSatEvaluationError("repair probe total and stage budgets must be 300 seconds")
+    if config.use_feasibility_bootstrap or config.use_constrained_first_hint:
+        raise CpSatEvaluationError("repair probe must disable legacy/bootstrap hint paths")
+    if config.internal_feasibility_hint_strategy != "constrained_first":
+        raise CpSatEvaluationError("repair probe requires constrained_first internal hint")
+    if config.internal_repair_objective_strategy != "hamming_to_constrained_first":
+        raise CpSatEvaluationError("repair probe requires the explicit Hamming objective")
+    if not config.stop_after_first_valid_solution:
+        raise CpSatEvaluationError("repair probe must stop after its first solver solution")
+    if config.initial_solution_artifact_dir is not None or config.external_persisted_seed:
+        raise CpSatEvaluationError("external persisted seeds are forbidden in repair probe")
+    if config.stage_order != REPAIR_PROBE_STAGE_ORDER or config.objective_order:
+        raise CpSatEvaluationError("repair probe must contain only the internal repair stage")
+    return config
+
+
+def load_repair_probe_manifest(
+    path: str | Path = "data/scenarios/cp_sat_cold_start_repair_probe_v1.json",
+) -> dict[str, Any]:
+    payload = _read_json(Path(path))
+    required = {
+        "evaluation_name", "evaluation_version", "baseline_evaluation", "source_normal_suite",
+        "source_git_commit", "split", "development_data", "holdout_execution_allowed",
+        "tuning_allowed", "solver_configuration", "scenario_groups", "scenarios", "notes",
+    }
+    missing = sorted(required - set(payload))
+    if missing:
+        raise CpSatEvaluationError("repair probe manifest missing: " + ", ".join(missing))
+    if payload["split"] != "development" or payload["development_data"] is not True:
+        raise CpSatEvaluationError("repair probe must use development data")
+    if payload["holdout_execution_allowed"] is not False or payload["tuning_allowed"] is not True:
+        raise CpSatEvaluationError("repair probe must forbid holdout execution and permit only this tuning probe")
+    _repair_probe_solver_configuration(payload)
+    groups = payload["scenario_groups"]
+    scenarios = payload["scenarios"]
+    if not isinstance(groups, dict) or set(groups) != {"normal"} or not isinstance(scenarios, list):
+        raise CpSatEvaluationError("repair probe must contain only one normal scenario group")
+    if groups["normal"] != ["normal_dev_reference_2026"] or len(scenarios) != 1:
+        raise CpSatEvaluationError("repair probe must contain only the stable reference scenario")
+    scenario = scenarios[0]
+    expected = {"scenario_id", "group", "source_suite", "source_scenario_id", "paired_normal_scenario_id", "expected_feasibility"}
+    if not isinstance(scenario, dict) or expected - set(scenario):
+        raise CpSatEvaluationError("repair probe scenario is incomplete")
+    if (
+        scenario["scenario_id"], scenario["group"], scenario["source_suite"],
+        scenario["source_scenario_id"], scenario["expected_feasibility"]
+    ) != ("normal_dev_reference_2026", "normal", "normal", "normal_dev_reference_2026", "unknown"):
+        raise CpSatEvaluationError("repair probe scenario is not the stable normal reference")
+    return payload
 
 
 def _verify_sha256_manifest(root: Path) -> tuple[str, int, int, int]:
@@ -418,8 +634,22 @@ def _stage_trace(result: CpSatAllocationResult, scenario_id: str) -> list[dict[s
             "response_proto_hash": response_hash,
             "incumbent_found": status in {"FEASIBLE", "OPTIMAL"},
             "incumbent_source": "solver_response" if response_hash else None,
-            "hint_source": result.model_stats.bootstrap_hint_strategy if diagnostic.stage_name == CpSatStageName.FEASIBILITY_BOOTSTRAP else result.model_stats.hint_source,
-            "hint_variable_count": result.model_stats.hint_variables_supplied if diagnostic.stage_name != CpSatStageName.FEASIBILITY_BOOTSTRAP else None,
+            "hint_source": (
+                "constrained_first_internal"
+                if diagnostic.stage_name == CpSatStageName.INTERNAL_REPAIR_FEASIBILITY
+                else result.model_stats.bootstrap_hint_strategy
+                if diagnostic.stage_name == CpSatStageName.FEASIBILITY_BOOTSTRAP
+                else result.model_stats.hint_source
+            ),
+            "hint_variable_count": (
+                result.model_stats.internal_hint_candidate_variables_hinted
+                if diagnostic.stage_name == CpSatStageName.INTERNAL_REPAIR_FEASIBILITY
+                else result.model_stats.hint_variables_supplied
+                if diagnostic.stage_name != CpSatStageName.FEASIBILITY_BOOTSTRAP
+                else None
+            ),
+            "repair_hint_enabled": diagnostic.repair_hint_enabled,
+            "hint_assignment_hash": diagnostic.hint_assignment_hash,
             "branch_count": diagnostic.branches,
             "conflict_count": diagnostic.conflicts,
             "fixed_prior_objectives": [
@@ -475,6 +705,18 @@ def _null_metrics(allocation_input: Any) -> dict[str, Any]:
         "policy_violation_count": None,
         "assignment_nonpublishable": True,
         "certificate_valid": None,
+        "internal_repair_status": None,
+        "internal_repair_incumbent_found": False,
+        "internal_repair_runtime_seconds": None,
+        "internal_hint_assignment_hash": None,
+        "internal_hint_candidate_variables": None,
+        "internal_hint_candidate_variables_hinted": None,
+        "internal_hint_candidate_coverage_rate": None,
+        "internal_hint_auxiliary_variables_hinted": None,
+        "internal_hint_unhinted_variables": None,
+        "internal_hint_duplicate_keys": None,
+        "internal_hint_out_of_domain_keys": None,
+        "model_invariance_equal": None,
     }
 
 
@@ -499,6 +741,22 @@ def _result_metrics(result: CpSatAllocationResult, allocation_input: Any) -> dic
     assigned_seats = sum(row.assigned_count for row in result.section_roster_summary)
     protected_unmet = sum(outcome.priority_protected and outcome.primary_unmet_count > 0 for outcome in students)
     ordinary_max = max((outcome.primary_unmet_count for outcome in students if not outcome.priority_protected), default=0)
+    policy_summary = result.policy_report.summary if result.policy_report else None
+    primary_demand = Counter(
+        request.candidate_key
+        for request in allocation_input.logical_requests
+        if request.request_type == "primary"
+    )
+    high_demand_keys = {
+        key for key, demand in primary_demand.items()
+        if demand > HIGH_DEMAND_PRIMARY_THRESHOLD
+    }
+    high_demand_violations = sum(
+        outcome.request_type == "primary"
+        and outcome.candidate_key in high_demand_keys
+        and outcome.status.value != "assigned"
+        for outcome in primary_outcomes
+    )
     rank_counts = Counter(
         outcome.alternate_rank
         for outcome in result.request_outcomes
@@ -512,9 +770,9 @@ def _result_metrics(result: CpSatAllocationResult, allocation_input: Any) -> dic
         "primary_unmet_period_units": sum(outcome.period_units for outcome in primary_outcomes if outcome.status.value != "assigned"),
         "protected_primary_unmet": protected_unmet,
         "ordinary_max_primary_unmet": ordinary_max,
-        "ordinary_policy_violations": len(result.policy_report.ordinary_violation_student_ids) if result.policy_report else 0,
-        "protected_policy_violations": len(result.policy_report.protected_violation_student_ids) if result.policy_report else 0,
-        "high_demand_violations": result.policy_report.high_demand_violation_count if result.policy_report else 0,
+        "ordinary_policy_violations": policy_summary.ordinary_primary_unmet_violation_count if policy_summary else 0,
+        "protected_policy_violations": policy_summary.protected_primary_unmet_violation_count if policy_summary else 0,
+        "high_demand_violations": high_demand_violations,
         "target_logical_total": target_total,
         "assigned_logical_total": logical_assigned,
         "total_logical_gap": sum(logical_gaps),
@@ -539,6 +797,27 @@ def _result_metrics(result: CpSatAllocationResult, allocation_input: Any) -> dic
         "consistency_issue_count": len(result.consistency_issues),
         "assignment_nonpublishable": not policy.summary.final_schedule_policy_pass or bool(result.consistency_issues),
         "certificate_valid": None,
+        "internal_repair_status": result.model_stats.internal_repair_status.value if result.model_stats.internal_repair_status else None,
+        "internal_repair_incumbent_found": result.model_stats.internal_repair_incumbent_found,
+        "internal_repair_runtime_seconds": result.model_stats.internal_repair_runtime_seconds,
+        "internal_hint_assignment_hash": result.model_stats.internal_hint_assignment_hash,
+        "internal_hint_primary_assigned": result.model_stats.internal_hint_primary_assigned,
+        "internal_hint_primary_unmet": result.model_stats.internal_hint_primary_unmet,
+        "internal_hint_logical_assigned": result.model_stats.internal_hint_logical_assigned,
+        "internal_hint_logical_gap": result.model_stats.internal_hint_logical_gap,
+        "internal_hint_logical_full": result.model_stats.internal_hint_logical_full,
+        "internal_hint_gap_over_1": result.model_stats.internal_hint_gap_over_1,
+        "internal_hint_below_five": result.model_stats.internal_hint_below_five,
+        "internal_hint_policy_violation_count": result.model_stats.internal_hint_policy_violation_count,
+        "internal_hint_structural_issue_count": result.model_stats.internal_hint_structural_issue_count,
+        "internal_hint_candidate_variables": result.model_stats.internal_hint_candidate_variables,
+        "internal_hint_candidate_variables_hinted": result.model_stats.internal_hint_candidate_variables_hinted,
+        "internal_hint_candidate_coverage_rate": result.model_stats.internal_hint_candidate_coverage_rate,
+        "internal_hint_auxiliary_variables_hinted": result.model_stats.internal_hint_auxiliary_variables_hinted,
+        "internal_hint_unhinted_variables": result.model_stats.internal_hint_unhinted_variables,
+        "internal_hint_duplicate_keys": result.model_stats.internal_hint_duplicate_keys,
+        "internal_hint_out_of_domain_keys": result.model_stats.internal_hint_out_of_domain_keys,
+        "model_invariance_equal": result.model_stats.model_invariance_equal,
     }
 
 
@@ -562,12 +841,13 @@ def _validate_result(result: CpSatAllocationResult, metrics: dict[str, Any], sce
     if status == "MODEL_INVALID":
         raise CpSatEvaluationCorrectnessError(f"MODEL_INVALID in {scenario.scenario_id}")
     assignment = bool(result.student_outcomes)
-    if status in {"FEASIBLE", "OPTIMAL"} and not assignment:
+    assignment_statuses = {"FEASIBLE", "OPTIMAL", "UNKNOWN_WITH_VALIDATED_INCUMBENT"}
+    if status in assignment_statuses and not assignment:
         raise CpSatEvaluationCorrectnessError(f"{status} has no final assignment in {scenario.scenario_id}")
-    if assignment and status not in {"FEASIBLE", "OPTIMAL"}:
+    if assignment and status not in assignment_statuses:
         raise CpSatEvaluationCorrectnessError(f"assignment exists with non-solution status {status}")
     if scenario.group == "negative":
-        if status in {"FEASIBLE", "OPTIMAL"} or assignment:
+        if status in assignment_statuses or assignment:
             raise CpSatEvaluationCorrectnessError(f"negative scenario produced a publishable-looking result: {scenario.scenario_id}")
     elif assignment:
         if metrics["final_schedule_policy_pass"] is not True or metrics["consistency_issue_count"] != 0:
@@ -1241,6 +1521,426 @@ class CpSatRobustnessRunner:
         return _audited_readiness(enriched, negative, source_info, failures)
 
 
+DEFAULT_RECOVERY_MANIFEST = Path("data/scenarios/cp_sat_cold_start_recovery_v1.json")
+DEFAULT_RECOVERY_OUTPUT = Path(
+    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-recovery-v1"
+)
+STABLE_FINGERPRINT = {
+    "students": 2630,
+    "logical_requests": 25106,
+    "logical_primaries": 17216,
+    "alternates": 7890,
+    "logical_sections": 463,
+    "section_rows": 482,
+    "candidate_edges": 165481,
+    "canonical_input_hash": "516e95e735873b1c0c8f1109956f6452c121db7800bf6b91dd1c53f9c615deb0",
+}
+
+
+class CpSatColdStartRecoveryRunner:
+    """Run the constrained-first recovery experiment inside the same runner."""
+
+    def __init__(
+        self,
+        manifest_path: str | Path = DEFAULT_RECOVERY_MANIFEST,
+        config_dir: str | Path = "data/config",
+    ) -> None:
+        self.manifest_path = Path(manifest_path)
+        self.config_dir = Path(config_dir)
+        self.manifest = load_recovery_evaluation_manifest(self.manifest_path)
+        self.manifest_hash = evaluation_manifest_hash(self.manifest_path)
+        self.config = _recovery_solver_configuration(self.manifest)
+
+    def select(self, scenario_id: str | None = None) -> list[EvaluationScenario]:
+        scenarios = [
+            EvaluationScenario(
+                scenario_id=str(raw["scenario_id"]),
+                group=str(raw["group"]),
+                source_suite=str(raw["source_suite"]),
+                source_scenario_id=str(raw["source_scenario_id"]),
+                paired_normal_scenario_id=str(raw["paired_normal_scenario_id"]),
+                expected_feasibility=str(raw["expected_feasibility"]),
+            )
+            for raw in self.manifest["scenarios"]
+        ]
+        if scenario_id is not None:
+            scenarios = [item for item in scenarios if item.scenario_id == scenario_id]
+            if not scenarios:
+                raise CpSatEvaluationError(f"scenario is not in recovery manifest: {scenario_id}")
+        return scenarios
+
+    def verify_sources(self, scenarios: Iterable[EvaluationScenario]) -> dict[str, Any]:
+        source_info = _verify_source_suite(self.manifest, "normal")
+        for scenario in scenarios:
+            allocation_input, _manifest, source_result = _load_scenario_input(
+                self.manifest,
+                scenario,
+                self.config_dir,
+            )
+            fingerprint = asdict(canonical_input_fingerprint(allocation_input))
+            if scenario.scenario_id == "normal_dev_reference_2026" and fingerprint != STABLE_FINGERPRINT:
+                raise CpSatEvaluationError(
+                    f"stable canonical fingerprint mismatch for {scenario.scenario_id}"
+                )
+            if source_result.get("input_fingerprint") != fingerprint:
+                raise CpSatEvaluationError(f"source fingerprint mismatch: {scenario.scenario_id}")
+        return source_info
+
+    def run(self, output_dir: str | Path = DEFAULT_RECOVERY_OUTPUT, *, resume: bool = False) -> dict[str, Any]:
+        scenarios = self.select()
+        root = Path(output_dir)
+        if root.exists() and any(root.iterdir()) and not resume:
+            raise CpSatEvaluationError(f"recovery output is non-empty; refusing to overwrite: {root}")
+        root.mkdir(parents=True, exist_ok=True)
+        source_info = self.verify_sources(scenarios)
+        run_manifest_path = root / "run_manifest.json"
+        selected_ids = [item.scenario_id for item in scenarios]
+        if resume:
+            run_manifest = _read_json(run_manifest_path)
+            expected = {
+                "evaluation_manifest_sha256": self.manifest_hash,
+                "source_git_commit": self.manifest["source_git_commit"],
+                "selected_scenario_ids": selected_ids,
+            }
+            mismatches = [key for key, value in expected.items() if run_manifest.get(key) != value]
+            if mismatches:
+                raise CpSatEvaluationError("recovery resume provenance mismatch: " + ", ".join(mismatches))
+            completed = set(run_manifest.get("completed_scenario_ids", []))
+        else:
+            completed = set()
+            _write_json(root / "evaluation_manifest_snapshot.json", self.manifest)
+            _write_json(root / "run_manifest.json", {
+                "schema_version": EVALUATION_SCHEMA_VERSION,
+                "status": "running",
+                "evaluation_manifest_sha256": self.manifest_hash,
+                "source_git_commit": self.manifest["source_git_commit"],
+                "selected_scenario_ids": selected_ids,
+                "completed_scenario_ids": [],
+                "failed_scenario_ids": [],
+                "holdout_runs": 0,
+                "stress_runs": 0,
+                "external_persisted_seed": False,
+                "internal_hint_strategy": "constrained_first",
+            })
+
+        failures: list[dict[str, Any]] = []
+        stopped_after_stable = False
+        stop_reason = None
+        for index, scenario in enumerate(scenarios):
+            if scenario.scenario_id in completed:
+                continue
+            try:
+                self._run_scenario(root, scenario)
+                completed.add(scenario.scenario_id)
+                self._update_recovery_manifest(root, completed, failures, "running")
+            except Exception as exc:
+                failures.append({
+                    "scenario_id": scenario.scenario_id,
+                    "failure_type": "runner_failure",
+                    "message": str(exc),
+                })
+                self._update_recovery_manifest(root, completed, failures, "failed")
+                _write_json(root / "failures.json", {
+                    "failures": failures,
+                    "unexpected_failure_count": len(failures),
+                })
+                _write_checksums(root)
+                raise CpSatEvaluationError(f"recovery scenario failed: {scenario.scenario_id}: {exc}") from exc
+            summary = _read_completed_summary(root / "scenarios" / scenario.scenario_id / "scenario_summary.json")
+            if index == 0 and not summary["result"].get("publishable_assignment_available", False):
+                stopped_after_stable = True
+                stop_reason = "stable_reference_not_publishable"
+                break
+
+        self._write_recovery_aggregates(
+            root,
+            scenarios,
+            source_info,
+            failures,
+            stopped_after_stable=stopped_after_stable,
+            stop_reason=stop_reason,
+        )
+        _write_json(root / "run_manifest.json", {
+            **_read_json(root / "run_manifest.json"),
+            "status": "completed_stopped_after_gate" if stopped_after_stable else "completed",
+            "completed_scenario_ids": sorted(completed),
+            "failed_scenario_ids": [item["scenario_id"] for item in failures],
+            "stopped_after_stable_reference": stopped_after_stable,
+            "stop_reason": stop_reason,
+        })
+        _write_checksums(root)
+        return _read_json(root / "aggregate_summary.json")
+
+    def _update_recovery_manifest(
+        self,
+        root: Path,
+        completed: set[str],
+        failures: list[dict[str, Any]],
+        status: str,
+    ) -> None:
+        current = _read_json(root / "run_manifest.json")
+        current.update({
+            "status": status,
+            "completed_scenario_ids": sorted(completed),
+            "failed_scenario_ids": [item["scenario_id"] for item in failures],
+        })
+        _write_json(root / "run_manifest.json", current)
+
+    def _run_scenario(self, root: Path, scenario: EvaluationScenario) -> None:
+        allocation_input, input_manifest, source_result = _load_scenario_input(
+            self.manifest,
+            scenario,
+            self.config_dir,
+        )
+        catalog = pd.read_csv(self.config_dir / "course_catalog.csv", keep_default_na=False)
+        math_ids = math_course_ids_from_catalog(catalog)
+        fallback_rules = _load_benchmark_math_fallback_rules(self.config_dir, catalog)
+        started = time.perf_counter()
+        result = run_fair_cp_sat_solver(
+            allocation_input,
+            seed=self.config.solver_seed,
+            math_course_ids=math_ids,
+            math_fallback_rules=fallback_rules,
+            max_time_seconds_per_stage=self.config.per_stage_time_limit_seconds,
+            bootstrap_time_seconds=self.config.bootstrap_time_limit_seconds,
+            max_total_time_seconds=self.config.total_time_limit_seconds,
+            num_search_workers=self.config.workers,
+            use_feasibility_bootstrap=self.config.use_feasibility_bootstrap,
+            use_constrained_first_hint=self.config.use_constrained_first_hint,
+            logical_schedule_completion_enabled=self.config.logical_schedule_completion_enabled,
+            initial_solution_artifact_dir=None,
+            internal_feasibility_hint_strategy=self.config.internal_feasibility_hint_strategy,
+            internal_repair_time_seconds=self.config.internal_repair_time_limit_seconds,
+        )
+        runtime = time.perf_counter() - started
+        trace = _stage_trace(result, scenario.scenario_id)
+        metrics = _result_metrics(result, allocation_input)
+        metrics.update({
+            "status": result.solve_status.value,
+            "final_assignment_available": bool(result.student_outcomes),
+            "certificate_valid": None,
+            "internal_repair_validated": result.model_stats.internal_repair_incumbent_found,
+            "model_invariance_equal": result.model_stats.model_invariance_equal,
+        })
+        _validate_objective_bounds(trace, int(metrics["theoretical_maximum"]))
+        _validate_result(result, metrics, scenario)
+        fingerprint = source_result["input_fingerprint"]
+        row = _scenario_row(
+            scenario,
+            result,
+            metrics,
+            trace,
+            self.manifest,
+            {**fingerprint, **input_manifest},
+            runtime,
+        )
+        row.update({
+            "recovery_hint_strategy": self.config.internal_feasibility_hint_strategy,
+            "external_persisted_seed": False,
+            "initial_solution_artifact_dir": None,
+            "final_assignment_source_stage": _final_stage(trace)["stage_name"] if _final_stage(trace) and result.student_outcomes else None,
+        })
+        summary = {
+            "schema_version": EVALUATION_SCHEMA_VERSION,
+            "status": "completed_with_assignment" if result.student_outcomes else "completed_without_assignment",
+            "evaluation_manifest_sha256": self.manifest_hash,
+            "source_git_commit": self.manifest["source_git_commit"],
+            "scenario": asdict(scenario),
+            "input_manifest": input_manifest,
+            "input_fingerprint": fingerprint,
+            "result": row,
+            "solver_configuration": self.manifest["solver_configuration"],
+            "final_assignment_source_stage": row["final_assignment_source_stage"],
+            "final_assignment_response_proto_hash": (
+                _final_stage(trace)["response_proto_hash"] if _final_stage(trace) and result.student_outcomes else None
+            ),
+            "assignment_hash": _assignment_hash(result),
+            "trace_file": "stage_trace.json",
+            "final_validation_file": "final_validation.json",
+        }
+        base = root / "scenarios"
+        base.mkdir(parents=True, exist_ok=True)
+        destination = base / scenario.scenario_id
+        temporary = Path(tempfile.mkdtemp(prefix=f".{scenario.scenario_id}.", dir=base))
+        try:
+            solver_dir = temporary / "solver"
+            solver_dir.mkdir()
+            _write_json(temporary / "stage_trace.json", {"scenario_id": scenario.scenario_id, "stages": trace})
+            _write_json(temporary / "final_validation.json", {
+                "final_schedule_policy_pass": metrics["final_schedule_policy_pass"],
+                "consistency_issue_count": metrics["consistency_issue_count"],
+                "assignment_nonpublishable": metrics["assignment_nonpublishable"],
+                "status": result.solve_status.value,
+                "evaluation_status": summary["status"],
+            })
+            _write_json(solver_dir / "solver_result.json", {
+                "status": result.solve_status.value,
+                "objective_values": result.objective_values,
+                "model_stats": result.model_stats,
+                "assignment_source_stage": summary["final_assignment_source_stage"],
+                "response_proto_hash": summary["final_assignment_response_proto_hash"],
+                "assignment_hash": summary["assignment_hash"],
+            })
+            _write_json(temporary / "scenario_summary.json", summary)
+            _write_csv(temporary / "grade_subgroup_results.csv", _grade_rows(allocation_input, result, scenario.scenario_id))
+            if result.student_outcomes:
+                _write_csv(solver_dir / "assignments.csv", [_jsonable(asdict(item)) for item in result.assignments])
+                _write_csv(solver_dir / "request_outcomes.csv", [_jsonable(asdict(item)) for item in result.request_outcomes])
+                _write_csv(solver_dir / "student_outcomes.csv", [_jsonable(asdict(item)) for item in result.student_outcomes])
+            temporary.replace(destination)
+        finally:
+            if temporary.exists():
+                for path in sorted(temporary.rglob("*"), reverse=True):
+                    if path.is_file():
+                        path.unlink()
+                    elif path.is_dir():
+                        path.rmdir()
+                temporary.rmdir()
+
+    def _write_recovery_aggregates(
+        self,
+        root: Path,
+        scenarios: list[EvaluationScenario],
+        source_info: dict[str, Any],
+        failures: list[dict[str, Any]],
+        *,
+        stopped_after_stable: bool,
+        stop_reason: str | None,
+    ) -> None:
+        rows: list[dict[str, Any]] = []
+        grades: list[dict[str, Any]] = []
+        stage_rows: list[dict[str, Any]] = []
+        hint_rows: list[dict[str, Any]] = []
+        for scenario in scenarios:
+            scenario_root = root / "scenarios" / scenario.scenario_id
+            summary_path = scenario_root / "scenario_summary.json"
+            if not summary_path.is_file():
+                continue
+            summary = _read_completed_summary(summary_path)
+            row = summary["result"]
+            rows.append(row)
+            grade_path = scenario_root / "grade_subgroup_results.csv"
+            if grade_path.is_file():
+                with grade_path.open(newline="") as handle:
+                    grades.extend(csv.DictReader(handle))
+            trace = _read_json(scenario_root / "stage_trace.json")["stages"]
+            stage_rows.extend({"scenario_id": scenario.scenario_id, **item} for item in trace)
+            hint_rows.append({
+                "scenario_id": scenario.scenario_id,
+                "strategy": row.get("recovery_hint_strategy"),
+                "assignment_hash": row.get("internal_hint_assignment_hash"),
+                "primary_assigned": row.get("internal_hint_primary_assigned"),
+                "primary_unmet": row.get("internal_hint_primary_unmet"),
+                "logical_assigned": row.get("internal_hint_logical_assigned"),
+                "logical_gap": row.get("internal_hint_logical_gap"),
+                "logical_full": row.get("internal_hint_logical_full"),
+                "gap_over_1": row.get("internal_hint_gap_over_1"),
+                "below_five": row.get("internal_hint_below_five"),
+                "policy_violation_count": row.get("internal_hint_policy_violation_count"),
+                "structural_issue_count": row.get("internal_hint_structural_issue_count"),
+                "candidate_variables": row.get("internal_hint_candidate_variables"),
+                "candidate_variables_hinted": row.get("internal_hint_candidate_variables_hinted"),
+                "candidate_coverage_rate": row.get("internal_hint_candidate_coverage_rate"),
+                "auxiliary_variables_hinted": row.get("internal_hint_auxiliary_variables_hinted"),
+                "unhinted_variables": row.get("internal_hint_unhinted_variables"),
+                "duplicate_keys": row.get("internal_hint_duplicate_keys"),
+                "out_of_domain_keys": row.get("internal_hint_out_of_domain_keys"),
+                "model_invariance_equal": row.get("model_invariance_equal"),
+                "repair_status": row.get("internal_repair_status"),
+                "repair_incumbent_found": row.get("internal_repair_incumbent_found"),
+                "repair_runtime_seconds": row.get("internal_repair_runtime_seconds"),
+            })
+        _write_csv(root / "scenario_results.csv", rows)
+        _write_csv(root / "stage_results.csv", stage_rows)
+        _write_csv(root / "grade_subgroup_results.csv", grades)
+        _write_csv(root / "internal_hint_results.csv", hint_rows)
+        phase_c_rows = []
+        cf_rows = []
+        for row in rows:
+            scenario_id = row["scenario_id"]
+            phase_c = Path(DEFAULT_OUTPUT) / "scenarios" / scenario_id / "scenario_summary.json"
+            phase_c_result = _read_json(phase_c).get("result", {}) if phase_c.is_file() else {}
+            phase_c_rows.append({
+                "scenario_id": scenario_id,
+                "recovery_status": row.get("status"),
+                "phase_c_status": phase_c_result.get("status"),
+                "recovery_assignment_available": row.get("final_assignment_available"),
+                "phase_c_assignment_available": phase_c_result.get("final_assignment_available"),
+                "primary_assigned_delta": _delta(row.get("primary_assigned"), phase_c_result.get("primary_assigned")),
+                "logical_full_delta": _delta(row.get("logical_fully_scheduled_students"), phase_c_result.get("logical_fully_scheduled_students")),
+                "total_gap_delta": _delta(row.get("total_logical_gap"), phase_c_result.get("total_logical_gap")),
+            })
+            try:
+                source = _source_root(self.manifest, "normal") / "scenarios" / scenario_id
+                greedy = _greedy_rows(source)
+                cf = greedy["constrained_first_greedy"]
+            except (CpSatEvaluationError, KeyError):
+                cf = {}
+            cf_rows.append({
+                "scenario_id": scenario_id,
+                "recovery_status": row.get("status"),
+                "constrained_first_status": cf.get("status"),
+                "recovery_primary_assigned": row.get("primary_assigned"),
+                "constrained_first_primary_assigned": _number(cf, "primary_assigned"),
+                "recovery_logical_full": row.get("logical_fully_scheduled_students"),
+                "constrained_first_logical_full": _number(cf, "logical_fully_scheduled_students"),
+                "recovery_total_gap": row.get("total_logical_gap"),
+                "constrained_first_total_gap": _number(cf, "total_logical_schedule_gap"),
+            })
+        _write_csv(root / "paired_recovery_vs_phase_c.csv", phase_c_rows)
+        _write_csv(root / "paired_recovery_vs_constrained_first.csv", cf_rows)
+        publishable = sum(bool(row.get("final_assignment_available")) for row in rows)
+        aggregate = {
+            "schema_version": EVALUATION_SCHEMA_VERSION,
+            "evaluation_name": self.manifest["evaluation_name"],
+            "development_only": True,
+            "holdout_runs": 0,
+            "stress_runs": 0,
+            "external_persisted_seed": False,
+            "internal_hint_strategy": "constrained_first",
+            "scenarios_attempted": len(rows),
+            "stable_reference_attempted": any(row["scenario_id"] == scenarios[0].scenario_id for row in rows),
+            "stopped_after_stable_reference": stopped_after_stable,
+            "stop_reason": stop_reason,
+            "publishable_assignment_count": publishable,
+            "normal_publishable_assignment_rate": round(publishable / 12, 6),
+            "normal": _aggregate(rows, "normal development recovery"),
+            "source_info": source_info,
+            "failures": failures,
+            "readiness_basis": "stable reference first; remaining scenarios run only after stable publishable assignment",
+        }
+        _write_json(root / "aggregate_summary.json", aggregate)
+        ready = (
+            len(rows) == 12
+            and publishable >= 7
+            and not failures
+            and all(row.get("model_invariance_equal") is True for row in rows)
+            and all(row.get("external_persisted_seed") is False for row in rows)
+        )
+        _write_json(root / "readiness_assessment.json", {
+            "ready_for_holdout": ready,
+            "normal_scenarios_attempted": len(rows),
+            "normal_publishable_assignments": publishable,
+            "holdout_runs": 0,
+            "stress_runs": 0,
+            "blocking_reasons": ([] if ready else [
+                reason for reason, condition in (
+                    ("not_all_normal_scenarios_attempted", len(rows) != 12),
+                    ("stable_reference_gate_failed", stopped_after_stable),
+                    ("fewer_than_7_publishable_normal_assignments", publishable < 7),
+                    ("model_invariance_not_verified", not all(row.get("model_invariance_equal") is True for row in rows)),
+                    ("failures_present", bool(failures)),
+                ) if condition
+            ]),
+            "not_a_generalization_claim": True,
+        })
+        _write_json(root / "failures.json", {
+            "failures": failures,
+            "unexpected_failure_count": len(failures),
+            "stable_reference_gate_stopped": stopped_after_stable,
+        })
+
+
 def audit_existing_artifact(
     source_dir: str | Path,
     output_dir: str | Path,
@@ -1393,8 +2093,21 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--audit-source-dir", help="Rebuild summaries from an existing raw Phase C artifact without solving")
     parser.add_argument("--audit-output-dir", help="Destination for a status-semantics audited artifact")
     parser.add_argument("--audit-overwrite-existing", action="store_true", help="Refresh an existing matching audited summary only")
+    parser.add_argument("--recovery-manifest", help="Run the internal constrained-first cold-start recovery evaluation")
+    parser.add_argument("--recovery-output-dir", default=str(DEFAULT_RECOVERY_OUTPUT))
+    parser.add_argument("--recovery-resume", action="store_true")
     args = parser.parse_args(tuple(argv) if argv is not None else None)
     try:
+        if args.recovery_manifest:
+            recovery_runner = CpSatColdStartRecoveryRunner(args.recovery_manifest)
+            summary = recovery_runner.run(args.recovery_output_dir, resume=args.recovery_resume)
+            print(
+                "CP-SAT cold-start recovery PASS: "
+                f"{summary['scenarios_attempted']} scenario(s), "
+                f"{summary['publishable_assignment_count']} publishable assignment(s), "
+                f"ready_for_holdout={_read_json(Path(args.recovery_output_dir) / 'readiness_assessment.json')['ready_for_holdout']}"
+            )
+            return 0
         runner = CpSatRobustnessRunner(args.evaluation_manifest)
         if args.audit_source_dir:
             if not args.audit_output_dir:
