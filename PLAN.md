@@ -399,3 +399,14 @@ Version 1 is complete when:
 - fairness and satisfaction metrics are calculated,
 - incomplete and infeasible cases are clearly reported,
 - and results can be explained using small hand-verifiable examples.
+
+### Core-Targeted Minimum Period-Placement Repair Probe v1
+
+The next development diagnostic freezes one feasible control and seven audited
+normal targets, then generates period-only edits from the authoritative fine
+core. The first step is an exact student-level candidate preview; it does not
+run CP-SAT. Candidate validation, when explicitly authorized after the cost
+gate, will reuse the unchanged production hard model on an in-memory section
+plan copy. No capacity, request, policy, HA, or linked-course semantics may
+change. Any minimum statement is limited to the frozen admissible candidate
+universe; teacher and room realism remain outside the modeled scope.

@@ -1,0 +1,38 @@
+{
+  "probe_name": "core_targeted_minimum_period_placement_repair_probe",
+  "probe_version": "v1",
+  "source_git_commit": "aafd3331695d0dd5440cf83873830c49f825708b",
+  "source_section_audit_manifest_hash": "fec9189f0997ebe92a7c0fb260fbf745af022b5765bb4ede29cbaaf6c4e10716",
+  "source_raw_artifact_hash": "1e9e899918d5f873e4a25bd4689153638b11dca3af113916212e5d3458369e18",
+  "source_audited_artifact_hash": "6a74f985b801606f7fb9c4323ea6853f8313a1e99db7e92388aad2a8f85dc015",
+  "solver_seed": 20260630,
+  "workers": 1,
+  "scenarios": [
+    "normal_dev_reference_2026",
+    "normal_dev_01",
+    "normal_dev_03",
+    "normal_dev_04",
+    "normal_dev_05",
+    "normal_dev_07",
+    "normal_dev_09",
+    "normal_dev_10"
+  ],
+  "allowed_edit_types": [
+    "single_section_move",
+    "logical_section_swap"
+  ],
+  "candidate_universe_definition": {
+    "scope": "primary logical courses of the audited fine-core student and compatible existing logical sections",
+    "periods": "P1-P7",
+    "double_period": "consecutive P1-P2 through P6-P7",
+    "multi_row_atomicity": true,
+    "capacity_changes": false,
+    "request_changes": false,
+    "policy_relaxation": false,
+    "invalid_witness_students_excluded": true,
+    "candidate_edge_membership": "canonical request-section membership is preserved; period-derived views are rebuilt"
+  },
+  "tuning_allowed": false,
+  "stress_execution_allowed": false,
+  "holdout_execution_allowed": false
+}

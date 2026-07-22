@@ -112,3 +112,10 @@ witnesses retain raw diagnostic values only; they do not supply authoritative
 repair amounts or root-cause student IDs. The current audited conclusion is
 strong evidence of period-supply misalignment under the frozen section plans,
 not proof of a minimum section move.
+
+- Began the Core-Targeted Minimum Period-Placement Repair Probe v1. Added a
+  frozen control/target manifest and an independent candidate-universe runner.
+  The preview uses only audited fine-core students, excludes invalid witness
+  students, preserves section identity/capacity/HA/linked semantics, and uses
+  an exact no-capacity student-level dynamic program. Formal CP-SAT candidate
+  validation is not run until its explicit cost gate is reviewed.

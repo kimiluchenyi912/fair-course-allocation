@@ -293,3 +293,20 @@ python -m src.section_plan_feasibility_audit \
   --rebuild-reporting-source-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1 \
   --rebuild-reporting-output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1-audited
 ```
+
+## Period-placement repair probe
+
+The development-only period-placement probe generates a frozen candidate
+universe and exact core-student preview on copies of the seven audited target
+section plans. It performs no solver runs and refuses to overwrite a non-empty
+artifact directory:
+
+```bash
+.venv/bin/python -m src.period_placement_repair_probe \
+  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/period-placement-repair-probe-v1
+```
+
+It uses only authoritative fine-core evidence, keeps capacities and policy
+hard, and does not claim a global minimum or teacher/room feasibility. Formal
+candidate validation is blocked until the generated cost preview is reviewed;
+stress, negative, and holdout scenarios are not included.

@@ -800,6 +800,26 @@ comes only from an invalid witness is downgraded to `low_confidence_signal`.
 See
 `docs/SECTION_PLAN_FEASIBILITY_AUDIT.md`.
 
+### Period-placement repair probe v1
+
+The core-targeted repair probe is a separate development diagnostic. It uses
+only the audited fine sufficient core and excludes students from invalid
+relaxation witnesses. Its frozen candidate universe contains single logical
+section moves and compatible logical-section swaps over P1-P7; double-period
+sections use consecutive pairs and Gov/Econ/multi-row structures move
+atomically. It changes no request, capacity, section count, policy, course
+identity, or production planner output.
+
+The first cost-preview stage uses an exact dynamic program that ignores
+capacity but preserves candidate validity, period conflicts, logical identity,
+HA occupancy, and linked semantics. A promising local edit is not a validated
+repair. Future full-model validation must use the production hard-model
+builder, a solver-response assignment, Final Schedule Policy, and zero
+consistency issues. A minimum claim is restricted to the frozen admissible
+candidate universe; UNKNOWN prevents a no-repair conclusion. No teacher,
+room, or other unmodeled physical constraint is claimed. Stress, negative,
+and holdout scenarios are out of scope.
+
 ## 14. Solver priorities
 
 Use lexicographic optimization:
