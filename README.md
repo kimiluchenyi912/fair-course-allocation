@@ -310,3 +310,22 @@ It uses only authoritative fine-core evidence, keeps capacities and policy
 hard, and does not claim a global minimum or teacher/room feasibility. Formal
 candidate validation is blocked until the generated cost preview is reviewed;
 stress, negative, and holdout scenarios are not included.
+
+## Joint period-edit feasibility pilot
+
+The Phase A pilot jointly models frozen section-placement choices and student
+assignment for only the feasible control and `normal_dev_10`. It uses the
+frozen promising placement domain, keeps production hard policies and section
+counts unchanged, and distinguishes a diagnostic joint witness from an
+independently validated production repair:
+
+```bash
+.venv/bin/python -m src.joint_period_edit_pilot \
+  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-period-edit-pilot-v1
+```
+
+The pilot excludes `G12_0105`, does not use an external persisted seed, and
+does not run the other six targets, stress, negative, or holdout scenarios.
+Minimum claims, if any, are bounded to the frozen placement domain and are
+not global schedule-planning claims. See
+`docs/JOINT_PERIOD_EDIT_FEASIBILITY.md`.

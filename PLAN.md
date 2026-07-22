@@ -386,6 +386,23 @@ and cannot supply authoritative repair amounts or root-cause students. See
 `docs/SECTION_PLAN_FEASIBILITY_AUDIT.md` for the full method, output contract,
 and per-scenario findings.
 
+### Joint Period-Edit Feasibility Pilot v1
+
+The next Phase A diagnostic pilot jointly chooses placements from the frozen
+promising-candidate domain and assigns students using production-equivalent
+hard semantics. It runs only `normal_dev_reference_2026` and
+`normal_dev_10`; the other six targets, stress, negative, and holdout inputs
+remain unrun. The control fixed-placement model must be feasible and the
+target zero-edit model must remain INFEASIBLE (or stop on UNKNOWN) before any
+repair search begins.
+
+The pilot does not modify the section planner, request data, capacities,
+policy configuration, or production CP-SAT model. HA and Gov/Econ linked
+sections remain atomic. A joint-model witness is diagnostic only and requires
+an independent production-model validation before it can be called a
+validated repair. Minimum wording, if ever supported, is limited to the
+frozen placement domain and cannot describe a global or real-world minimum.
+
 ## 11. Version 1 Completion Criteria
 
 Version 1 is complete when:

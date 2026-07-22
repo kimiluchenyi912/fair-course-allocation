@@ -1,0 +1,33 @@
+{
+  "experiment_name": "joint_period_edit_feasibility_pilot",
+  "experiment_version": "v1",
+  "phase": "A_single_scenario_pilot",
+  "source_git_commit": "f88e545301564c52de499cbf76abef5cdc1c822f",
+  "source_candidate_preview_git_commit": "aafd3331695d0dd5440cf83873830c49f825708b",
+  "source_audit_hash": "1e9e899918d5f873e4a25bd4689153638b11dca3af113916212e5d3458369e18",
+  "source_audited_artifact_hash": "6a74f985b801606f7fb9c4323ea6853f8313a1e99db7e92388aad2a8f85dc015",
+  "source_candidate_preview_hash": "c43e00a74bbe513064b4d40839ad648b000f08757499f91ae0952d9e542ea6e2",
+  "control_scenario_id": "normal_dev_reference_2026",
+  "target_scenario_id": "normal_dev_10",
+  "authoritative_student_id": "G12_0536",
+  "solver_seed": 20260630,
+  "workers": 1,
+  "external_persisted_seed": false,
+  "stress_execution_allowed": false,
+  "holdout_execution_allowed": false,
+  "other_normal_targets_allowed": false,
+  "student_request_source": "frozen_normal-development-v1 input",
+  "placement_domain_source": "period-placement-repair-probe-v1 statically promising candidates only",
+  "forbidden_authoritative_student": "G12_0105",
+  "allowed_edit_types": [
+    "single_section_move",
+    "logical_section_swap"
+  ],
+  "minimum_claim_scope": "frozen_admissible_placement_domain_only",
+  "notes": [
+    "This is a development diagnostic pilot, not a seven-scenario evaluation.",
+    "The joint model must preserve production hard policies and fixed section counts.",
+    "A joint witness is not an independently validated repair until the unchanged production model accepts the edited plan.",
+    "No teacher, room, department, stress, negative, or holdout constraints are modeled in this slice."
+  ]
+}

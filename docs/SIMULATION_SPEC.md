@@ -820,6 +820,27 @@ candidate universe; UNKNOWN prevents a no-repair conclusion. No teacher,
 room, or other unmodeled physical constraint is claimed. Stress, negative,
 and holdout scenarios are out of scope.
 
+### Joint Period-Edit Feasibility Pilot v1
+
+Phase A adds a separate joint diagnostic model for one feasible control and
+`normal_dev_10` only. It converts only statically promising candidates from
+the period-placement preview into a frozen per-logical-section placement
+domain. It uses the production canonical request/candidate universe and
+production hard-policy helpers, while independently expressing placement
+choices, changed-section indicators, assignment-dependent optional intervals,
+and per-student `NoOverlap`. Normal sections occupy one period; Math 2/3
+Honors Accelerated occupies two consecutive periods as one logical section;
+Gov/Econ linked semester rows occupy one logical period and one identity.
+
+The fixed-original control must be feasible and the target zero-edit check
+must remain INFEASIBLE or stop on UNKNOWN before repair search. A cost gate
+stops oversized joint models without deleting placement options. A joint
+witness is not a repair until the unchanged production model validates an
+independent edited-plan copy with no external persisted seed. Any minimum
+statement is limited to the frozen placement domain, never a global or
+real-world schedule minimum. The other six normal targets, stress, negative,
+and holdout scenarios are not run in this Phase A slice.
+
 ## 14. Solver priorities
 
 Use lexicographic optimization:

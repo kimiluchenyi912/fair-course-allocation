@@ -76,6 +76,19 @@
   section plan, or policy was changed. See
   `docs/SECTION_PLAN_FEASIBILITY_AUDIT.md`.
 
+## Joint Period-Edit Feasibility Pilot v1
+
+Added the Phase A single-scenario joint diagnostic model. It is limited to the
+feasible control `normal_dev_reference_2026` and pilot target `normal_dev_10`,
+uses only the frozen statically promising placement domain for authoritative
+student `G12_0536`, and excludes `G12_0105`. Placement choices and assignment
+intervals share one CP-SAT model while production candidate, capacity,
+identity, fallback, fairness, minimum-five, and maximum-gap semantics remain
+unchanged. The control and target zero-edit equivalence checks run before the
+cost gate; any joint witness still requires independent validation by the
+unchanged production solver. This is not a seven-scenario evaluation and does
+not run stress, negative, or holdout scenarios.
+
 ## Current Direction
 
 Build a scheduling system that assigns counselor-approved requests to fixed
