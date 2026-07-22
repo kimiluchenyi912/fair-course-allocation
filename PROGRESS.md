@@ -46,6 +46,35 @@
   and structural certificates. Holdout readiness now fails closed for a
   majority of normal scenarios without publishable assignments; the current
   cold-start result is 0/12 and is not evidence of global model infeasibility.
+- Added the distance-guided CP-SAT cold-start repair probe (Phase B): a single
+  stable-reference development probe using a constrained-first internal hint
+  and an unweighted Hamming-distance objective over the unchanged full hard
+  model, with no external persisted seed, legacy bootstrap, or later
+  lexicographic stage.
+- Added the frozen 12-normal Cold-Start Feasibility Recovery evaluation
+  (Phase C): imports the stable reference from the completed probe artifact
+  without re-solving it, and solves the remaining 11 normal development
+  scenarios once each under the identical frozen configuration. Result:
+  3 FEASIBLE, 7 INFEASIBLE, 2 UNKNOWN, 3/12 publishable, success gate FAIL,
+  `ready_for_stress_development`/`ready_for_holdout` both false.
+- Ran a Reporting Integrity Audit over that Phase C artifact (no re-solve):
+  fixed a missing `publishable_assignment_available` field on the imported
+  stable row, replaced ambiguous comparison language with a fixed
+  `policy_compliance_tradeoff` classification, and traced an anomalous
+  `normal_dev_11` stage-level wall-time reading to OR-Tools' native
+  `CpSolver.wall_time` property (unrelated to this codebase's own, sane,
+  perf_counter-based timing) -- flagged and excluded from aggregate solver
+  timing while the raw value is preserved for audit.
+- Added the Section-Plan Feasibility Alignment Audit v1: an independent,
+  read-only diagnostic CP-SAT model (reusing the production canonical input,
+  candidate index, mandatory-fallback injection, and policy thresholds) that
+  explains the 7 Phase C INFEASIBLE scenarios via OR-Tools assumption-literal
+  unsatisfiable cores (group-level and fine-grained, with deletion-filtering
+  to a locally minimal core), a fixed three-stage lexicographic
+  slack-relaxation witness, and eight single/multi-family counterfactual
+  checks. Diagnostic witnesses are never publishable and no production code,
+  section plan, or policy was changed. See
+  `docs/SECTION_PLAN_FEASIBILITY_AUDIT.md`.
 
 ## Current Direction
 
@@ -65,9 +94,21 @@ authoritative input model for new development.
 
 ## Next Step
 
-Review the Phase C CP-SAT development artifact and its status audit before
-explicitly approving any holdout evaluation. Do not treat UNKNOWN as
-INFEASIBLE, FEASIBLE as OPTIMAL, lexicographic-stage or bootstrap
-INFEASIBLE as a full-model proof, ordinary stress results as a generalization
-claim, or structural negative certificates as evidence about ordinary-year
-feasibility.
+Review the Section-Plan Feasibility Alignment Audit v1 findings (unsatisfiable
+cores, relaxation witnesses, counterfactual checks, and evidence-backed
+classification) for the 7 INFEASIBLE normal development scenarios before
+deciding whether the next slice is a section-capacity rebalance, a
+period-aware section-planning change, or a policy reconsideration. Do not
+treat UNKNOWN as INFEASIBLE, FEASIBLE as OPTIMAL, lexicographic-stage or
+bootstrap INFEASIBLE as a full-model proof, a diagnostic relaxation witness as
+publishable, a sufficient unsatisfiable core as proven minimum, ordinary
+stress results as a generalization claim, or structural negative certificates
+as evidence about ordinary-year feasibility.
+
+The Section-Plan audit distinguishes an unsat core (constraints jointly
+sufficient for infeasibility) from a relaxation counterfactual (removing a
+family is sufficient to restore feasibility). Invalid or unproven relaxation
+witnesses retain raw diagnostic values only; they do not supply authoritative
+repair amounts or root-cause student IDs. The current audited conclusion is
+strong evidence of period-supply misalignment under the frozen section plans,
+not proof of a minimum section move.

@@ -734,6 +734,72 @@ without an optimality proof; `UNKNOWN` is not `INFEASIBLE`.
 This is a development diagnostic, not a generalization claim and not a change
 to generator, section planning, capacity, period layout, or policy semantics.
 
+### Cold-start feasibility recovery Phase C
+
+`data/scenarios/cp_sat_cold_start_normal_evaluation_v1.json` extends Phase B's
+frozen configuration to all 12 normal development scenarios. The stable
+reference is imported from the completed Phase B probe artifact once solver
+configuration and input provenance are verified to match -- it is never
+re-solved. The remaining 11 scenarios are each solved once under the
+identical configuration (seed `20260630`, one worker, 300-second budget,
+constrained-first internal hint, unweighted Hamming objective, stop after
+first solver solution). Current frozen result: 3 FEASIBLE, 7 INFEASIBLE,
+2 UNKNOWN, 3/12 publishable, success gate FAIL,
+`ready_for_stress_development`/`ready_for_holdout` both false. A Reporting
+Integrity Audit later rebuilt a corrected reporting layer from the same raw
+artifact without re-solving: it backfilled a missing publishable field on the
+imported stable row by deriving it from that row's own already-persisted
+fields, replaced ambiguous comparison language with a fixed
+`policy_compliance_tradeoff` classification, and isolated an anomalous
+stage-level wall-time reading on `normal_dev_11` to OR-Tools' native
+`CpSolver.wall_time` property (traced to the exact assignment line in
+`cp_sat_solver.py`), which is excluded from aggregate solver-timing
+statistics while the raw value is preserved for audit.
+
+### Section-Plan Feasibility Alignment Audit v1
+
+`data/scenarios/section_plan_feasibility_audit_v1.json` defines a read-only
+diagnostic slice over the 7 Phase C scenarios proven globally INFEASIBLE,
+plus the stable feasible reference as a control. It does not modify the
+production section planner, generator, CP-SAT hard constraints, objective, or
+Final Schedule Policy. An independent diagnostic CP-SAT model reuses the
+production canonical input, candidate index, mandatory fallback injection,
+and policy threshold constants; the never-relaxed families (candidate
+validity, duplicate logical identity, student target-load cap, mandatory
+fallback semantics, and the already-soft math coverage policy) are added via
+the unmodified production constraint functions. The seven diagnosable
+hard-policy families -- `SECTION_CAPACITY`, `STUDENT_PERIOD_CONFLICT`,
+`PROTECTED_PRIMARY`, `ORDINARY_MAX_PRIMARY_UNMET`, `HIGH_DEMAND_PRIMARY`,
+`MINIMUM_FIVE_LOGICAL`, `MAXIMUM_LOGICAL_GAP_ONE` -- are each gated by an
+OR-Tools assumption literal.
+
+For each INFEASIBLE target the audit reconfirms INFEASIBLE against the
+diagnostic model (a correctness failure otherwise), extracts a sufficient
+assumption core via `SufficientAssumptionsForInfeasibility`, and
+deletion-filters it to a locally minimal core -- never reported as a proven
+global minimum. A fine-grained pass repeats this at per-section/per-student
+granularity for the families the group core implicates. A separate
+controlled-relaxation model adds non-negative slack to the same seven
+families (period conflicts stay hard unless a documented second layer is
+needed) and solves a fixed three-stage lexicographic objective: minimize the
+count of relaxed constraint instances, then the total slack magnitude, then
+the Hamming distance to the Constrained First hint. The result is a
+diagnostic relaxation witness, never a publishable assignment or a repaired
+section plan; a `FEASIBLE` (not `OPTIMAL`) stage result is reported as "best
+found," not "minimum." Eight fixed single/multi-family counterfactual checks
+report whether relaxing one rule family alone would have restored
+feasibility, without treating `UNKNOWN` as a negative result. A counterfactual
+is not an unsat core: the core is jointly sufficient for infeasibility, while
+the counterfactual is sufficient feasibility after removing a family. Invalid
+or unproven witnesses retain raw values but are diagnostic-only and cannot
+support authoritative repair amounts or student root-cause evidence.
+Classification labels (e.g. `course_capacity_bottleneck`,
+`period_supply_misalignment`, `minimum_load_policy_interaction`) are only
+assigned when backed by core or counterfactual evidence; an interaction that
+comes only from an invalid witness is downgraded to `low_confidence_signal`.
+See
+`docs/SECTION_PLAN_FEASIBILITY_AUDIT.md`.
+
 ## 14. Solver priorities
 
 Use lexicographic optimization:

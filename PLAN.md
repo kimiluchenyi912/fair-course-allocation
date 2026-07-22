@@ -338,6 +338,54 @@ optimality proof; `UNKNOWN` is not `INFEASIBLE`. This is a development
 diagnostic and does not establish generalization or change generator, section
 planning, capacity, period-layout, or policy semantics.
 
+### Cold-Start Feasibility Recovery v1 Phase C — Frozen 12-Normal Development Evaluation
+
+Phase C applies the same distance-guided repair method to all 12 normal
+development scenarios. The stable reference (`normal_dev_reference_2026`) is
+never re-solved: its result is imported from the completed Phase B probe
+artifact once solver configuration and input provenance are verified to
+match. The remaining 11 scenarios are each solved once under the identical
+frozen configuration (seed `20260630`, one worker, 300-second budget,
+constrained-first internal hint, unweighted Hamming objective, stop after
+first solver solution). Result: 3 FEASIBLE, 7 INFEASIBLE, 2 UNKNOWN;
+3/12 publishable; success gate FAIL; `ready_for_stress_development` and
+`ready_for_holdout` both `false`. A follow-up Reporting Integrity Audit
+rebuilt a corrected reporting layer from the same raw artifact (no re-solve):
+it fixed a missing `publishable_assignment_available` field on the imported
+stable row, replaced ambiguous "dominance"/"winner" language with a fixed
+`policy_compliance_tradeoff` classification, and traced an anomalous
+`normal_dev_11` stage-level wall-time reading (1114.1s, exceeding its own
+289s configured budget) to OR-Tools' native `CpSolver.wall_time` property —
+confirmed unrelated to this codebase's own perf_counter-based timing, which
+stayed sane throughout; the anomaly is flagged and excluded from aggregate
+solver-timing statistics while the raw value is preserved for audit.
+
+### Section-Plan Feasibility Alignment Audit v1
+
+A read-only diagnostic slice explaining *why* the 7 Phase C scenarios above
+are globally INFEASIBLE, without changing the production section planner,
+generator, CP-SAT hard constraints, objective, or Final Schedule Policy. It
+builds an independent diagnostic CP-SAT model that reuses the production
+canonical input, candidate index, mandatory-fallback injection, and policy
+threshold constants; the seven diagnosable hard-policy families
+(`SECTION_CAPACITY`, `STUDENT_PERIOD_CONFLICT`, `PROTECTED_PRIMARY`,
+`ORDINARY_MAX_PRIMARY_UNMET`, `HIGH_DEMAND_PRIMARY`, `MINIMUM_FIVE_LOGICAL`,
+`MAXIMUM_LOGICAL_GAP_ONE`) are each gated by an OR-Tools assumption literal so
+`SufficientAssumptionsForInfeasibility` plus deletion-filtering can produce a
+group-level and fine-grained (per-section/per-student) unsatisfiable core.
+A separate controlled-relaxation model adds non-negative slack to the same
+seven families and solves a fixed three-stage lexicographic objective
+(minimize relaxed-instance count, then total slack magnitude, then Hamming
+distance to the Constrained First hint) to produce a diagnostic witness —
+never a publishable assignment. Eight fixed single/multi-family counterfactual
+checks answer whether relaxing one rule family alone would restore
+feasibility. A counterfactual is not an unsat core: cores are jointly
+sufficient for infeasibility, while counterfactuals test sufficient feasibility
+after removing a family. Invalid or unproven witnesses remain diagnostic-only
+and cannot supply authoritative repair amounts or root-cause students. See
+`docs/SECTION_PLAN_FEASIBILITY_AUDIT.md` for the full method, output contract,
+and per-scenario findings.
+
 ## 11. Version 1 Completion Criteria
 
 Version 1 is complete when:

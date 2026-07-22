@@ -232,3 +232,64 @@ assignment variables, and the hint is not a hard constraint. `FEASIBLE` is not
 available, must come from the repair solver response and pass the final policy
 and consistency checks. The probe is development diagnostics only; it does not
 run stress or holdout scenarios or prove generalization.
+
+## Cold-start feasibility recovery Phase C
+
+Run the frozen 12-normal-scenario evaluation. The stable reference is
+imported from the completed Phase B probe artifact (never re-solved); the
+remaining 11 scenarios are each solved once under the identical frozen
+configuration:
+
+```bash
+python -m src.cp_sat_normal_evaluation_runner \
+  --evaluation-manifest data/scenarios/cp_sat_cold_start_normal_evaluation_v1.json \
+  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-normal-development-v1
+```
+
+To rebuild a corrected reporting layer from an existing raw Phase C artifact
+without re-solving anything:
+
+```bash
+python -m src.cp_sat_normal_evaluation_runner \
+  --audit-source-dir /path/to/cp-sat-cold-start-normal-development-v1 \
+  --audit-output-dir /path/to/cp-sat-cold-start-normal-development-v1-audited
+```
+
+Current frozen result: 3 FEASIBLE, 7 INFEASIBLE, 2 UNKNOWN, 3/12 publishable,
+success gate FAIL, `ready_for_stress_development`/`ready_for_holdout` both
+false. See `docs/CP_SAT_ROBUSTNESS_EVALUATION.md`.
+
+## Section-plan feasibility alignment audit
+
+Run the read-only diagnostic slice that explains why the 7 INFEASIBLE normal
+scenarios above are globally infeasible, using the stable reference as a
+control. It never modifies the production section planner, generator, hard
+constraints, objective, or policy, and never re-solves the Phase C evaluation:
+
+```bash
+python -m src.section_plan_feasibility_audit \
+  --audit-manifest data/scenarios/section_plan_feasibility_audit_v1.json \
+  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1
+```
+
+It reports, per scenario: static feasibility descriptors (capacity, course
+demand, exact student max-load matching, period concentration), an
+OR-Tools assumption-literal unsatisfiable core (group-level and
+fine-grained, with deletion-filtering to a locally minimal core), a fixed
+three-stage lexicographic slack-relaxation witness, and eight
+single/multi-family counterfactual checks. Diagnostic witnesses are never
+publishable assignments or repaired section plans; a sufficient
+unsatisfiable core is never reported as a proven minimum unless the solver
+proves it. A counterfactual is not a smaller unsat core: it only tests whether
+removing a family restores feasibility. Invalid or unproven witnesses remain
+diagnostic-only and cannot support repair recommendations or root-cause
+students. See `docs/SECTION_PLAN_FEASIBILITY_AUDIT.md`.
+
+To rebuild corrected reporting from an existing raw audit artifact without
+running a solver:
+
+```bash
+python -m src.section_plan_feasibility_audit \
+  --rebuild-reporting-source-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1 \
+  --rebuild-reporting-output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1-audited
+```

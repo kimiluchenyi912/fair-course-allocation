@@ -1,0 +1,64 @@
+{
+  "audit_name": "section_plan_feasibility_audit",
+  "audit_version": "v1",
+  "diagnostic_schema_version": 1,
+  "baseline_evaluation": "cp_sat_cold_start_normal_evaluation_v1",
+  "source_normal_suite": {
+    "artifact_dir": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/normal-development-v1",
+    "manifest_sha256": "9e4cc9ddf6e6b4f367f139048319c09a74c8e993aa8c8a44678c10ef45e1f095",
+    "sha256sums_sha256": "9e24470e55e85f005b35c347ceaeaa15082b1da84c58af16e5fe75704be73b6d"
+  },
+  "source_recovery_evaluation_artifact": {
+    "artifact_dir": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-normal-development-v1"
+  },
+  "source_recovery_evaluation_audited_artifact": {
+    "artifact_dir": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-normal-development-v1-audited"
+  },
+  "source_git_commit": "0f004e6c82fd1e480a0284f0e81607abc49a0d86",
+  "split": "development",
+  "development_data": true,
+  "tuning_allowed": true,
+  "holdout_execution_allowed": false,
+  "stress_execution_allowed": false,
+  "solver_seed": 20260630,
+  "workers": 1,
+  "time_budgets_seconds": {
+    "group_core": 60,
+    "fine_core": 120,
+    "counterfactual_variant": 30,
+    "counterfactual_variant_count": 8,
+    "relaxation_stage_1": 120,
+    "relaxation_stage_2": 120,
+    "relaxation_stage_3": 60,
+    "total_scenario_budget": 660
+  },
+  "constraint_families": {
+    "never_relaxed": [
+      "ASSIGNMENT_CANDIDATE_VALIDITY",
+      "DUPLICATE_LOGICAL_IDENTITY",
+      "STUDENT_TARGET_LOAD_CAP",
+      "MANDATORY_FALLBACK_SEMANTICS",
+      "MATH_COVERAGE_SOFT_POLICY"
+    ],
+    "diagnosable": [
+      "SECTION_CAPACITY",
+      "STUDENT_PERIOD_CONFLICT",
+      "PROTECTED_PRIMARY",
+      "ORDINARY_MAX_PRIMARY_UNMET",
+      "HIGH_DEMAND_PRIMARY",
+      "MINIMUM_FIVE_LOGICAL",
+      "MAXIMUM_LOGICAL_GAP_ONE"
+    ]
+  },
+  "scenarios": [
+    {"scenario_id": "normal_dev_reference_2026", "role": "feasible_control", "source_suite": "normal", "source_scenario_id": "normal_dev_reference_2026", "expected_baseline_outcome": "feasible_control"},
+    {"scenario_id": "normal_dev_01", "role": "infeasible_target", "source_suite": "normal", "source_scenario_id": "normal_dev_01", "expected_baseline_outcome": "globally_infeasible"},
+    {"scenario_id": "normal_dev_03", "role": "infeasible_target", "source_suite": "normal", "source_scenario_id": "normal_dev_03", "expected_baseline_outcome": "globally_infeasible"},
+    {"scenario_id": "normal_dev_04", "role": "infeasible_target", "source_suite": "normal", "source_scenario_id": "normal_dev_04", "expected_baseline_outcome": "globally_infeasible"},
+    {"scenario_id": "normal_dev_05", "role": "infeasible_target", "source_suite": "normal", "source_scenario_id": "normal_dev_05", "expected_baseline_outcome": "globally_infeasible"},
+    {"scenario_id": "normal_dev_07", "role": "infeasible_target", "source_suite": "normal", "source_scenario_id": "normal_dev_07", "expected_baseline_outcome": "globally_infeasible"},
+    {"scenario_id": "normal_dev_09", "role": "infeasible_target", "source_suite": "normal", "source_scenario_id": "normal_dev_09", "expected_baseline_outcome": "globally_infeasible"},
+    {"scenario_id": "normal_dev_10", "role": "infeasible_target", "source_suite": "normal", "source_scenario_id": "normal_dev_10", "expected_baseline_outcome": "globally_infeasible"}
+  ],
+  "notes": "Section-Plan Feasibility Alignment Audit v1. Development-only diagnostic slice over the 7 normal development scenarios already proven globally INFEASIBLE by the frozen distance-guided full-hard-model repair (cp_sat_cold_start_normal_evaluation_v1), plus the stable feasible control normal_dev_reference_2026. Builds an independent diagnostic CP-SAT model that reuses the production canonical input, candidate index, mandatory-fallback injection, and constraint thresholds; never-relaxed constraint families (candidate validity, duplicate logical identity, student target-load cap, mandatory fallback semantics, and the already-soft math coverage policy) are added exactly as in production. The seven diagnosable hard-policy families are each gated by an assumption/relaxation control so their contribution to infeasibility can be measured via unsat-core extraction, controlled slack relaxation, and single-family counterfactual checks. An unsat core is a set of constraints jointly sufficient for infeasibility; a counterfactual only tests whether removing a family restores feasibility, and neither proves a minimum section repair. Invalid or unproven relaxation witnesses are diagnostic-only and cannot supply authoritative repair amounts or root-cause student evidence. No stress, negative, or holdout scenario is included. No production section planner, generator, hard constraint, objective, or policy threshold is modified. Relaxed diagnostic assignments are never publishable and are not a repaired section plan."
+}
