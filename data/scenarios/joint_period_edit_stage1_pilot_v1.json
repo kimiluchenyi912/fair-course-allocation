@@ -1,0 +1,43 @@
+{
+  "experiment_name": "joint_period_edit_stage1_pilot",
+  "experiment_version": "v1",
+  "phase": "stage1_single_target_pilot",
+  "source_git_commit": "414b20ff13962a1f080650ec0f87e55307562a71",
+  "target_scenario_id": "normal_dev_10",
+  "authoritative_student_id": "G12_0536",
+  "excluded_witness_student_ids": [
+    "G12_0105"
+  ],
+  "source_section_audit_hash": "1e9e899918d5f873e4a25bd4689153638b11dca3af113916212e5d3458369e18",
+  "source_section_audited_hash": "6a74f985b801606f7fb9c4323ea6853f8313a1e99db7e92388aad2a8f85dc015",
+  "source_candidate_preview_hash": "c43e00a74bbe513064b4d40839ad648b000f08757499f91ae0952d9e542ea6e2",
+  "source_joint_pilot_hash": "b020be3972b8eeb7b2bcacfbf4d53c823ee127f5ebebaecc53db698dc1787c63",
+  "source_control_audit_hash": "6b075d07d0c188998a2bf8000fe150ccebc970b8d623ddef8f5a35ffc4175c22",
+  "source_control_audited_hash": "f5eb6f8020180fbfa9fe706c1e99c0c8b40f6e592f9b1fc551d78e85fdbceae5",
+  "frozen_placement_domain_hash": "be91f2b0eca356fe8340b474c63cf2cb37673120c1d620ad39be5535faea05c0",
+  "editable_section_id_hash": "4c896d19b8b39c423c52675d190def740e349515bd21c26a41df821a9770e1b2",
+  "placement_option_hash": "6a9e87335a22c4d6bab0109c1a022df1489ff158978d9cec82b9cf0e9caedb5a",
+  "section_domain_mapping_hash": "4651e306c061bcc4a57a1828152e77c4d2ffb4a147ff358f136a173bf8cf47bb",
+  "candidate_source_id_hash": "76717f215bdf09839c2b1b79a03d24006f23644e6b76ff9eea7db3ec502ea004",
+  "original_placement_hash": "bfa9c25a1a03466731aaa967c3f01126bc06a35aeb86f4966380ace833d75281",
+  "solver_seed": 20260630,
+  "workers": 1,
+  "external_persisted_seed": false,
+  "stage1_budget_seconds": 300,
+  "fixed_witness_acceptance_budget_seconds": 30,
+  "production_validation_budget_seconds": 300,
+  "stop_after_first_complete_solution": false,
+  "stage2_allowed": false,
+  "stage3_allowed": false,
+  "stage4_allowed": false,
+  "other_normal_targets_allowed": false,
+  "control_solver_runs_allowed": false,
+  "stress_execution_allowed": false,
+  "negative_execution_allowed": false,
+  "holdout_execution_allowed": false,
+  "notes": [
+    "Stage 1 minimizes changed logical sections within the frozen candidate-preview domain.",
+    "A joint witness is not an independently validated production repair.",
+    "No section is added, removed, split, merged, resized, or dynamically pruned."
+  ]
+}

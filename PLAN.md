@@ -455,3 +455,16 @@ identity. If an older checkpoint cannot bind a response, log, and validation
 without ambiguity, that result is marked provenance-unverified and excluded;
 only the same frozen variant may be rerun to replace it. The raw artifact is
 never rewritten during this audit.
+
+### Joint Period-Edit Stage 1 Pilot v1
+
+The next slice is restricted to `normal_dev_10` and the frozen promising
+placement domain from the candidate preview. It runs one fresh optional-
+interval joint model and minimizes changed logical sections only. Control,
+other normal targets, stress, negative, holdout, and Stage 2--4 runs are
+forbidden. A Stage 1 incumbent is a diagnostic joint witness until the
+unchanged production model accepts the exact assignment on an edited-plan
+copy and an independent production cold-start validation passes. Any minimum
+claim is scoped to the frozen domain and requires an `OPTIMAL` Stage 1 plus
+both production gates; `FEASIBLE` and `UNKNOWN` remain best-found or
+unresolved results.

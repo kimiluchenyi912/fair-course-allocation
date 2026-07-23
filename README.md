@@ -366,3 +366,22 @@ per-variant `response_stats.json` and `validation.json` names for Hamming and
 feasibility-only runs. The affected B/C Hamming rows were therefore excluded
 and rerun with the same frozen configuration; no target or holdout run was
 added.
+
+## Joint Period-Edit Stage 1 Pilot
+
+The current development-only Stage 1 pilot runs only `normal_dev_10` inside a
+frozen candidate-preview placement domain. It minimizes changed logical
+sections with the existing joint optional-interval model, then (only for a
+validated joint witness) runs fixed-witness production acceptance followed by
+one independent production cold-start validation:
+
+```bash
+.venv/bin/python -m src.joint_period_edit_stage1_pilot \
+  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-period-edit-stage1-pilot-v1
+```
+
+The command refuses to overwrite a non-empty artifact directory and supports
+`--resume` without repeating a completed Stage 1 solve. It does not run the
+control, other normal targets, Stage 2--4, stress, negative, or holdout
+scenarios. A joint witness is not a production repair; minimum wording is
+limited to the frozen placement domain and requires all acceptance gates.

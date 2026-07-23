@@ -152,3 +152,13 @@ not proof of a minimum section move.
   Hamming rows were excluded and rerun with the exact frozen settings; the raw
   artifact remains unchanged and the audited sibling records both replacements
   and the five pre-search duplicate-hint attempts.
+
+- Added the single-target Joint Period-Edit Stage 1 Pilot v1 orchestration.
+  It validates source hashes and a frozen 312-section/841-option placement
+  domain, applies one constrained-first hint owner to a fresh model, and
+  minimizes changed logical sections for `normal_dev_10` only. It records
+  model cost gates, raw solver response/log data, joint witness validation,
+  fixed-witness production acceptance, and independent production cold-start
+  validation without changing production planner or CP-SAT semantics. Stage
+  2--4, control, other normal targets, stress, negative, and holdout runs are
+  disabled.

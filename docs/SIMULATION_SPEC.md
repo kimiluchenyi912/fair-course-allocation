@@ -930,3 +930,28 @@ older checkpoint whose shared files were overwritten is provenance-unverified,
 excluded from the aggregate, and may be replaced only by an identical frozen
 rerun. The raw artifact remains immutable; the audit records the replacement
 and all excluded attempts in an external audited sibling.
+
+## Joint Period-Edit Stage 1 Pilot v1
+
+This pilot is a single-target development diagnostic for `normal_dev_10`. It
+uses only the statically promising, hash-verified placement candidates from
+the period-placement preview. Section count, section capacity, request data,
+linked Government/Economics atomicity, Math 2/3 double-period semantics, and
+all production hard-policy helpers remain unchanged. Teacher, room,
+department, and master-schedule constraints are outside this model.
+
+The fresh joint model has one hint owner and one objective:
+`minimize(sum(section_changed))`. It runs with data and section inputs already
+frozen by prior artifacts and `solver_seed=20260630`, one worker, and a
+300-second Stage 1 budget. Control, other normal targets, Stage 2--4, stress,
+negative, and holdout runs are disabled. The external persisted seed is false.
+
+`OPTIMAL` proves a minimum only within the frozen placement domain. `FEASIBLE`
+is a best-found result, while `UNKNOWN` is unresolved even if a callback saw an
+incumbent. A joint witness must pass replay, capacity, period, identity,
+fairness, minimum-five, maximum-gap, and Final Schedule Policy checks before
+production acceptance is attempted. Fixed-witness acceptance uses the
+unchanged production model with every assignment variable fixed and no hint or
+Hamming objective. Only after that passes may the independent production
+cold-start validation run. No result is called a validated repair or a global
+minimum without these gates.
