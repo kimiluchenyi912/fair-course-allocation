@@ -365,6 +365,7 @@ def build_joint_model(
     *,
     placement_domains: Mapping[str, tuple[PlacementOption, ...]] | None = None,
     fixed_original: bool = False,
+    use_optional_intervals_for_fixed: bool = False,
     math_fallback_rules: tuple[Any, ...] = (),
     math_course_ids: tuple[str, ...] = (),
 ) -> JointModelBuild:
@@ -431,7 +432,7 @@ def build_joint_model(
         model.Add(sum(by_section.get(section.linked_section_group_id, ())) <= section.capacity)
 
     optional_intervals = 0
-    if not placement_choice_vars:
+    if not placement_choice_vars and not use_optional_intervals_for_fixed:
         # Fixed-placement equivalence uses the exact same occupancy semantics
         # in the production form.  Avoiding interval objects here keeps the
         # proof check tractable; the variable-placement model below uses

@@ -329,3 +329,40 @@ does not run the other six targets, stress, negative, or holdout scenarios.
 Minimum claims, if any, are bounded to the frozen placement domain and are
 not global schedule-planning claims. See
 `docs/JOINT_PERIOD_EDIT_FEASIBILITY.md`.
+
+## Joint model control performance audit
+
+The control-only audit compares the production-native model with two fixed
+placement joint formulations. It first verifies structural invariance and
+accepts a known policy-compliant assignment for correctness only. The known
+assignment is never used as a performance hint; cold-start runs use only the
+internal Constrained First hint. The default command performs no expensive
+solve. Add `--run-performance` only when the frozen budgets are explicitly
+approved:
+
+```bash
+.venv/bin/python -m src.joint_model_control_performance_audit
+.venv/bin/python -m src.joint_model_control_performance_audit --run-performance \
+  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-model-control-performance-audit-v1
+```
+
+This is a single deterministic reference-control comparison, not a broad
+performance benchmark. `UNKNOWN` is not `INFEASIBLE`; targets, stress,
+negative, and holdout scenarios remain forbidden.
+
+Hint ownership is explicit: the reporting audit is read-only, each performance
+run copies a clean model proto and applies the internal hint exactly once, and
+known-witness acceptance uses separate fresh models. Duplicate or conflicting
+hint variables fail closed before `Solve`. The audited provenance distinguishes
+all solver attempts from included results; an attempt rejected before search
+for duplicate hint variables is excluded from performance aggregation, not
+reported as solver performance failure. The Phase A correctness gate is
+structural invariance plus known-witness acceptance and hint/source-hash
+validation; control feasibility-only `UNKNOWN` is a performance diagnostic and
+is not a prerequisite for semantic equivalence.
+
+The provenance audit also found that the first raw checkpoint reused shared
+per-variant `response_stats.json` and `validation.json` names for Hamming and
+feasibility-only runs. The affected B/C Hamming rows were therefore excluded
+and rerun with the same frozen configuration; no target or holdout run was
+added.

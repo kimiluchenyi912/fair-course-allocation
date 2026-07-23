@@ -132,3 +132,23 @@ not proof of a minimum section move.
   students, preserves section identity/capacity/HA/linked semantics, and uses
   an exact no-capacity student-level dynamic program. Formal CP-SAT candidate
   validation is not run until its explicit cost gate is reviewed.
+
+- Added the Joint Model Control-Equivalence Performance Audit v1 scaffold. It
+  compares production-native, fixed-native-joint, and fixed-optional-interval
+  formulations on `normal_dev_reference_2026` only. Structural invariance and
+  known-witness acceptance are fail-closed gates; the witness is correctness
+  evidence only, not a performance seed. Expensive A/B/C runs are explicit
+  opt-in, with no target, stress, negative, or holdout execution.
+
+- Audited the Joint Model control benchmark hint provenance. The reporting
+  audit is now read-only, solver runs own one fresh model copy each, duplicate
+  or conflicting hint variables fail closed before search, and valid versus
+  excluded solver attempts are represented separately. The Phase A gate uses
+  structural and known-witness correctness checks rather than requiring a
+  control feasibility-only incumbent.
+
+- The provenance audit found and isolated a legacy per-variant checkpoint
+  collision between Hamming and feasibility-only outputs. The affected B/C
+  Hamming rows were excluded and rerun with the exact frozen settings; the raw
+  artifact remains unchanged and the audited sibling records both replacements
+  and the five pre-search duplicate-hint attempts.

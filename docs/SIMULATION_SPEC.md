@@ -892,3 +892,41 @@ as opt-in benchmark runs.
 7. Add fairness and robustness metrics.
 8. Add section-planning diagnostics and scenario comparisons.
 9. Build a lightweight website only after the solver is tested.
+
+### Joint model control-equivalence performance audit v1
+
+The audit is limited to `normal_dev_reference_2026`. Variant A reuses the
+production CP-SAT builder, Variant B uses the fixed-placement joint path with
+native linear period conflicts, and Variant C uses fixed placements with
+assignment-dependent optional intervals and per-student `NoOverlap`.
+Assignment-key, candidate, policy, capacity, identity, target-load, and
+original-period invariants are compared before solving. A known stable
+assignment is fixed in fresh models for acceptance only; it is never used as a
+performance hint. Cold-start A/B/C Hamming runs receive the same internal
+Constrained First hint, seed `20260630`, and one worker. B/C also have separate
+feasibility-only runs without the Hamming objective.
+
+The default runner performs structural and witness checks only. Performance
+runs require explicit opt-in and preserve raw solver logs plus structured
+response statistics. A single control configuration cannot prove a general
+performance bottleneck. `UNKNOWN` remains a search result, not an
+infeasibility proof. No target, stress, negative, or holdout scenario is run,
+and diagnosis is separate from any future repair.
+
+The audit has a single performance-hint owner. The reporting hint audit is
+read-only; each run uses a fresh model proto and applies the internal
+Constrained First hint once. Empty-hint, duplicate-index, and conflicting-value
+checks run before `Solve` and fail closed. Known-witness acceptance uses
+separate fresh models and the witness is never a performance hint. Provenance
+counts every solver attempt, including attempts rejected before search with
+`MODEL_INVALID`, while performance aggregates include only validly started
+runs. Such rejected attempts are not solver performance failures. For Phase A,
+structural invariance, known-witness acceptance, hint audit, and source hashes
+are the correctness prerequisites; control feasibility-only `UNKNOWN` remains
+a performance diagnostic and does not invalidate semantic equivalence.
+
+Per-run response and validation files are keyed by variant and run kind. An
+older checkpoint whose shared files were overwritten is provenance-unverified,
+excluded from the aggregate, and may be replaced only by an identical frozen
+rerun. The raw artifact remains immutable; the audit records the replacement
+and all excluded attempts in an external audited sibling.

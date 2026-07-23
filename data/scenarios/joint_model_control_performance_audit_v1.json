@@ -1,0 +1,33 @@
+{
+  "audit_name": "joint_model_control_performance_audit",
+  "audit_version": "v1",
+  "source_git_commit": "f544ae08e6a700ea7d22291a8de552130d8a6752",
+  "source_joint_pilot_hash": "b020be3972b8eeb7b2bcacfbf4d53c823ee127f5ebebaecc53db698dc1787c63",
+  "source_repair_probe_hash": "c43e00a74bbe513064b4d40839ad648b000f08757499f91ae0952d9e542ea6e2",
+  "scenario_id": "normal_dev_reference_2026",
+  "solver_seed": 20260630,
+  "workers": 1,
+  "external_persisted_seed_for_performance_runs": false,
+  "stop_after_first_solution": true,
+  "witness_acceptance_budget_seconds": 30,
+  "hamming_run_budget_seconds": 180,
+  "feasibility_only_budget_seconds": 120,
+  "other_normal_targets_allowed": false,
+  "stress_execution_allowed": false,
+  "holdout_execution_allowed": false,
+  "performance_variants": [
+    "production_native",
+    "joint_fixed_native_conflicts",
+    "joint_fixed_optional_intervals"
+  ],
+  "source_artifacts": {
+    "joint_period_edit_pilot": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-period-edit-pilot-v1",
+    "period_placement_repair_probe": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/period-placement-repair-probe-v1",
+    "stable_reference_assignment": "/Users/klu/Projects/fair-course-allocation-artifacts/repair-footprint-v1/cpsat-oracle"
+  },
+  "notes": [
+    "Known witness is used for correctness acceptance only, never as a performance hint.",
+    "The audit is a single deterministic reference-control comparison, not a broad performance benchmark.",
+    "UNKNOWN is not an infeasibility proof. Target, stress, negative, and holdout scenarios are forbidden."
+  ]
+}

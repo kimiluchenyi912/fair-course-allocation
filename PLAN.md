@@ -427,3 +427,31 @@ gate, will reuse the unchanged production hard model on an in-memory section
 plan copy. No capacity, request, policy, HA, or linked-course semantics may
 change. Any minimum statement is limited to the frozen admissible candidate
 universe; teacher and room realism remain outside the modeled scope.
+
+### Joint Model Control-Equivalence Performance Audit v1
+
+This reference-control-only audit compares the production-native model with a
+fixed-placement joint model using native period conflicts and a fixed-placement
+joint model using optional intervals and `NoOverlap`. Structural invariance and
+a known policy-compliant witness must pass before cold-start performance runs.
+The witness is fixed for correctness acceptance only, never as a performance
+hint. Runs use only the internal Constrained First hint, seed `20260630`, one
+worker, and frozen budgets. Targets, stress, negative, and holdout scenarios
+are forbidden; `UNKNOWN` is not infeasibility.
+
+The performance runner has one hint owner. Reporting does not mutate model
+protos; every Hamming or feasibility-only run uses an independent clean proto,
+checks that its solution hint is empty, applies the internal Constrained First
+hint once, and validates unique variable indices before `Solve`. A duplicate or
+conflicting hint is a pre-search model wiring error and fails closed. Attempt
+provenance must retain excluded `MODEL_INVALID` attempts separately from valid
+benchmark rows. The Phase A correctness gate is structural invariance,
+known-witness acceptance, hint audit, and source-hash validation; a frozen
+control feasibility-only `UNKNOWN` is not an equivalence failure or a reason to
+block later target repair search.
+
+Per-run response and validation artifacts must use the run kind in their
+identity. If an older checkpoint cannot bind a response, log, and validation
+without ambiguity, that result is marked provenance-unverified and excluded;
+only the same frozen variant may be rerun to replace it. The raw artifact is
+never rewritten during this audit.

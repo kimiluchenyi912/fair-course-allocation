@@ -42,3 +42,34 @@ validated period repair.
 The pilot does not model teacher, room, department, or master-schedule
 realism. It writes artifacts outside the repository and keeps atomic stage
 checkpoints; those artifacts are not repository inputs.
+
+## Control-equivalence performance audit
+
+`src.joint_model_control_performance_audit` is a separate, control-only audit.
+It compares the production-native model, a fixed-placement joint model using
+native period conflicts, and the fixed-placement optional-interval model. A
+known stable assignment is first fixed in fresh models and checked for exact
+acceptance, policy pass, and consistency. This witness is not a performance
+hint. Performance runs are cold-start runs with only the internal Constrained
+First hint and frozen solver settings.
+
+The default command does not run the expensive performance variants. The
+explicit `--run-performance` mode writes raw OR-Tools logs and structured
+statistics, but still runs only the reference control. It never runs
+`normal_dev_10`, stress, negative, or holdout scenarios. A result of `UNKNOWN`
+does not prove infeasibility, and any diagnosis remains a performance
+observation rather than a repair or correctness claim.
+
+The control-equivalence correctness gate is structural invariance,
+known-witness acceptance, hint audit, and source-hash verification. It does
+not require the B/C feasibility-only probes to find an incumbent within their
+frozen time budget. The performance runner has one hint owner: its reporting
+audit is read-only, each run uses a fresh model copy, and duplicate or
+conflicting hint indices fail closed before `Solve`. A `MODEL_INVALID` attempt
+rejected before search is retained in attempt provenance but excluded from
+performance aggregation; it is not reported as solver performance failure.
+
+If a legacy checkpoint cannot bind a response, solver log, and validation to a
+single run because per-variant files were reused, that checkpoint is marked
+provenance-unverified and excluded. A replacement must use the same seed,
+worker count, objective, and budget; the raw checkpoint is not rewritten.
