@@ -468,3 +468,19 @@ copy and an independent production cold-start validation passes. Any minimum
 claim is scoped to the frozen domain and requires an `OPTIMAL` Stage 1 plus
 both production gates; `FEASIBLE` and `UNKNOWN` remain best-found or
 unresolved results.
+
+### Joint Stage 1 Hybrid Occupancy Model-Size Reduction Audit v1
+
+This audit adds an explicit `hybrid_sparse_linear_occupancy` mode beside the
+unchanged `full_optional_intervals` mode. It uses sparse exact q/w occupancy
+channels for actual periods, including linked semester and double-period
+logical sections, without pruning candidates or changing sections. Small
+exhaustive fixtures, structural hashes, and a fresh reference-control witness
+acceptance are required evidence. The `normal_dev_10` model is built for size
+accounting only; Stage 1 Solve and all other scenario runs are disabled. The
+frozen 250,000,000-byte cost gate is not raised.
+
+The earlier `4a97c02` Stage 1 report is retained as historical provenance: its
+serialized-byte label used text-format proto length and Stage 1 never ran.
+The hybrid audit uses actual binary `.pb` export/serialization bytes instead;
+the corrected baseline and hybrid values both pass the frozen gate.

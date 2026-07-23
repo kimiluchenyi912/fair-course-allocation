@@ -162,3 +162,17 @@ not proof of a minimum section move.
   validation without changing production planner or CP-SAT semantics. Stage
   2--4, control, other normal targets, stress, negative, and holdout runs are
   disabled.
+
+- Added the Joint Stage 1 Hybrid Occupancy Model-Size Reduction Audit v1.
+  The original full optional-interval formulation remains the default; the
+  audit-only hybrid mode uses sparse exact q/w linear occupancy channels,
+  preserves the frozen 312-section/841-option domain, proves small-fixture
+  equivalence, and accepts the stable control witness. The target model is
+  built for cost accounting only; Stage 1 Solve and all other scenario runs
+  remain disabled.
+
+- Corrected the hybrid audit's proto accounting. The earlier Stage 1 cost-gate
+  report is retained as historical provenance, but its serialized-byte label
+  was text-format length. The audit now records binary export bytes separately
+  from text bytes and both frozen baseline/hybrid binary measurements pass the
+  250,000,000-byte gate. Stage 1 remains unrun.

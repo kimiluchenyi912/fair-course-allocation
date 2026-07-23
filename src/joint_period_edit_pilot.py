@@ -16,7 +16,7 @@ import hashlib
 import json
 import time
 from collections import defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -122,6 +122,10 @@ class JointModelBuild:
     model_variables: int
     model_constraints: int
     proto_bytes: int
+    occupancy_mode: str = "full_optional_intervals"
+    occupancy_vars: dict[tuple[str, str], cp_model.IntVar] = field(default_factory=dict)
+    occupancy_conjunction_vars: dict[tuple[_VariableKey, str], cp_model.IntVar] = field(default_factory=dict)
+    occupancy_metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -366,10 +370,13 @@ def build_joint_model(
     placement_domains: Mapping[str, tuple[PlacementOption, ...]] | None = None,
     fixed_original: bool = False,
     use_optional_intervals_for_fixed: bool = False,
+    occupancy_mode: str = "full_optional_intervals",
     math_fallback_rules: tuple[Any, ...] = (),
     math_course_ids: tuple[str, ...] = (),
 ) -> JointModelBuild:
     """Build the independent joint placement/assignment model."""
+    if occupancy_mode not in {"full_optional_intervals", "hybrid_sparse_linear_occupancy"}:
+        raise JointPilotError(f"unknown occupancy mode: {occupancy_mode}")
     if isinstance(allocation_input, ScenarioContext):
         allocation_input = allocation_input.allocation_input
     started = time.perf_counter()
@@ -432,7 +439,85 @@ def build_joint_model(
         model.Add(sum(by_section.get(section.linked_section_group_id, ())) <= section.capacity)
 
     optional_intervals = 0
-    if not placement_choice_vars and not use_optional_intervals_for_fixed:
+    occupancy_vars: dict[tuple[str, str], cp_model.IntVar] = {}
+    occupancy_conjunction_vars: dict[tuple[_VariableKey, str], cp_model.IntVar] = {}
+    occupancy_metadata: dict[str, Any] = {
+        "fixed_assignment_contributions": 0,
+        "editable_constant_contributions": 0,
+        "editable_dynamic_contributions": 0,
+        "q_variables": 0,
+        "w_variables": 0,
+        "q_constant_zero_omitted": 0,
+        "q_constant_one_omitted": 0,
+        "q_without_consumers_omitted": 0,
+        "student_period_constraints": 0,
+        "student_period_single_contribution_omitted": 0,
+        "duplicate_contributions_omitted": 0,
+    }
+    if occupancy_mode == "hybrid_sparse_linear_occupancy":
+        # This is an exact Boolean occupancy channel.  It deliberately uses
+        # occupied_periods rather than a start-period approximation so linked
+        # semester blocks and double-period sections retain their semantics.
+        by_student_period: dict[tuple[str, str], list[cp_model.IntVar]] = defaultdict(list)
+        edges_by_section: dict[str, list[tuple[_VariableKey, cp_model.IntVar]]] = defaultdict(list)
+        for key, variable in assignment_vars.items():
+            edges_by_section[key.section_id].append((key, variable))
+        for section in allocation_input.logical_sections:
+            section_id = section.linked_section_group_id
+            options = domains[section_id]
+            edges = edges_by_section.get(section_id, [])
+            for period in PERIODS:
+                occupied_options = [option for option in options if period in option.placement]
+                if not occupied_options:
+                    occupancy_metadata["q_constant_zero_omitted"] += 1
+                    continue
+                if len(occupied_options) == len(options):
+                    occupancy_metadata["q_constant_one_omitted"] += 1
+                    for key, variable in edges:
+                        by_student_period[(requests_by_key[key.request_key].student_id, period)].append(variable)
+                        if len(options) == 1:
+                            occupancy_metadata["fixed_assignment_contributions"] += 1
+                        else:
+                            occupancy_metadata["editable_constant_contributions"] += 1
+                    continue
+                if not edges:
+                    occupancy_metadata["q_without_consumers_omitted"] += 1
+                    continue
+                q = model.NewBoolVar(f"occupancy__{_safe_name(section_id)}__{period}")
+                occupancy_vars[(section_id, period)] = q
+                occupancy_metadata["q_variables"] += 1
+                model.Add(q == sum(
+                    placement_choice_vars[(section_id, option.placement)]
+                    for option in occupied_options
+                ))
+                for key, variable in edges:
+                    student_id = requests_by_key[key.request_key].student_id
+                    w = model.NewBoolVar(
+                        f"occupancy_and__{_safe_name(key.request_key)}__{_safe_name(section_id)}__{period}"
+                    )
+                    occupancy_conjunction_vars[(key, period)] = w
+                    occupancy_metadata["w_variables"] += 1
+                    model.Add(w <= variable)
+                    model.Add(w <= q)
+                    model.Add(w >= variable + q - 1)
+                    by_student_period[(student_id, period)].append(w)
+                    occupancy_metadata["editable_dynamic_contributions"] += 1
+        for values in by_student_period.values():
+            unique = []
+            seen = set()
+            for value in values:
+                index = value.Index()
+                if index in seen:
+                    occupancy_metadata["duplicate_contributions_omitted"] += 1
+                    continue
+                seen.add(index)
+                unique.append(value)
+            if len(unique) <= 1:
+                occupancy_metadata["student_period_single_contribution_omitted"] += 1
+            else:
+                model.Add(sum(unique) <= 1)
+                occupancy_metadata["student_period_constraints"] += 1
+    elif not placement_choice_vars and not use_optional_intervals_for_fixed:
         # Fixed-placement equivalence uses the exact same occupancy semantics
         # in the production form.  Avoiding interval objects here keeps the
         # proof check tractable; the variable-placement model below uses
@@ -525,6 +610,10 @@ def build_joint_model(
         # SerializeToString/ByteSize methods. Its deterministic text form is
         # sufficient for this build-cost gate and is recorded explicitly.
         proto_bytes=len(str(proto).encode("utf-8")),
+        occupancy_mode=occupancy_mode,
+        occupancy_vars=occupancy_vars,
+        occupancy_conjunction_vars=occupancy_conjunction_vars,
+        occupancy_metadata=occupancy_metadata,
     )
 
 

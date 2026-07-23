@@ -1,0 +1,30 @@
+{
+  "audit_name": "joint_stage1_model_size_reduction",
+  "audit_version": "v1",
+  "source_git_commit": "4a97c02dea4d87ebd21d7cf06bc2de9789568c88",
+  "phase": "hybrid_occupancy_model_size_reduction",
+  "control_scenario_id": "normal_dev_reference_2026",
+  "size_target_scenario_id": "normal_dev_10",
+  "authoritative_student_id": "G12_0536",
+  "excluded_witness_student_ids": ["G12_0105"],
+  "frozen_editable_section_count": 312,
+  "frozen_placement_option_count": 841,
+  "frozen_placement_domain_hash": "be91f2b0eca356fe8340b474c63cf2cb37673120c1d620ad39be5535faea05c0",
+  "baseline_formulation": "full_optional_intervals",
+  "candidate_formulation": "hybrid_sparse_linear_occupancy",
+  "max_serialized_proto_bytes": 250000000,
+  "solver_seed": 20260630,
+  "workers": 1,
+  "target_stage1_solve_allowed": false,
+  "other_normal_targets_allowed": false,
+  "stress_execution_allowed": false,
+  "negative_execution_allowed": false,
+  "holdout_execution_allowed": false,
+  "source_artifacts": {
+    "stage1_cost_gate": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-period-edit-stage1-pilot-v1",
+    "candidate_preview": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/period-placement-repair-probe-v1",
+    "control_audit": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-model-control-performance-audit-v1-audited",
+    "section_audit_raw": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1",
+    "section_audit_audited": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1-audited"
+  }
+}

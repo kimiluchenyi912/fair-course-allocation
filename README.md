@@ -385,3 +385,13 @@ The command refuses to overwrite a non-empty artifact directory and supports
 control, other normal targets, Stage 2--4, stress, negative, or holdout
 scenarios. A joint witness is not a production repair; minimum wording is
 limited to the frozen placement domain and requires all acceptance gates.
+
+## Hybrid occupancy model-size audit
+
+```bash
+.venv/bin/python -m src.joint_stage1_model_size_reduction_audit --skip-control
+```
+
+This audit compares the unchanged full optional-interval encoding with sparse
+exact linear occupancy channels. It builds, but never solves, the frozen
+`normal_dev_10` Stage 1 model; artifacts are written outside the repository.

@@ -60,6 +60,12 @@ statistics, but still runs only the reference control. It never runs
 does not prove infeasibility, and any diagnosis remains a performance
 observation rather than a repair or correctness claim.
 
+The separate hybrid occupancy audit is build-only. It keeps the original
+optional-interval model and adds an exact sparse linear occupancy mode without
+changing requests, sections, capacities, candidates, or production policies.
+It does not solve `normal_dev_10` Stage 1; a cost-gate result is not a solver
+failure or an infeasibility claim.
+
 The control-equivalence correctness gate is structural invariance,
 known-witness acceptance, hint audit, and source-hash verification. It does
 not require the B/C feasibility-only probes to find an incumbent within their

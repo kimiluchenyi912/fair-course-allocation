@@ -955,3 +955,10 @@ unchanged production model with every assignment variable fixed and no hint or
 Hamming objective. Only after that passes may the independent production
 cold-start validation run. No result is called a validated repair or a global
 minimum without these gates.
+
+The separate hybrid occupancy audit uses exact sparse q/w linear channels
+beside the unchanged optional-interval formulation. It does not prune the
+frozen domain or alter production hard policies. Small exhaustive fixtures and
+a fresh stable-control witness acceptance are required evidence; witness
+acceptance alone is not full feasible-set proof. The target model is built but
+never solved, and the frozen 250 MB cost gate is unchanged.

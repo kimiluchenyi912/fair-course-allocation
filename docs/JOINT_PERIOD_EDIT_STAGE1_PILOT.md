@@ -42,3 +42,8 @@ department feasibility claim is made.
 Artifacts are written outside the repository. The runner refuses to overwrite
 a non-empty directory and `--resume` returns a completed checkpoint without
 re-running Stage 1.
+
+The follow-up hybrid occupancy audit compares the unchanged optional-interval
+encoding with exact sparse q/w occupancy channels. It checks fixture feasible
+sets and a known control witness, then only builds the target model. It does
+not prune placements, produce repairs, or establish a minimum.
