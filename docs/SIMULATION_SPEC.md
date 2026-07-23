@@ -962,3 +962,9 @@ frozen domain or alter production hard policies. Small exhaustive fixtures and
 a fresh stable-control witness acceptance are required evidence; witness
 acceptance alone is not full feasible-set proof. The target model is built but
 never solved, and the frozen 250 MB cost gate is unchanged.
+
+The execution follow-up is restricted to one `normal_dev_10` Stage 1 run with
+the frozen hybrid model. It does not run Stage 2--4 or any other scenario.
+`UNKNOWN` without an incumbent is unresolved, not infeasible; only a valid
+joint witness can proceed to fixed-witness acceptance and one independent
+production validation.

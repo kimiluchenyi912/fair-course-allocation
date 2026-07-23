@@ -395,3 +395,7 @@ limited to the frozen placement domain and requires all acceptance gates.
 This audit compares the unchanged full optional-interval encoding with sparse
 exact linear occupancy channels. It builds, but never solves, the frozen
 `normal_dev_10` Stage 1 model; artifacts are written outside the repository.
+
+The execution slice permits one frozen-budget hybrid Stage 1 run for
+`normal_dev_10` only. An `UNKNOWN` result without an incumbent remains
+unresolved and does not start production acceptance or validation.

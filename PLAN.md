@@ -484,3 +484,14 @@ The earlier `4a97c02` Stage 1 report is retained as historical provenance: its
 serialized-byte label used text-format proto length and Stage 1 never ran.
 The hybrid audit uses actual binary `.pb` export/serialization bytes instead;
 the corrected baseline and hybrid values both pass the frozen gate.
+
+### Hybrid Joint Period-Edit Stage 1 Execution v1
+
+This execution slice permits exactly one Stage 1 solve for `normal_dev_10`
+using the audited hybrid occupancy formulation, seed `20260630`, one worker,
+and a 300-second budget. Stage 2--4, control, other normal, stress, negative,
+and holdout runs are disabled. `UNKNOWN` without an incumbent is unresolved
+and does not trigger witness acceptance or production validation. A valid
+witness would require both fixed-witness production acceptance and an
+independent production cold-start validation before any repair or minimum
+claim.

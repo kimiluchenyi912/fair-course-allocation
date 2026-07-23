@@ -66,6 +66,11 @@ changing requests, sections, capacities, candidates, or production policies.
 It does not solve `normal_dev_10` Stage 1; a cost-gate result is not a solver
 failure or an infeasibility claim.
 
+The hybrid execution slice is separate from the build-only audit and permits
+one Stage 1 run for `normal_dev_10` only. It preserves the frozen placement
+domain and does not call later stages. An unresolved `UNKNOWN` without an
+incumbent produces no repair claim or production validation.
+
 The control-equivalence correctness gate is structural invariance,
 known-witness acceptance, hint audit, and source-hash verification. It does
 not require the B/C feasibility-only probes to find an incumbent within their

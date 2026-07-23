@@ -268,7 +268,7 @@ def cost_gate(metrics: Mapping[str, Any], *, max_proto_bytes: int = MAX_PROTO_BY
         violations.append("total_variables_exceeds_limit")
     if metrics["optional_intervals"] > 500_000:
         violations.append("optional_intervals_exceeds_limit")
-    if metrics["proto_serialized_bytes"] > max_proto_bytes:
+    if int(metrics["serialized_binary_proto_bytes"]) > max_proto_bytes:
         violations.append("serialized_model_proto_exceeds_limit")
     if metrics["build_time_seconds"] > 180:
         violations.append("model_build_runtime_exceeds_limit")
@@ -277,7 +277,7 @@ def cost_gate(metrics: Mapping[str, Any], *, max_proto_bytes: int = MAX_PROTO_BY
 
 def reduction_row(baseline: Mapping[str, Any], hybrid: Mapping[str, Any]) -> dict[str, Any]:
     row: dict[str, Any] = {}
-    for key in ("total_variables", "optional_intervals", "total_constraints", "proto_serialized_bytes", "build_time_seconds"):
+    for key in ("total_variables", "optional_intervals", "total_constraints", "serialized_binary_proto_bytes", "build_time_seconds"):
         old, new = float(baseline[key]), float(hybrid[key])
         row[key] = {"baseline": old, "hybrid": new, "reduction": old - new, "reduction_percent": (100.0 * (old - new) / old) if old else 0.0}
     return row

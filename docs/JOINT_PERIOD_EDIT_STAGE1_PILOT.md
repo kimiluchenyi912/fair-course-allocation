@@ -47,3 +47,7 @@ The follow-up hybrid occupancy audit compares the unchanged optional-interval
 encoding with exact sparse q/w occupancy channels. It checks fixture feasible
 sets and a known control witness, then only builds the target model. It does
 not prune placements, produce repairs, or establish a minimum.
+
+The execution follow-up permits one hybrid Stage 1 invocation for
+`normal_dev_10`. `UNKNOWN` without an incumbent is unresolved, and acceptance
+and production validation are skipped in that case.

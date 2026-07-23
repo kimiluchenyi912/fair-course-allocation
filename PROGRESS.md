@@ -176,3 +176,9 @@ not proof of a minimum section move.
   was text-format length. The audit now records binary export bytes separately
   from text bytes and both frozen baseline/hybrid binary measurements pass the
   250,000,000-byte gate. Stage 1 remains unrun.
+
+- Added the single-target Hybrid Joint Period-Edit Stage 1 Execution v1. The
+  one permitted `normal_dev_10` run used the frozen hybrid model, seed
+  `20260630`, one worker, and 300 seconds. It returned `UNKNOWN` without an
+  incumbent, so no witness, acceptance, production validation, or minimum
+  claim was produced; no retry or other scenario run was made.

@@ -154,8 +154,8 @@ def test_size_decomposition_closes_interval_families():
 
 
 def test_cost_gate_uses_frozen_250mb_limit():
-    assert "serialized_model_proto_exceeds_limit" in cost_gate({"total_variables": 0, "optional_intervals": 0, "proto_serialized_bytes": 250000001, "build_time_seconds": 0})
-    assert cost_gate({"total_variables": 0, "optional_intervals": 0, "proto_serialized_bytes": 250000000, "build_time_seconds": 0}) == []
+    assert "serialized_model_proto_exceeds_limit" in cost_gate({"total_variables": 0, "optional_intervals": 0, "serialized_binary_proto_bytes": 250000001, "build_time_seconds": 0})
+    assert cost_gate({"total_variables": 0, "optional_intervals": 0, "serialized_binary_proto_bytes": 250000000, "build_time_seconds": 0}) == []
 
 
 def test_proto_measurement_uses_binary_export_not_text_repr():
@@ -191,7 +191,7 @@ def test_constraint_family_counts_close():
 
 
 def test_reduction_accounting_is_deterministic():
-    row = reduction_row({"total_variables": 100, "optional_intervals": 40, "total_constraints": 80, "proto_serialized_bytes": 1000, "build_time_seconds": 10}, {"total_variables": 70, "optional_intervals": 0, "total_constraints": 50, "proto_serialized_bytes": 600, "build_time_seconds": 5})
+    row = reduction_row({"total_variables": 100, "optional_intervals": 40, "total_constraints": 80, "serialized_binary_proto_bytes": 1000, "build_time_seconds": 10}, {"total_variables": 70, "optional_intervals": 0, "total_constraints": 50, "serialized_binary_proto_bytes": 600, "build_time_seconds": 5})
     assert row["total_variables"]["reduction"] == 30
     assert row["optional_intervals"]["reduction_percent"] == 100
 
