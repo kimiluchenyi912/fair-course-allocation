@@ -495,3 +495,22 @@ and does not trigger witness acceptance or production validation. A valid
 witness would require both fixed-witness production acceptance and an
 independent production cold-start validation before any repair or minimum
 claim.
+
+### Hybrid Stage 1 Incumbent Bootstrap Audit v1
+
+The incumbent bootstrap is a bounded, single-target follow-up for
+`normal_dev_10`. It uses only the frozen 312-section/841-option placement
+domain and at most three K=1 followed by at most two K=2 candidate-guided
+searches. A fresh edited-plan constrained-first assignment is a hint; the
+full joint model retains the complete domain and adds the corresponding
+change-count cap. The hints and Hamming objective do not restrict the feasible
+region; the explicit cap is the sole deliberate feasibility restriction in
+each bounded search model. It does not prune placement options or candidate
+edges and does not change production hard-policy semantics.
+
+`UNKNOWN` remains unresolved, while `INFEASIBLE` is scoped to the frozen full
+domain and cap. Any incumbent requires joint replay, fixed-witness production
+acceptance, and independent production cold-start validation. The runner uses
+atomic checkpoints so `--resume` skips completed candidates. Control, other
+normal, stress, negative, holdout, and Stage 2--4 runs remain disabled; no
+section planning, capacity, period layout, or production policy is changed.

@@ -968,3 +968,28 @@ the frozen hybrid model. It does not run Stage 2--4 or any other scenario.
 `UNKNOWN` without an incumbent is unresolved, not infeasible; only a valid
 joint witness can proceed to fixed-witness acceptance and one independent
 production validation.
+
+### Hybrid Stage 1 incumbent bootstrap audit v1
+
+The bounded bootstrap audit is a separate single-target diagnostic for
+`normal_dev_10`. It keeps the complete audited 312-section/841-option domain
+and searches at most three deterministic K=1 portfolios followed by at most
+two K=2 portfolios. Each edited plan receives a fresh constrained-first
+assignment hint. The joint model adds only `sum(section_changed) <= K` and an
+unweighted Hamming objective to that hint.
+The hints and Hamming objective do not restrict the feasible region. The explicit change cap is the sole
+deliberate feasibility restriction in each bounded search model: it excludes
+solutions with more than K changed sections, without pruning placement options
+or candidate edges or changing production hard-policy semantics.
+
+The protocol treats `INFEASIBLE` as scoped to the frozen full-domain cap and
+never treats `UNKNOWN` as infeasible. A candidate incumbent is not a repair
+claim until joint replay, fixed-witness production acceptance, and one
+independent production cold-start validation pass. Minimum wording requires
+the corresponding K=1 or K=2 proof conditions as well. Atomic checkpoints and
+`--resume` skip completed candidates without rerunning them.
+
+This slice does not run control, other normal, stress, negative, holdout, or
+Stage 2--4 scenarios. It does not alter section planning, capacities, period
+layout, requests, or production hard policies, and it does not model teacher,
+room, or department constraints. No external persisted seed is used.

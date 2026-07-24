@@ -399,3 +399,24 @@ exact linear occupancy channels. It builds, but never solves, the frozen
 The execution slice permits one frozen-budget hybrid Stage 1 run for
 `normal_dev_10` only. An `UNKNOWN` result without an incumbent remains
 unresolved and does not start production acceptance or validation.
+
+## Hybrid Stage 1 incumbent bootstrap audit
+
+The bounded bootstrap audit searches a frozen `normal_dev_10` placement domain
+with deterministic K=1/K=2 portfolios. It writes external artifacts and
+atomic checkpoints; resume completed work with `--resume` without rerunning
+recorded candidates:
+
+```bash
+.venv/bin/python -m src.hybrid_stage1_incumbent_bootstrap \
+  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/hybrid-stage1-incumbent-bootstrap-v1
+```
+
+This command is not a production allocator or section planner. `UNKNOWN` is
+unresolved, and any candidate repair still requires the unchanged production
+acceptance and independent cold-start validation gates.
+
+The hints and Hamming objective do not restrict the feasible region. The
+explicit `sum(section_changed) <= K` cap is the sole deliberate feasibility
+restriction in each bounded search model; it does not prune placement options,
+candidate edges, or production hard-policy semantics.

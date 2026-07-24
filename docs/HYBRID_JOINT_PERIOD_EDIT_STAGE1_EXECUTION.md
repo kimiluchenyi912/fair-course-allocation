@@ -18,3 +18,15 @@ replay, capacity, period, identity, policy, and consistency checks before the
 single fixed-witness production acceptance; only that acceptance permits one
 independent production cold-start validation. No result is globally minimum or
 a real-world repair claim.
+
+The incumbent bootstrap follow-up is a separate bounded search. It may try up
+to three K=1 and then two K=2 candidate portfolios, using fresh edited-plan
+constrained-first hints and the complete frozen placement domain. Its explicit
+change cap is the sole deliberate feasibility restriction in each bounded
+search model. The hints and Hamming objective do not restrict the feasible
+region. The cap excludes solutions with more than K changed sections but does
+not prune the frozen placement options or candidate edges, and does not
+replace production constraints. It records atomic checkpoints and resumes by
+skipping completed candidate run IDs. `UNKNOWN` remains unresolved; no
+incumbent is publishable without the same production acceptance and independent
+cold-start gates.

@@ -182,3 +182,11 @@ not proof of a minimum section move.
   `20260630`, one worker, and 300 seconds. It returned `UNKNOWN` without an
   incumbent, so no witness, acceptance, production validation, or minimum
   claim was produced; no retry or other scenario run was made.
+
+- Added the Hybrid Stage 1 Incumbent Bootstrap Audit v1. It uses a frozen
+  complete 312-section/841-option domain, deterministic bounded K=1/K=2
+  candidate portfolios, fresh constrained-first hint generation, and atomic
+  per-run checkpoints. Hints and Hamming distance guide search but do not
+  restrict the model. The slice remains limited to `normal_dev_10`; any
+  incumbent requires unchanged production acceptance and independent cold-start
+  validation, and `UNKNOWN` is unresolved rather than infeasible.
