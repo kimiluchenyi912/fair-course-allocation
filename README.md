@@ -420,3 +420,27 @@ The hints and Hamming objective do not restrict the feasible region. The
 explicit `sum(section_changed) <= K` cap is the sole deliberate feasibility
 restriction in each bounded search model; it does not prune placement options,
 candidate edges, or production hard-policy semantics.
+
+## Hybrid K=2 search bottleneck diagnostic
+
+Reuses the incumbent bootstrap's two frozen K=2 pair candidates, without
+regenerating them, to distinguish why both bootstrap K=2 searches returned
+`UNKNOWN`:
+
+```bash
+.venv/bin/python -m src.hybrid_k2_search_bottleneck_diagnostic \
+  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/hybrid-k2-search-bottleneck-diagnostic-v1
+```
+
+For each pair, in order and only as needed: Diagnostic A fixes the exact
+hinted destinations in the unchanged production hard model with no hint or
+objective; Diagnostic B adds a fresh Constrained First hint and Hamming
+objective to that same exact plan; Diagnostic C keeps the full hybrid joint
+model but forces exactly the pair's two sections to change (destinations
+otherwise free) and every other section to stay original. At most six new
+solver runs across both pairs; any incumbent stops the remaining runs. This
+command does not rerun the full cap-2 portfolio and does not run K=1 or K=3.
+`INFEASIBLE` from an exact-plan diagnostic (A/B) is scoped to that one plan;
+`INFEASIBLE` from the fixed-section-ID diagnostic (C) is scoped to that one
+section pair, never to other K=2 pairs. See
+`docs/HYBRID_K2_SEARCH_BOTTLENECK_DIAGNOSTIC.md` for the full protocol.

@@ -47,3 +47,10 @@ The formal overall result is recorded as
 `result_classification=unresolved_no_incumbent`. The K=1 result is a scoped
 cap-1 infeasibility result, while both K=2 searches are `UNKNOWN` without an
 incumbent; therefore this is not a no-repair proof.
+
+The follow-up Hybrid K=2 Search Bottleneck Diagnostic Audit v1 (see
+`docs/HYBRID_K2_SEARCH_BOTTLENECK_DIAGNOSTIC.md`) reuses these same two frozen
+K=2 pair candidates, unmodified, to distinguish exact-destination
+infeasibility from fixed-section-ID infeasibility for each pair. It does not
+rerun this bootstrap's K=1/K=2 portfolio search and does not mine new
+candidates.

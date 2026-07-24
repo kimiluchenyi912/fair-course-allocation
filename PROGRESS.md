@@ -190,3 +190,26 @@ not proof of a minimum section move.
   restrict the model. The slice remains limited to `normal_dev_10`; any
   incumbent requires unchanged production acceptance and independent cold-start
   validation, and `UNKNOWN` is unresolved rather than infeasible.
+
+- Added the Hybrid K=2 Search Bottleneck Diagnostic Audit v1. It reuses the
+  bootstrap's two frozen K=2 pair candidates without regenerating them and
+  runs up to three placement-fixing ablations per pair (exact destinations
+  with no hint, exact destinations with a coherent hint and Hamming
+  objective, and fixed section IDs with destinations left free) to separate
+  section-pair-selection, destination-selection, and assignment-feasibility
+  explanations for the bootstrap's unresolved K=2 searches. It does not
+  rerun the full cap-2 portfolio and does not run K=1 or K=3. See
+  `docs/HYBRID_K2_SEARCH_BOTTLENECK_DIAGNOSTIC.md` for the protocol and
+  `aggregate_summary.json`/`bottleneck_classification.json` in the artifact
+  for the actual run's result.
+- Corrected the diagnostic's artifact reporting after discovering its first
+  completed batch (4 solver runs) had been superseded and rerun to fix a
+  `provenance.json` finalization bug, without disclosing that history. Added
+  `execution_history_correction.json` (total invocations = 8: 4x Diagnostic
+  A, 0x Diagnostic B, 4x Diagnostic C, vs. 4 accepted-final-artifact runs) and
+  corrected pair-count semantics (2 frozen pair candidates and 2 exact
+  destination plans, but only 1 unique fixed section-ID pair, since both
+  pairs move the same two sections). Applied via
+  `--apply-execution-history-correction`, a reporting-only path that never
+  builds or solves a CP-SAT model and never touches `runs/**` solver
+  evidence; no new diagnostic solver runs were executed for this correction.

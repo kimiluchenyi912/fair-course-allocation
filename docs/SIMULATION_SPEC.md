@@ -993,3 +993,55 @@ This slice does not run control, other normal, stress, negative, holdout, or
 Stage 2--4 scenarios. It does not alter section planning, capacities, period
 layout, requests, or production hard policies, and it does not model teacher,
 room, or department constraints. No external persisted seed is used.
+
+### Hybrid K=2 search bottleneck diagnostic audit v1
+
+This diagnostic reuses the bootstrap's two frozen K=2 pair candidates without
+regenerating them, and runs up to three placement-fixing ablations per pair to
+separate why the bootstrap's K=2 searches returned `UNKNOWN`. Diagnostic A
+fixes both target sections to their exact hinted destinations in an edited
+copy of the input and solves the unchanged full production hard-constraint
+model with no hint and no objective (60s, first-solution stop). Diagnostic B
+runs only if A is `UNKNOWN` with no incumbent, on the identical exact plan and
+feasible region, adding a freshly regenerated edited-plan Constrained First
+hint and an unweighted Hamming objective (60s). Diagnostic C runs whenever
+neither A nor B has found an incumbent: it keeps the complete hybrid joint
+model and frozen 312-section/841-option domain, forces the pair's two named
+sections' `section_changed` indicators to `1` and all other 310 editable
+sections' indicators to `0`, leaves both target sections' full destination
+domains unpruned, and applies the frozen pair hint plus a fresh Constrained
+First assignment hint and Hamming objective (120s).
+
+At most six new diagnostic solver runs across both pairs (two per diagnostic
+type); any validated incumbent stops all remaining runs. This module never
+reruns the full 312-section cap-2 portfolio, never mines new pair candidates,
+and never runs K=1 or K=3. Hints and the Hamming objective are search
+guidance only in every diagnostic; they never restrict the feasible region.
+Diagnostic C's section-changed fixing is the only deliberate feasibility
+restriction anywhere in this module.
+
+`INFEASIBLE` from Diagnostic A or B proves only that the one exact plan tested
+has no valid production assignment; it does not generalize to the section
+pair. `INFEASIBLE` from Diagnostic C proves only that the one fixed
+section-ID pair tested has no valid repair across its full destination
+domain; it excludes only that pair, not other K=2 pairs outside this frozen
+two-pair portfolio. `UNKNOWN` is never described as `INFEASIBLE`. The
+previous K=2 solver logs are parsed with structured-response fields, log
+evidence, and inference kept in separate, clearly labeled sub-objects; a raw
+`solver.log` `CpSolverResponse summary` block's numeric `objective`/
+`best_bound` fields are recorded but never reported as a found incumbent's
+objective when `status: UNKNOWN` and `solution_count: 0`.
+
+Any `minimum_changed_sections_within_frozen_placement_domain = 2` claim still
+requires the pre-existing K=1 infeasibility proof, exactly two changed
+logical sections, a production-hard-policy-valid assignment, Final Schedule
+Policy PASS, zero consistency issues, and both fixed-witness production
+acceptance and independent production cold-start validation. No result here
+is described as a globally minimum, unique minimum, or real-world
+(teacher/room-feasible) repair. If no incumbent is found, the overall result
+is `unresolved_no_incumbent`, the K=1 lower bound of 2 stands unchanged, and
+K=2 is not declared infeasible (that would require the full global cap-2
+model itself to return `INFEASIBLE`). This slice does not run control, other
+normal, stress, negative, holdout, or Stage 2--4 scenarios, and does not alter
+section planning, capacities, period layout, requests, or production hard
+policies.

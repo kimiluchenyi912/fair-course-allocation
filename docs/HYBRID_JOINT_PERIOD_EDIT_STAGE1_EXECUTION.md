@@ -30,3 +30,9 @@ replace production constraints. It records atomic checkpoints and resumes by
 skipping completed candidate run IDs. `UNKNOWN` remains unresolved; no
 incumbent is publishable without the same production acceptance and independent
 cold-start gates.
+
+A further follow-up, the Hybrid K=2 Search Bottleneck Diagnostic Audit v1
+(`docs/HYBRID_K2_SEARCH_BOTTLENECK_DIAGNOSTIC.md`), reuses the bootstrap's two
+frozen K=2 pairs unmodified to separate exact-destination infeasibility from
+fixed-section-ID infeasibility per pair, without rerunning the bootstrap's
+portfolio search or mining new candidates.

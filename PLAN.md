@@ -514,3 +514,30 @@ acceptance, and independent production cold-start validation. The runner uses
 atomic checkpoints so `--resume` skips completed candidates. Control, other
 normal, stress, negative, holdout, and Stage 2--4 runs remain disabled; no
 section planning, capacity, period layout, or production policy is changed.
+
+### Hybrid K=2 Search Bottleneck Diagnostic Audit v1
+
+This diagnostic reuses, without regenerating, the bootstrap's two frozen K=2
+pair candidates for `normal_dev_10` and separates why both bootstrap K=2
+searches returned `UNKNOWN` into four candidate explanations: global
+section-pair selection, destination-placement selection, fixed-plan
+assignment feasibility, and hint/Hamming search guidance. For each pair it
+runs, in a fixed order and only as needed, Diagnostic A (exact hinted
+destinations, full production hard model, no hint, no objective, 60s),
+Diagnostic B (same exact plan, edited-plan Constrained First hint plus
+Hamming objective, 60s, only if A is `UNKNOWN`), and Diagnostic C (the full
+hybrid joint model with the pair's two section IDs forced changed and the
+other 310 editable sections forced original, destinations otherwise free,
+120s, only while no incumbent exists yet). At most six new solver runs total
+across both pairs; any incumbent stops all remaining runs. It does not rerun
+the full 312-section cap-2 portfolio, does not mine new pair candidates, and
+does not run K=1 or K=3.
+
+`INFEASIBLE` from Diagnostic A or B is scoped to the one exact plan tested,
+never generalized to the section pair. `INFEASIBLE` from Diagnostic C is
+scoped to the one fixed section-ID pair tested across its full destination
+domain, never to other K=2 pairs. `UNKNOWN` is never described as
+`INFEASIBLE`. Any minimum-changed-sections claim still requires the
+pre-existing K=1 infeasibility proof plus full joint/production validation;
+if no incumbent is found the previously proven lower bound of 2 stands
+unchanged and K=2 itself is not declared infeasible.
