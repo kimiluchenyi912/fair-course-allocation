@@ -179,6 +179,12 @@ diagnostic tested exactly one section-ID pair (in two hint variants). The
 previously proven K=1 lower bound of 2 stands unchanged, and no
 `minimum_changed_sections_within_frozen_placement_domain` claim is made.
 
+The later Hybrid K=2 Section-Pair Static Screening v1 uses this diagnostic's
+excluded pair as prior evidence while enumerating the complete 48,516-pair
+frozen universe. That static screen is only a G12_0536 necessary-condition
+filter: its survivors are not global-feasibility or production-repair
+evidence, and it does not run fixed-pair Run A/B or any CP-SAT solver.
+
 ## Execution history correction
 
 The accepted final artifact's `provenance.json`/`aggregate_summary.json`

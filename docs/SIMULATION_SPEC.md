@@ -1045,3 +1045,33 @@ model itself to return `INFEASIBLE`). This slice does not run control, other
 normal, stress, negative, holdout, or Stage 2--4 scenarios, and does not alter
 section planning, capacities, period layout, requests, or production hard
 policies.
+
+### Hybrid K=2 section-pair static screening v1
+
+The static screening pass is a development-only narrowing step for
+`normal_dev_10`. It enumerates the full frozen 312-section unordered pair
+universe (`312 * 311 / 2 = 48,516`) and, for each pair, evaluates every
+non-original destination combination against only the authoritative G12_0536
+student-local necessary condition. The screen is intentionally one-way:
+failure excludes a pair from the G12_0536 necessary-condition perspective,
+but survival does not prove global feasibility, production feasibility,
+teacher/room feasibility, or repair validity.
+
+The accepted formal static artifact records:
+
+- `total_unique_pairs = 48516`
+- `raw_placement_combination_count = 139415`
+- `core_necessary_condition_failed_count = 47278`
+- `core_screen_survivor_count = 1237`
+- `previously_proven_infeasible_pairs = 1`
+- `portfolio_count = 6`
+- `portfolio_hash = ef83de1d2dfecaa6f55b8d074156466d96f73c5334be61d2aba856819445fd67`
+
+Fixed-pair Run A/B, production fixed-witness acceptance, independent
+production validation, global K2, K1, K3, stress, negative, and holdout runs
+remain disabled in this slice; all solver counters are zero. The
+same-course-pair cap relaxation to 2 is recorded, but the final selected
+portfolio still has six unique course pairs. The section-participation cap
+relaxation to 3 is also recorded and used. The previous K=1 lower bound of 2
+stands unchanged, global K2 remains unresolved, and no exact minimum claim is
+made.

@@ -541,3 +541,23 @@ domain, never to other K=2 pairs. `UNKNOWN` is never described as
 pre-existing K=1 infeasibility proof plus full joint/production validation;
 if no incumbent is found the previously proven lower bound of 2 stands
 unchanged and K=2 itself is not declared infeasible.
+
+### Hybrid K=2 Section-Pair Static Screening v1
+
+This static-only pass enumerates all 48,516 unordered pairs in the frozen
+312-section `normal_dev_10` domain and checks whether each pair can satisfy
+the authoritative G12_0536 student-local necessary condition across its full
+non-original destination-product domain. It is deliberately not a solver run:
+fixed-pair Run A/B, production fixed-witness acceptance, independent
+production validation, global K=2, K=1, and K=3 are all disabled.
+
+The accepted formal static artifact matches the exploratory dry run: 139,415
+placement combinations, 47,278 necessary-condition failures, 1,237 survivors,
+one previously proven infeasible pair, and a six-pair portfolio with hash
+`ef83de1d2dfecaa6f55b8d074156466d96f73c5334be61d2aba856819445fd67`.
+Survivors are only G12_0536 necessary-condition survivors; they do not prove
+global or production feasibility. The same-course-pair cap was relaxed to 2,
+but the final portfolio still contains six unique course pairs. The section
+participation cap was relaxed to 3 and that relaxation was used. The lower
+bound remains 2, global K=2 remains unresolved, and no exact minimum claim is
+made.

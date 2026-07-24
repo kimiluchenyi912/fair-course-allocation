@@ -444,3 +444,25 @@ command does not rerun the full cap-2 portfolio and does not run K=1 or K=3.
 `INFEASIBLE` from the fixed-section-ID diagnostic (C) is scoped to that one
 section pair, never to other K=2 pairs. See
 `docs/HYBRID_K2_SEARCH_BOTTLENECK_DIAGNOSTIC.md` for the full protocol.
+
+## Hybrid K=2 section-pair static screening
+
+The static screening pass enumerates the complete frozen `normal_dev_10`
+312-section K=2 pair universe without running fixed-pair Run A/B or any
+CP-SAT solver:
+
+```bash
+.venv/bin/python -m src.hybrid_k2_section_pair_screening \
+  --manifest data/scenarios/hybrid_k2_section_pair_screening_v1.json \
+  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/hybrid-k2-section-pair-screening-v1 \
+  --screening-only
+```
+
+This is only a G12_0536 student-local necessary-condition screen. Its 1,237
+survivors are not global-feasibility evidence and are not production-feasible
+repairs. The accepted formal static artifact records 48,516 pairs, 139,415
+placement combinations, 47,278 necessary-condition failures, one previously
+proven infeasible pair, and six selected portfolio pairs. Fixed-pair solver
+runs, production acceptance, and production validation all remain at zero;
+global K=2 is still unresolved, the K=1 lower bound of 2 stands unchanged, and
+no exact minimum claim is made.

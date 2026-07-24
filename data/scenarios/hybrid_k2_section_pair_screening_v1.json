@@ -1,0 +1,53 @@
+{
+  "authoritative_student_id": "G12_0536",
+  "candidate_edge_count": 164269,
+  "candidate_membership_hash": "8fc503201e5791a420febe9f776e87e691cbbab4ad80acd5d9661a8efa472f4f",
+  "control_runs_allowed": false,
+  "editable_section_count": 312,
+  "editable_section_id_hash": "4c896d19b8b39c423c52675d190def740e349515bd21c26a41df821a9770e1b2",
+  "excluded_student_ids": [
+    "G12_0105"
+  ],
+  "expected_unique_pair_count": 48516,
+  "experiment_name": "hybrid_k2_section_pair_screening",
+  "experiment_version": "v1",
+  "external_persisted_seed": false,
+  "fixed_pair_feasibility_budget_seconds": 75,
+  "fixed_pair_guided_budget_seconds": 75,
+  "frozen_placement_domain_hash": "be91f2b0eca356fe8340b474c63cf2cb37673120c1d620ad39be5535faea05c0",
+  "global_k2_allowed": false,
+  "holdout_execution_allowed": false,
+  "k1_allowed": false,
+  "k3_allowed": false,
+  "logical_identity_hash": "8aa35282c258210e1333e3631a6ef62c7633a3c6c09e5c6c4564d333314270e4",
+  "negative_execution_allowed": false,
+  "original_placement_hash": "bfa9c25a1a03466731aaa967c3f01126bc06a35aeb86f4966380ace833d75281",
+  "other_normal_targets_allowed": false,
+  "phase": "k2_unique_section_pair_screening",
+  "placement_option_count": 841,
+  "placement_option_hash": "6a9e87335a22c4d6bab0109c1a022df1489ff158978d9cec82b9cf0e9caedb5a",
+  "previously_excluded_unique_pair_count": 1,
+  "previously_excluded_unique_pairs": [
+    [
+      "AP_3D_ART_DESIGN_01",
+      "SOCIAL_JUSTICE_01"
+    ]
+  ],
+  "production_fixed_witness_budget_seconds": 30,
+  "production_validation_budget_seconds": 300,
+  "section_capacity_hash": "41bc736b8e426e04f3524aec86f666a215778ad13f47175a656509163a2680e6",
+  "selected_pair_portfolio_size_max": 6,
+  "solver_seed": 20260630,
+  "source_bootstrap_hash": "528a13614477c0403c12626696e2f0cd394beb69bb5818316ea680ad0810773a",
+  "source_candidate_preview_hash": "c43e00a74bbe513064b4d40839ad648b000f08757499f91ae0952d9e542ea6e2",
+  "source_control_audited_hash": "f5eb6f8020180fbfa9fe706c1e99c0c8b40f6e592f9b1fc551d78e85fdbceae5",
+  "source_git_commit": "d6b38384978829eaec10ab26f695492b46724b0a",
+  "source_hybrid_model_size_hash": "5a5775ca7bff4054b034ab336d9ebc49fa6c11f9cc0e58cff94be8a34dbd3f80",
+  "source_k2_diagnostic_hash": "9a4bdfc3d46477541e7f5efb46fc301f13b2864bac6169210f594b6f8312c20f",
+  "source_section_audit_hash": "1e9e899918d5f873e4a25bd4689153638b11dca3af113916212e5d3458369e18",
+  "source_section_audited_hash": "6a74f985b801606f7fb9c4323ea6853f8313a1e99db7e92388aad2a8f85dc015",
+  "stop_after_first_valid_incumbent": true,
+  "stress_execution_allowed": false,
+  "target_scenario_id": "normal_dev_10",
+  "workers": 1
+}

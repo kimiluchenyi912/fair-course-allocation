@@ -213,3 +213,16 @@ not proof of a minimum section move.
   `--apply-execution-history-correction`, a reporting-only path that never
   builds or solves a CP-SAT model and never touches `runs/**` solver
   evidence; no new diagnostic solver runs were executed for this correction.
+
+- Added the Hybrid K=2 Section-Pair Static Screening v1 runner and manifest.
+  The accepted formal `--screening-only` artifact enumerates all 48,516
+  unordered frozen section pairs for `normal_dev_10`, evaluates 139,415
+  placement combinations against the G12_0536 student-local necessary
+  condition, and selects a six-pair portfolio. It matches the exploratory
+  dry run exactly on frozen counts: 47,278 necessary-condition failures,
+  1,237 survivors, one previously proven infeasible pair, and portfolio hash
+  `ef83de1d2dfecaa6f55b8d074156466d96f73c5334be61d2aba856819445fd67`.
+  Fixed-pair solver runs, production acceptance, production validation,
+  global K2/K1/K3, stress, negative, and holdout runs are all zero. Survivors
+  are not global or production feasibility evidence; global K2 remains
+  unresolved and no exact minimum claim is made.
