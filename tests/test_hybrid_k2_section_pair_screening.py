@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from ortools.sat import cp_model_pb2
 
 import src.hybrid_k2_section_pair_screening as k2
 from src.hybrid_stage1_incumbent_bootstrap import SearchResult
@@ -39,7 +40,16 @@ class FakeModel:
         self.objective = objective
 
     def Proto(self) -> SimpleNamespace:
-        return SimpleNamespace(variables=(), constraints=tuple(self.constraints))
+        return SimpleNamespace(
+            variables=(),
+            constraints=tuple(self.constraints),
+            __str__=lambda: "fake-proto",
+        )
+
+    def ExportToFile(self, path: str) -> bool:
+        proto = cp_model_pb2.CpModelProto()
+        Path(path).write_bytes(proto.SerializeToString(deterministic=True))
+        return True
 
 
 def search_result(status: str, *, incumbent: bool = False) -> SearchResult:
@@ -398,6 +408,59 @@ def test_add_fixed_pair_constraints_forces_two_changed_sections() -> None:
     assert build.model.constraints == [("eq", "A", 1), ("eq", "B", 1), ("eq", "C", 0)]
 
 
+def test_model_size_does_not_require_bytesize_and_records_binary_measurements(tmp_path: Path) -> None:
+    build = fake_build()
+
+    size = k2._model_size(build, export_path=tmp_path / "model.pb")
+
+    assert size["serialized_binary_proto_bytes"] == size["exported_binary_proto_file_bytes"]
+    assert size["binary_measurements_equal"] is True
+    assert size["binary_proto_bytes"] == size["serialized_binary_proto_bytes"]
+    assert size["proto_text_bytes"] >= size["serialized_binary_proto_bytes"]
+    assert size["proto_measurement_method"] == "ExportToFile_pb_and_cp_model_pb2_deterministic_SerializeToString"
+
+
+def test_recovery_provenance_constants_do_not_claim_original_solved_proto() -> None:
+    assert k2.RECOVERED_MODEL_PROTO_PROVENANCE == {
+        "model_proto_origin": "reporting_only_rebuild_after_solver",
+        "model_proto_is_original_solved_proto": False,
+        "original_solved_proto_persisted": False,
+        "model_proto_fingerprint_match_to_solved_model": "unverified",
+        "model_rebuild_used_same_frozen_inputs_and_builder": True,
+        "model_rebuild_solver_invocations": 0,
+    }
+    assert k2.RECONSTRUCTED_SOLVER_CONFIG_PROVENANCE == {
+        "solver_config_origin": "reconstructed_from_invoked_command_candidate_and_retained_evidence",
+        "solver_config_original_pre_solve_file_persisted": False,
+        "status_evidence_source": "raw_solver_log_final_summary",
+        "runtime_evidence_source": "raw_solver_log_and_terminal_transcript",
+    }
+
+
+def test_response_payload_keeps_unavailable_response_hash_null() -> None:
+    payload = k2._response_payload(search_result("INFEASIBLE"))
+    assert payload["response_hash"].startswith("hash-INFEASIBLE")
+    assert payload["response_hash_verified"] is True
+
+    missing = search_result("INFEASIBLE")
+    missing = replace(missing, response_hash="unavailable_artifact_write_failure_after_solver")
+    payload = k2._response_payload(missing)
+
+    assert payload["response_hash"] is None
+    assert payload["response_hash_available"] is False
+    assert payload["response_hash_verified"] is False
+    assert payload["response_hash_unavailable_reason"] == "post_solve_artifact_write_failure_before_structured_response_persistence"
+
+
+def test_raw_solver_log_final_status_requires_summary_status(tmp_path: Path) -> None:
+    log = tmp_path / "solver.log"
+    log.write_text("CpSolverResponse summary:\nstatus: INFEASIBLE\n", encoding="utf-8")
+    assert k2._raw_solver_log_final_status(log) == "INFEASIBLE"
+
+    log.write_text("INFEASIBLE appeared earlier but no final summary\n", encoding="utf-8")
+    assert k2._raw_solver_log_final_status(log) is None
+
+
 def test_fixed_pair_run_a_protocol_has_no_hint_or_objective(monkeypatch: pytest.MonkeyPatch) -> None:
     observed: dict[str, object] = {}
 
@@ -592,6 +655,128 @@ def test_screening_only_writes_static_outputs_without_solver(monkeypatch: pytest
     assert result["result_classification"] == "unresolved_no_incumbent"
 
 
+def write_static_artifact_stub(root: Path) -> None:
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "aggregate_summary.json").write_text(
+        json.dumps(
+            {
+                "sha256sums_hash": "static-sha",
+                "solver_counters": {
+                    "fixed_pair_feasibility_runs": 0,
+                    "fixed_pair_guided_runs": 0,
+                    "total_solver_invocations": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / "checkpoint.json").write_text(
+        json.dumps({"screening_complete": True, "aggregate_written": True}),
+        encoding="utf-8",
+    )
+    (root / "source_artifact_verification.json").write_text("{}", encoding="utf-8")
+    (root / "structural_revalidation.json").write_text("{}", encoding="utf-8")
+    (root / "zero_edit_core_student_verification.json").write_text("{}", encoding="utf-8")
+    (root / "pair_screening_summary.json").write_text(
+        json.dumps(
+            {
+                "evaluator_cache_hits": 0,
+                "evaluator_cache_misses": 1,
+                "unique_effect_signature_count": 1,
+                "screening_runtime_seconds": 0.0,
+                "total_unique_pairs": 1,
+                "core_screen_survivor_count": 1,
+                "class_count_closure": True,
+                "survivor_proves_global_feasible": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    portfolio = k2.portfolio_payload((candidate(), candidate(("C", "D"))), {"portfolio_hash": "hash"})
+    for item in portfolio["candidates"]:
+        item["occupancy_shape"] = [[1], [1]]
+    (root / "selected_pair_portfolio.json").write_text(json.dumps(portfolio), encoding="utf-8")
+    (root / "portfolio_diversity_audit.json").write_text(json.dumps({"portfolio_hash": "hash"}), encoding="utf-8")
+    (root / "diagnostic_runs.csv").write_text("", encoding="utf-8")
+
+
+def stub_resume_dependencies(monkeypatch: pytest.MonkeyPatch, statuses: list[str]) -> list[str]:
+    calls: list[str] = []
+    monkeypatch.setattr(k2, "load_target_context_and_domains", lambda **kwargs: (SimpleNamespace(allocation_input=fake_input(), catalog="catalog"), domains(), {"ok": True}))
+    monkeypatch.setattr(k2, "_load_math_fallback_rules", lambda *args, **kwargs: ())
+    monkeypatch.setattr(k2, "math_course_ids_from_catalog", lambda catalog: ())
+    monkeypatch.setattr(k2, "_previous_k1_proof_verified", lambda: True)
+    monkeypatch.setattr(k2, "_write_solver_run", lambda *args, **kwargs: None)
+
+    def fake_protocol(**kwargs: object) -> k2.DiagnosticOutcome:
+        call_id = f"portfolio_pair_{kwargs['pair_index'] + 1}"
+        calls.append(call_id)
+        status = statuses.pop(0)
+        return k2.DiagnosticOutcome(
+            pair_id=call_id,
+            run_rows=(k2.diagnostic_run_row(call_id, "feasibility", search_result(status)),),
+            incumbent_source=None,
+            newly_proven_infeasible=status == "INFEASIBLE",
+            unresolved=status != "INFEASIBLE",
+            correctness_failure=False,
+        )
+
+    monkeypatch.setattr(k2, "run_fixed_pair_protocol", fake_protocol)
+    return calls
+
+
+def test_max_new_solver_runs_one_executes_only_first_pair_run_a(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    write_static_artifact_stub(tmp_path)
+    calls = stub_resume_dependencies(monkeypatch, ["UNKNOWN", "UNKNOWN"])
+
+    result = k2.run_screening_audit(output_dir=tmp_path, resume=True, max_new_solver_runs=1)
+    rows = k2._read_csv(tmp_path / "diagnostic_runs.csv")
+
+    assert calls == ["portfolio_pair_1"]
+    assert [(row["pair_id"], row["run_name"], row["status"]) for row in rows] == [("portfolio_pair_1", "feasibility", "UNKNOWN")]
+    assert result["solver_counters"]["fixed_pair_feasibility_runs"] == 1
+    assert result["solver_counters"]["fixed_pair_guided_runs"] == 0
+    assert result["execution_counts"]["new_solver_runs_this_invocation"] == 1
+    assert result["failures"] == []
+
+
+def test_max_new_solver_runs_does_not_execute_second_pair(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    write_static_artifact_stub(tmp_path)
+    calls = stub_resume_dependencies(monkeypatch, ["INFEASIBLE", "UNKNOWN"])
+
+    result = k2.run_screening_audit(output_dir=tmp_path, resume=True, max_new_solver_runs=1)
+
+    assert calls == ["portfolio_pair_1"]
+    assert result["newly_proven_infeasible_unique_pairs"] == ["portfolio_pair_1"]
+    assert result["solver_counters"]["total_solver_invocations"] == 1
+
+
+def test_resume_does_not_repeat_completed_run_a(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    write_static_artifact_stub(tmp_path)
+    (tmp_path / "diagnostic_runs.csv").write_text(
+        "pair_id,run_name,status,incumbent_found,assignment_available,runtime_seconds,wall_time_seconds,branches,conflicts,response_hash\n"
+        "portfolio_pair_1,feasibility,UNKNOWN,False,False,1.0,1.0,0,0,hash\n",
+        encoding="utf-8",
+    )
+    calls = stub_resume_dependencies(monkeypatch, ["UNKNOWN"])
+
+    result = k2.run_screening_audit(output_dir=tmp_path, resume=True, max_new_solver_runs=1)
+
+    assert calls == ["portfolio_pair_2"]
+    assert result["solver_counters"]["fixed_pair_feasibility_runs"] == 1
+    assert result["execution_counts"]["new_solver_runs_this_invocation"] == 1
+
+
+def test_default_resume_with_aggregate_keeps_existing_behavior(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    write_static_artifact_stub(tmp_path)
+    monkeypatch.setattr(k2, "load_target_context_and_domains", lambda **kwargs: pytest.fail("default resume should return aggregate without reloading context"))
+
+    result = k2.run_screening_audit(output_dir=tmp_path, resume=True)
+
+    assert result["resumed"] is True
+    assert result["solver_reexecuted"] is False
+
+
 def test_protocol_deviation_is_explicitly_recorded() -> None:
     row = k2.diagnostic_run_row("pair", "feasibility", search_result("MODEL_INVALID"))
 
@@ -673,7 +858,7 @@ def test_formal_artifact_portfolio_hash_and_diversity() -> None:
     ]
 
 
-def test_formal_artifact_class_closure_and_solver_counters() -> None:
+def test_formal_artifact_class_closure_and_run_a_solver_counters() -> None:
     aggregate = read_artifact_json(FORMAL_ARTIFACT, "aggregate_summary.json")
     screening = aggregate["screening"]
     counters = aggregate["solver_counters"]
@@ -682,10 +867,17 @@ def test_formal_artifact_class_closure_and_solver_counters() -> None:
     assert screening["survivor_proves_global_feasible"] is False
     assert aggregate["global_k2_remains_unresolved"] is True
     assert aggregate["minimum_claim"]["proven"] is False
-    assert all(value == 0 for value in counters.values())
+    assert counters["fixed_pair_feasibility_runs"] == 1
+    assert counters["fixed_pair_guided_runs"] == 0
+    assert counters["total_solver_invocations"] == 1
+    assert counters["production_fixed_witness_acceptance_runs"] == 0
+    assert counters["production_validation_runs"] == 0
+    assert counters["global_k2_reruns"] == 0
+    assert counters["k1_runs"] == 0
+    assert counters["k3_runs"] == 0
 
 
-def test_formal_artifact_execution_counts_are_static_only() -> None:
+def test_formal_artifact_execution_counts_include_one_run_a() -> None:
     aggregate = read_artifact_json(FORMAL_ARTIFACT, "aggregate_summary.json")
     provenance = read_artifact_json(FORMAL_ARTIFACT, "provenance.json")
 
@@ -693,12 +885,71 @@ def test_formal_artifact_execution_counts_are_static_only() -> None:
         "exploratory_dry_runs": 1,
         "accepted_formal_static_screening_runs": 1,
         "total_static_screening_executions": 2,
-        "total_solver_invocations": 0,
+        "total_solver_invocations": 1,
+        "new_solver_runs_this_invocation": 1,
     }
     assert provenance["exploratory_dry_runs"] == 1
     assert provenance["accepted_formal_static_screening_runs"] == 1
     assert provenance["total_static_screening_executions"] == 2
-    assert provenance["total_solver_invocations"] == 0
+    assert provenance["total_solver_invocations"] == 1
+    assert provenance["fixed_pair_feasibility_runs"] == 1
+    assert provenance["fixed_pair_guided_runs"] == 0
+    assert provenance["production_validation_runs"] == 0
+
+
+def test_formal_artifact_marks_model_proto_as_reporting_only_rebuild() -> None:
+    model_size = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_1/feasibility/model_size.json")
+    response = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_1/feasibility/response_stats.json")
+    aggregate = read_artifact_json(FORMAL_ARTIFACT, "aggregate_summary.json")
+
+    for payload in (model_size, response, aggregate):
+        assert payload["model_proto_origin"] == "reporting_only_rebuild_after_solver"
+        assert payload["model_proto_is_original_solved_proto"] is False
+        assert payload["original_solved_proto_persisted"] is False
+        assert payload["model_proto_fingerprint_match_to_solved_model"] == "unverified"
+        assert payload["model_rebuild_used_same_frozen_inputs_and_builder"] is True
+        assert payload["model_rebuild_solver_invocations"] == 0
+    assert model_size["binary_proto_bytes"] == 101734174
+    assert model_size["proto_text_bytes"] == 292100197
+
+
+def test_formal_artifact_records_reconstructed_solver_config_evidence() -> None:
+    solver_config = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_1/feasibility/solver_config.json")
+    response = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_1/feasibility/response_stats.json")
+    validation = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_1/feasibility/validation.json")
+
+    for payload in (solver_config, response, validation):
+        assert payload["solver_config_origin"] == "reconstructed_from_invoked_command_candidate_and_retained_evidence"
+        assert payload["solver_config_original_pre_solve_file_persisted"] is False
+        assert payload["status_evidence_source"] == "raw_solver_log_final_summary"
+        assert payload["runtime_evidence_source"] == "raw_solver_log_and_terminal_transcript"
+        assert payload["response_hash"] is None
+        assert payload["response_hash_verified"] is False
+    assert response["response_hash_available"] is False
+    assert response["status_evidence_status"] == "INFEASIBLE"
+
+
+def test_formal_artifact_scoped_infeasible_conclusion_keeps_global_k2_unresolved() -> None:
+    aggregate = read_artifact_json(FORMAL_ARTIFACT, "aggregate_summary.json")
+    validation = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_1/feasibility/validation.json")
+
+    for payload in (aggregate, validation):
+        assert payload["fixed_section_pair_infeasible"] is True
+        assert payload["fixed_section_pair_infeasible_scope"]["scenario_id"] == "normal_dev_10"
+        assert payload["fixed_section_pair_infeasible_scope"]["logical_section_ids"] == [
+            "AP_3D_ART_DESIGN_01",
+            "CREATIVE_WRITING_01",
+        ]
+        assert payload["fixed_section_pair_infeasible_scope"]["both_selected_sections_forced_changed"] is True
+        assert payload["fixed_section_pair_infeasible_scope"]["destination_domain"] == (
+            "full_frozen_non_original_destination_domains"
+        )
+    assert aggregate["global_k2_remains_unresolved"] is True
+    assert aggregate["lower_bound_remains"] == 2
+    assert aggregate["minimum_claim"]["proven"] is False
+    assert aggregate["exact_minimum_claim"] is False
+    assert aggregate["repair_witness_found"] is False
+    assert aggregate["production_validation_runs"] == 0
 
 
 def test_formal_artifact_checksum_file_is_current() -> None:
@@ -707,7 +958,8 @@ def test_formal_artifact_checksum_file_is_current() -> None:
     checksum_file = FORMAL_ARTIFACT / "SHA256SUMS.txt"
     entries = [line for line in checksum_file.read_text(encoding="utf-8").splitlines() if line.strip()]
 
-    assert len(entries) == 19
+    assert len(entries) == 26
+    assert any(line.endswith("runs/portfolio_pair_1/feasibility/model.pb") for line in entries)
     for line in entries:
         expected, relative = line.split("  ", 1)
         actual = hashlib.sha256((FORMAL_ARTIFACT / relative).read_bytes()).hexdigest()

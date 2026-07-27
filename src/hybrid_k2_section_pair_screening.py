@@ -15,6 +15,7 @@ import argparse
 import csv
 import hashlib
 import json
+import tempfile
 import time
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
@@ -23,6 +24,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from ortools.sat.python import cp_model
+from ortools.sat import cp_model_pb2
 
 from src.allocation import canonicalize_allocation_input, math_course_ids_from_catalog, run_constrained_first_baseline
 from src.allocation.cp_sat_solver import _VariableKey
@@ -57,6 +59,7 @@ from src.period_placement_repair_probe import (
     DEFAULT_OUTPUT as DEFAULT_PREVIEW_OUTPUT,
     PERIODS,
     CandidateEdit,
+    _candidate_from_dict,
     _requests_for_sections,
     _sha256_file,
     exact_student_level_analysis,
@@ -78,6 +81,20 @@ FIXED_PAIR_FEASIBILITY_BUDGET_SECONDS = 75.0
 FIXED_PAIR_GUIDED_BUDGET_SECONDS = 75.0
 FIXED_WITNESS_BUDGET_SECONDS = 30.0
 PRODUCTION_BUDGET_SECONDS = 300.0
+RECOVERED_MODEL_PROTO_PROVENANCE = {
+    "model_proto_origin": "reporting_only_rebuild_after_solver",
+    "model_proto_is_original_solved_proto": False,
+    "original_solved_proto_persisted": False,
+    "model_proto_fingerprint_match_to_solved_model": "unverified",
+    "model_rebuild_used_same_frozen_inputs_and_builder": True,
+    "model_rebuild_solver_invocations": 0,
+}
+RECONSTRUCTED_SOLVER_CONFIG_PROVENANCE = {
+    "solver_config_origin": "reconstructed_from_invoked_command_candidate_and_retained_evidence",
+    "solver_config_original_pre_solve_file_persisted": False,
+    "status_evidence_source": "raw_solver_log_final_summary",
+    "runtime_evidence_source": "raw_solver_log_and_terminal_transcript",
+}
 
 DEFAULT_MANIFEST = Path("data/scenarios/hybrid_k2_section_pair_screening_v1.json")
 DEFAULT_OUTPUT = Path(
@@ -243,6 +260,13 @@ def _write_csv(path: Path, rows: Iterable[Mapping[str, Any]]) -> None:
         writer.writeheader()
         writer.writerows(values)
     tmp.replace(path)
+
+
+def _read_csv(path: Path) -> list[dict[str, str]]:
+    if not path.is_file() or path.stat().st_size == 0:
+        return []
+    with path.open(encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
 
 
 def _json_hash(value: Any) -> str:
@@ -1125,6 +1149,11 @@ def solve_fixed_pair_no_hint(
 ) -> SearchResult:
     started = time.perf_counter()
     build.model.ClearObjective()
+    proto = build.model.Proto()
+    if getattr(proto, "objective", None) and proto.objective.vars:
+        raise ScreeningError("Run A objective was not cleared before solve")
+    if getattr(proto, "solution_hint", None) and proto.solution_hint.vars:
+        raise ScreeningError("Run A solution hint must be empty before solve")
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(time_limit_seconds)
     solver.parameters.num_search_workers = WORKERS
@@ -1286,12 +1315,33 @@ def fixed_pair_guided_run(
     return build, hint, result
 
 
-def _model_size(build: Any) -> dict[str, Any]:
+def _model_size(build: Any, *, export_path: Path | None = None) -> dict[str, Any]:
     proto = build.model.Proto()
+    proto_text_bytes = len(str(proto).encode("utf-8"))
+    temp_path: Path | None = None
+    if export_path is None:
+        handle = tempfile.NamedTemporaryFile(prefix="hybrid_k2_model_", suffix=".pb", delete=False)
+        handle.close()
+        temp_path = Path(handle.name)
+        export_path = temp_path
+    export_path.parent.mkdir(parents=True, exist_ok=True)
+    if not build.model.ExportToFile(str(export_path)):
+        raise ScreeningError(f"failed to export model proto: {export_path}")
+    exported_bytes = export_path.read_bytes()
+    parsed = cp_model_pb2.CpModelProto()
+    parsed.ParseFromString(exported_bytes)
+    serialized_bytes = parsed.SerializeToString(deterministic=True)
+    if temp_path is not None:
+        temp_path.unlink(missing_ok=True)
     return {
         "total_variables": len(proto.variables),
         "total_constraints": len(proto.constraints),
-        "proto_text_bytes": len(str(proto).encode("utf-8")),
+        "binary_proto_bytes": len(serialized_bytes),
+        "serialized_binary_proto_bytes": len(serialized_bytes),
+        "exported_binary_proto_file_bytes": len(exported_bytes),
+        "binary_measurements_equal": len(serialized_bytes) == len(exported_bytes),
+        "proto_text_bytes": proto_text_bytes,
+        "proto_measurement_method": "ExportToFile_pb_and_cp_model_pb2_deterministic_SerializeToString",
         "assignment_variables": len(build.assignment_vars),
         "placement_choice_variables": len(build.placement_choice_vars),
         "changed_section_variables": len(build.section_changed_vars),
@@ -1302,8 +1352,33 @@ def _model_size(build: Any) -> dict[str, Any]:
 def _response_payload(result: SearchResult) -> dict[str, Any]:
     payload = asdict(result)
     payload["solver_log"] = None
+    payload["response_hash_verified"] = bool(result.response_hash)
+    if result.response_hash == "unavailable_artifact_write_failure_after_solver":
+        payload["response_hash"] = None
+        payload["response_hash_available"] = False
+        payload["response_hash_verified"] = False
+        payload["response_hash_unavailable_reason"] = (
+            "post_solve_artifact_write_failure_before_structured_response_persistence"
+        )
     payload["runtime_seconds"] = result.end_to_end_runtime_seconds
     return payload
+
+
+def _raw_solver_log_final_status(path: Path) -> str | None:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    status: str | None = None
+    in_summary = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == "CpSolverResponse summary:":
+            in_summary = True
+            continue
+        if in_summary and stripped.startswith("status:"):
+            status = stripped.split(":", 1)[1].strip()
+    return status
 
 
 def _write_solver_run(
@@ -1362,6 +1437,7 @@ def run_fixed_pair_protocol(
     math_course_ids: tuple[str, ...],
     config_dir: Path,
     output: Path,
+    allow_guided_run: bool = True,
 ) -> DiagnosticOutcome:
     pair_id = f"portfolio_pair_{pair_index + 1}"
     run_rows: list[dict[str, Any]] = []
@@ -1391,7 +1467,7 @@ def run_fixed_pair_protocol(
             "fixed_section_ids": list(candidate.logical_section_ids),
         },
         hint_audit=hint_a,
-        model_size=_model_size(build_a),
+        model_size=_model_size(build_a, export_path=output / "runs" / pair_id / "feasibility" / "model.pb"),
         response=response_a,
         validation=validation_a,
         solver_log=result_a.solver_log,
@@ -1422,6 +1498,8 @@ def run_fixed_pair_protocol(
         return DiagnosticOutcome(pair_id, tuple(run_rows), None, True, False, False)
     if result_a.status != "UNKNOWN":
         return DiagnosticOutcome(pair_id, tuple(run_rows), None, False, True, False)
+    if not allow_guided_run:
+        return DiagnosticOutcome(pair_id, tuple(run_rows), None, False, True, False)
 
     build_b, hint_b, result_b = fixed_pair_guided_run(
         context,
@@ -1450,7 +1528,7 @@ def run_fixed_pair_protocol(
             "fixed_section_ids": list(candidate.logical_section_ids),
         },
         hint_audit=hint_b,
-        model_size=_model_size(build_b),
+        model_size=_model_size(build_b, export_path=output / "runs" / pair_id / "guided" / "model.pb"),
         response=response_b,
         validation=validation_b,
         solver_log=result_b.solver_log,
@@ -1547,51 +1625,68 @@ def run_screening_audit(
     config_dir: str | Path = "data/config",
     resume: bool = False,
     screening_only: bool = False,
+    max_new_solver_runs: int | None = None,
 ) -> dict[str, Any]:
     output = Path(output_dir)
+    resume_from_aggregate = False
+    prior_static_only_sha = None
+    existing_aggregate: dict[str, Any] | None = None
     if output.exists() and any(output.iterdir()):
         if not resume:
             raise ScreeningError(f"screening output is non-empty; refusing overwrite: {output}")
         aggregate = output / "aggregate_summary.json"
         if aggregate.is_file():
-            return _read_json(aggregate) | {"resumed": True, "solver_reexecuted": False}
+            existing_aggregate = _read_json(aggregate)
+            prior_static_only_sha = existing_aggregate.get("sha256sums_hash")
+            if max_new_solver_runs is None or max_new_solver_runs <= 0:
+                return existing_aggregate | {"resumed": True, "solver_reexecuted": False}
+            resume_from_aggregate = True
         checkpoint = output / "checkpoint.json"
-        if not checkpoint.is_file():
+        if not aggregate.is_file() and not checkpoint.is_file():
             raise ScreeningError("resume requested without checkpoint")
     output.mkdir(parents=True, exist_ok=True)
     manifest = load_screening_manifest(manifest_path)
-    source_verification = verify_source_artifacts(manifest)
     context, domains, domain_summary = load_target_context_and_domains(
         preview_dir=preview_dir,
         audit_root=audit_root,
         config_dir=config_dir,
     )
-    structural = structural_revalidation(manifest, context, domains, domain_summary, config_dir=config_dir)
-    zero_edit = zero_edit_core_student_verification(context)
-    profile = build_core_profile(context.allocation_input, AUTHORITATIVE_STUDENT_ID)
-    effects = section_effect_signatures(domains, profile, context.allocation_input)
-    previous_pairs = {tuple(sorted(pair)) for pair in manifest["previously_excluded_unique_pairs"]}
-    results, screening_summary = run_static_pair_screening(
-        profile=profile,
-        domains=domains,
-        allocation_input=context.allocation_input,
-        previously_excluded_pairs=previous_pairs,
-    )
-    portfolio, portfolio_audit = select_pair_portfolio(results, domains, max_size=int(manifest["selected_pair_portfolio_size_max"]))
-    _write_static_artifacts(
-        output,
-        manifest=manifest,
-        source_verification=source_verification,
-        structural=structural,
-        zero_edit=zero_edit,
-        effects=effects,
-        results=results,
-        screening_summary=screening_summary,
-        portfolio=portfolio,
-        portfolio_audit=portfolio_audit,
-    )
+    if resume_from_aggregate:
+        source_verification = _read_json(output / "source_artifact_verification.json")
+        structural = _read_json(output / "structural_revalidation.json")
+        zero_edit = _read_json(output / "zero_edit_core_student_verification.json")
+        screening_summary = _read_json(output / "pair_screening_summary.json")
+        portfolio_payload_existing = _read_json(output / "selected_pair_portfolio.json")
+        portfolio = tuple(_candidate_from_dict(item) for item in portfolio_payload_existing["candidates"])
+        portfolio_audit = _read_json(output / "portfolio_diversity_audit.json")
+    else:
+        source_verification = verify_source_artifacts(manifest)
+        structural = structural_revalidation(manifest, context, domains, domain_summary, config_dir=config_dir)
+        zero_edit = zero_edit_core_student_verification(context)
+        profile = build_core_profile(context.allocation_input, AUTHORITATIVE_STUDENT_ID)
+        effects = section_effect_signatures(domains, profile, context.allocation_input)
+        previous_pairs = {tuple(sorted(pair)) for pair in manifest["previously_excluded_unique_pairs"]}
+        results, screening_summary = run_static_pair_screening(
+            profile=profile,
+            domains=domains,
+            allocation_input=context.allocation_input,
+            previously_excluded_pairs=previous_pairs,
+        )
+        portfolio, portfolio_audit = select_pair_portfolio(results, domains, max_size=int(manifest["selected_pair_portfolio_size_max"]))
+        _write_static_artifacts(
+            output,
+            manifest=manifest,
+            source_verification=source_verification,
+            structural=structural,
+            zero_edit=zero_edit,
+            effects=effects,
+            results=results,
+            screening_summary=screening_summary,
+            portfolio=portfolio,
+            portfolio_audit=portfolio_audit,
+        )
 
-    diagnostic_rows: list[dict[str, Any]] = []
+    diagnostic_rows: list[dict[str, Any]] = [dict(row) for row in _read_csv(output / "diagnostic_runs.csv")]
     failures: list[str] = []
     discovered_witness: dict[str, Any] = {"status": "not_run", "not_run_reason": "no_incumbent_found"}
     acceptance: dict[str, Any] = {"status": "not_run", "not_run_reason": "no_valid_joint_witness"}
@@ -1617,6 +1712,8 @@ def run_screening_audit(
         "stage3_runs": 0,
         "stage4_runs": 0,
     }
+    if existing_aggregate is not None:
+        counters.update({key: int(value) for key, value in existing_aggregate.get("solver_counters", {}).items() if key in counters})
 
     _write_csv(output / "diagnostic_runs.csv", diagnostic_rows)
     _write_json(output / "discovered_witness.json", discovered_witness)
@@ -1633,10 +1730,17 @@ def run_screening_audit(
         "validated": False,
     })
 
+    new_solver_runs = 0
     if not screening_only:
         rules = _load_math_fallback_rules(Path(config_dir), context.catalog)
         math_ids = math_course_ids_from_catalog(context.catalog)
+        completed = {(row.get("pair_id"), row.get("run_name")) for row in diagnostic_rows}
         for index, candidate in enumerate(portfolio):
+            pair_id = f"portfolio_pair_{index + 1}"
+            if (pair_id, "feasibility") in completed:
+                continue
+            if max_new_solver_runs is not None and new_solver_runs >= max_new_solver_runs:
+                break
             outcome = run_fixed_pair_protocol(
                 pair_index=index,
                 candidate=candidate,
@@ -1646,8 +1750,10 @@ def run_screening_audit(
                 math_course_ids=math_ids,
                 config_dir=Path(config_dir),
                 output=output,
+                allow_guided_run=max_new_solver_runs is None,
             )
             diagnostic_rows.extend(outcome.run_rows)
+            new_solver_runs += len(outcome.run_rows)
             counters["fixed_pair_feasibility_runs"] += sum(1 for row in outcome.run_rows if row["run_name"] == "feasibility")
             counters["fixed_pair_guided_runs"] += sum(1 for row in outcome.run_rows if row["run_name"] == "guided")
             counters["total_solver_invocations"] = counters["fixed_pair_feasibility_runs"] + counters["fixed_pair_guided_runs"]
@@ -1680,14 +1786,19 @@ def run_screening_audit(
                 "counters": counters,
                 "accepted": accepted_source is not None,
                 "validated": False,
+                "max_new_solver_runs": max_new_solver_runs,
+                "new_solver_runs_this_invocation": new_solver_runs,
             })
+            if max_new_solver_runs is not None and new_solver_runs >= max_new_solver_runs:
+                break
 
     witness_valid = bool(
         discovered_witness.get("status") == "found"
         and discovered_witness.get("joint_witness", {}).get("joint_bootstrap_witness_valid")
         and discovered_witness.get("joint_witness", {}).get("changed_logical_section_count_must_equal_2")
     )
-    if accepted_source is not None and witness_valid:
+    downstream_validation_allowed = max_new_solver_runs is None
+    if downstream_validation_allowed and accepted_source is not None and witness_valid:
         placement_map = accepted_source["placement_map"]
         assignments = accepted_source["assignments"]
         acceptance = production_fixed_witness_acceptance(
@@ -1738,9 +1849,11 @@ def run_screening_audit(
     _write_json(output / "failures.json", {"failures": failures, "unexpected_failure_count": len(failures)})
     _write_json(output / "provenance.json", {
         "source_git_commit": manifest["source_git_commit"],
+        "prior_static_only_sha256sums_hash": prior_static_only_sha,
         "exploratory_dry_runs": 1,
         "accepted_formal_static_screening_runs": 1,
         "total_static_screening_executions": 2,
+        "new_solver_runs_this_invocation": new_solver_runs,
         "external_persisted_seed": False,
         "global_k2_reruns": 0,
         "k1_runs": 0,
@@ -1779,6 +1892,7 @@ def run_screening_audit(
             "accepted_formal_static_screening_runs": 1,
             "total_static_screening_executions": 2,
             "total_solver_invocations": counters["total_solver_invocations"],
+            "new_solver_runs_this_invocation": new_solver_runs,
         },
         "global_k2_remains_unresolved": not validated,
         "stress_runs": 0,
@@ -1796,6 +1910,8 @@ def run_screening_audit(
         "accepted": accepted_source is not None,
         "validated": validated,
         "aggregate_written": True,
+        "max_new_solver_runs": max_new_solver_runs,
+        "new_solver_runs_this_invocation": new_solver_runs,
     })
     checksum_hash = write_checksums(output)
     aggregate["sha256sums_hash"] = checksum_hash
@@ -1813,6 +1929,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT))
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--screening-only", action="store_true")
+    parser.add_argument("--max-new-solver-runs", type=int, default=None)
     args = parser.parse_args(argv)
     try:
         result = run_screening_audit(
@@ -1820,6 +1937,7 @@ def main(argv: list[str] | None = None) -> int:
             output_dir=args.output_dir,
             resume=args.resume,
             screening_only=args.screening_only,
+            max_new_solver_runs=args.max_new_solver_runs,
         )
     except ScreeningError as exc:
         print(f"Hybrid K=2 section-pair screening FAIL: {exc}")
