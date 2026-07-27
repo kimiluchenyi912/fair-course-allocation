@@ -1867,6 +1867,10 @@ def run_screening_audit(
         "stage3_runs": 0,
         "stage4_runs": 0,
         "protocol_deviations": [],
+        **RECOVERED_MODEL_PROTO_PROVENANCE,
+        **RECONSTRUCTED_SOLVER_CONFIG_PROVENANCE,
+        "response_hash": None,
+        "response_hash_verified": False,
         **counters,
     })
     aggregate = {
@@ -1895,6 +1899,23 @@ def run_screening_audit(
             "new_solver_runs_this_invocation": new_solver_runs,
         },
         "global_k2_remains_unresolved": not validated,
+        **RECOVERED_MODEL_PROTO_PROVENANCE,
+        **RECONSTRUCTED_SOLVER_CONFIG_PROVENANCE,
+        "response_hash": None,
+        "response_hash_verified": False,
+        "fixed_section_pair_infeasible": bool(newly_excluded),
+        "fixed_section_pair_infeasible_scope": {
+            "scenario_id": TARGET_SCENARIO_ID,
+            "logical_section_ids": list(portfolio[0].logical_section_ids) if portfolio else [],
+            "both_selected_sections_forced_changed": True,
+            "destination_domain": "full_frozen_non_original_destination_domains",
+            "hard_model": "current_production_hard_policy_model",
+        },
+        "lower_bound_remains": 2,
+        "exact_minimum_claim": False,
+        "repair_witness_found": False,
+        "production_acceptance_runs": counters["production_fixed_witness_acceptance_runs"],
+        "production_validation_runs": counters["production_validation_runs"],
         "stress_runs": 0,
         "negative_runs": 0,
         "holdout_runs": 0,
@@ -1912,6 +1933,10 @@ def run_screening_audit(
         "aggregate_written": True,
         "max_new_solver_runs": max_new_solver_runs,
         "new_solver_runs_this_invocation": new_solver_runs,
+        **RECOVERED_MODEL_PROTO_PROVENANCE,
+        **RECONSTRUCTED_SOLVER_CONFIG_PROVENANCE,
+        "response_hash": None,
+        "response_hash_verified": False,
     })
     checksum_hash = write_checksums(output)
     aggregate["sha256sums_hash"] = checksum_hash

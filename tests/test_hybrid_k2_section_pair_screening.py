@@ -867,9 +867,9 @@ def test_formal_artifact_class_closure_and_run_a_solver_counters() -> None:
     assert screening["survivor_proves_global_feasible"] is False
     assert aggregate["global_k2_remains_unresolved"] is True
     assert aggregate["minimum_claim"]["proven"] is False
-    assert counters["fixed_pair_feasibility_runs"] == 1
+    assert counters["fixed_pair_feasibility_runs"] == 2
     assert counters["fixed_pair_guided_runs"] == 0
-    assert counters["total_solver_invocations"] == 1
+    assert counters["total_solver_invocations"] == 2
     assert counters["production_fixed_witness_acceptance_runs"] == 0
     assert counters["production_validation_runs"] == 0
     assert counters["global_k2_reruns"] == 0
@@ -877,7 +877,7 @@ def test_formal_artifact_class_closure_and_run_a_solver_counters() -> None:
     assert counters["k3_runs"] == 0
 
 
-def test_formal_artifact_execution_counts_include_one_run_a() -> None:
+def test_formal_artifact_execution_counts_include_two_run_a_attempts() -> None:
     aggregate = read_artifact_json(FORMAL_ARTIFACT, "aggregate_summary.json")
     provenance = read_artifact_json(FORMAL_ARTIFACT, "provenance.json")
 
@@ -885,14 +885,14 @@ def test_formal_artifact_execution_counts_include_one_run_a() -> None:
         "exploratory_dry_runs": 1,
         "accepted_formal_static_screening_runs": 1,
         "total_static_screening_executions": 2,
-        "total_solver_invocations": 1,
+        "total_solver_invocations": 2,
         "new_solver_runs_this_invocation": 1,
     }
     assert provenance["exploratory_dry_runs"] == 1
     assert provenance["accepted_formal_static_screening_runs"] == 1
     assert provenance["total_static_screening_executions"] == 2
-    assert provenance["total_solver_invocations"] == 1
-    assert provenance["fixed_pair_feasibility_runs"] == 1
+    assert provenance["total_solver_invocations"] == 2
+    assert provenance["fixed_pair_feasibility_runs"] == 2
     assert provenance["fixed_pair_guided_runs"] == 0
     assert provenance["production_validation_runs"] == 0
 
@@ -929,6 +929,29 @@ def test_formal_artifact_records_reconstructed_solver_config_evidence() -> None:
     assert response["status_evidence_status"] == "INFEASIBLE"
 
 
+def test_formal_artifact_pair_two_run_a_is_infeasible_without_hints() -> None:
+    solver_config = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_2/feasibility/solver_config.json")
+    hint_audit = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_2/feasibility/hint_audit.json")
+    response = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_2/feasibility/response_stats.json")
+
+    assert solver_config["fixed_section_ids"] == ["AP_JAPANESE_LANG_01", "SOCIAL_JUSTICE_01"]
+    assert solver_config["seed"] == 20260630
+    assert solver_config["workers"] == 1
+    assert solver_config["max_time_in_seconds"] == 75.0
+    assert solver_config["objective"] == "none"
+    assert solver_config["hint"] == "none"
+    assert solver_config["stop_after_first_solution"] is True
+    assert hint_audit["hint_used"] is False
+    assert hint_audit["objective_used"] is False
+    assert hint_audit["candidate_pruning"] is False
+    assert hint_audit["full_domain_preserved"] is True
+    assert response["status"] == "INFEASIBLE"
+    assert response["incumbent_found"] is False
+    assert response["assignment_available"] is False
+    assert response["branches"] == 0
+    assert response["conflicts"] == 0
+
+
 def test_formal_artifact_scoped_infeasible_conclusion_keeps_global_k2_unresolved() -> None:
     aggregate = read_artifact_json(FORMAL_ARTIFACT, "aggregate_summary.json")
     validation = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_1/feasibility/validation.json")
@@ -958,8 +981,9 @@ def test_formal_artifact_checksum_file_is_current() -> None:
     checksum_file = FORMAL_ARTIFACT / "SHA256SUMS.txt"
     entries = [line for line in checksum_file.read_text(encoding="utf-8").splitlines() if line.strip()]
 
-    assert len(entries) == 26
+    assert len(entries) == 33
     assert any(line.endswith("runs/portfolio_pair_1/feasibility/model.pb") for line in entries)
+    assert any(line.endswith("runs/portfolio_pair_2/feasibility/model.pb") for line in entries)
     for line in entries:
         expected, relative = line.split("  ", 1)
         actual = hashlib.sha256((FORMAL_ARTIFACT / relative).read_bytes()).hexdigest()
