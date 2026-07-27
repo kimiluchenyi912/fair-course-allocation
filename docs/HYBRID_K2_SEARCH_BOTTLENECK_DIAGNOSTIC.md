@@ -183,7 +183,10 @@ The later Hybrid K=2 Section-Pair Static Screening v1 uses this diagnostic's
 excluded pair as prior evidence while enumerating the complete 48,516-pair
 frozen universe. That static screen is only a G12_0536 necessary-condition
 filter: its survivors are not global-feasibility or production-repair
-evidence, and it does not run fixed-pair Run A/B or any CP-SAT solver.
+evidence. The later selected six-pair portfolio was subsequently exhausted
+with fixed-pair Run A, and all six selected pairs returned scoped
+`INFEASIBLE`, but that still leaves 1,231 untested static survivors and does
+not prove global K2 infeasibility or an exact minimum.
 
 ## Execution history correction
 

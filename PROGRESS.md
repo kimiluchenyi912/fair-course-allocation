@@ -215,14 +215,17 @@ not proof of a minimum section move.
   evidence; no new diagnostic solver runs were executed for this correction.
 
 - Added the Hybrid K=2 Section-Pair Static Screening v1 runner and manifest.
-  The accepted formal `--screening-only` artifact enumerates all 48,516
-  unordered frozen section pairs for `normal_dev_10`, evaluates 139,415
-  placement combinations against the G12_0536 student-local necessary
-  condition, and selects a six-pair portfolio. It matches the exploratory
-  dry run exactly on frozen counts: 47,278 necessary-condition failures,
-  1,237 survivors, one previously proven infeasible pair, and portfolio hash
-  `ef83de1d2dfecaa6f55b8d074156466d96f73c5334be61d2aba856819445fd67`.
-  Fixed-pair solver runs, production acceptance, production validation,
-  global K2/K1/K3, stress, negative, and holdout runs are all zero. Survivors
-  are not global or production feasibility evidence; global K2 remains
-  unresolved and no exact minimum claim is made.
+  The accepted formal artifact enumerates all 48,516 unordered frozen section
+  pairs for `normal_dev_10`, evaluates 139,415 placement combinations against
+  the G12_0536 student-local necessary condition, and selects a six-pair
+  portfolio. It matches the exploratory dry run exactly on frozen counts:
+  47,278 necessary-condition failures, 1,237 survivors, one previously proven
+  infeasible pair, and portfolio hash
+  `ef83de1d2dfecaa6f55b8d074156466d96f73c5334be61d2aba856819445fd67`. The
+  selected portfolio has now been exhausted with six fixed-pair Run A attempts,
+  all returning `INFEASIBLE`, zero Run B attempts, zero incumbents, and zero
+  production acceptance or validation runs. Those six scoped exclusions plus
+  the prior evidence exclude seven specific unique section-ID pairs; 1,231
+  static survivors remain untested. Survivors are not global or production
+  feasibility evidence; global K2 remains unresolved and no exact minimum claim
+  is made.

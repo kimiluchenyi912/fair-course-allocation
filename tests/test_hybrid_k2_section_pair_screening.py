@@ -868,9 +868,9 @@ def test_formal_artifact_class_closure_and_run_a_solver_counters() -> None:
     assert screening["survivor_proves_global_feasible"] is False
     assert aggregate["global_k2_remains_unresolved"] is True
     assert aggregate["minimum_claim"]["proven"] is False
-    assert counters["fixed_pair_feasibility_runs"] == 5
+    assert counters["fixed_pair_feasibility_runs"] == 6
     assert counters["fixed_pair_guided_runs"] == 0
-    assert counters["total_solver_invocations"] == 5
+    assert counters["total_solver_invocations"] == 6
     assert counters["production_fixed_witness_acceptance_runs"] == 0
     assert counters["production_validation_runs"] == 0
     assert counters["global_k2_reruns"] == 0
@@ -878,7 +878,32 @@ def test_formal_artifact_class_closure_and_run_a_solver_counters() -> None:
     assert counters["k3_runs"] == 0
 
 
-def test_formal_artifact_execution_counts_include_five_run_a_attempts() -> None:
+def test_formal_artifact_marks_selected_portfolio_exhausted_without_global_claim() -> None:
+    aggregate = read_artifact_json(FORMAL_ARTIFACT, "aggregate_summary.json")
+    provenance = read_artifact_json(FORMAL_ARTIFACT, "provenance.json")
+    checkpoint = read_artifact_json(FORMAL_ARTIFACT, "checkpoint.json")
+
+    for payload in (aggregate, provenance, checkpoint):
+        assert payload["selected_portfolio_pair_count"] == 6
+        assert payload["completed_run_a_count"] == 6
+        assert payload["run_a_infeasible_count"] == 6
+        assert payload["run_b_count"] == 0
+        assert payload["incumbent_count"] == 0
+        assert payload["selected_portfolio_complete"] is True
+        assert payload["selected_portfolio_exhausted"] is True
+        assert payload["selected_portfolio_result"] == "exhausted_no_incumbent"
+        assert payload["run_b_not_required_after_run_a_infeasible_count"] == 6
+        assert payload["tested_selected_static_survivor_pairs"] == 6
+        assert payload["remaining_untested_static_survivors"] == 1231
+        assert payload["previously_proven_infeasible_unique_pair_count"] == 1
+        assert payload["newly_fixed_pair_proven_infeasible_selected_pairs"] == 6
+        assert payload["total_specifically_excluded_unique_section_id_pairs"] == 7
+        assert payload["global_k2_status"] == "unresolved"
+        assert payload["proven_lower_bound"] == 2
+        assert payload["exact_minimum_claim_status"] == "none"
+
+
+def test_formal_artifact_execution_counts_include_six_run_a_attempts() -> None:
     aggregate = read_artifact_json(FORMAL_ARTIFACT, "aggregate_summary.json")
     provenance = read_artifact_json(FORMAL_ARTIFACT, "provenance.json")
 
@@ -886,14 +911,14 @@ def test_formal_artifact_execution_counts_include_five_run_a_attempts() -> None:
         "exploratory_dry_runs": 1,
         "accepted_formal_static_screening_runs": 1,
         "total_static_screening_executions": 2,
-        "total_solver_invocations": 5,
+        "total_solver_invocations": 6,
         "new_solver_runs_this_invocation": 1,
     }
     assert provenance["exploratory_dry_runs"] == 1
     assert provenance["accepted_formal_static_screening_runs"] == 1
     assert provenance["total_static_screening_executions"] == 2
-    assert provenance["total_solver_invocations"] == 5
-    assert provenance["fixed_pair_feasibility_runs"] == 5
+    assert provenance["total_solver_invocations"] == 6
+    assert provenance["fixed_pair_feasibility_runs"] == 6
     assert provenance["fixed_pair_guided_runs"] == 0
     assert provenance["production_validation_runs"] == 0
 
@@ -1022,12 +1047,40 @@ def test_formal_artifact_pair_five_run_a_is_infeasible_without_hints() -> None:
     assert response["conflicts"] == 0
 
 
+def test_formal_artifact_pair_six_run_a_is_infeasible_without_hints() -> None:
+    solver_config = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_6/feasibility/solver_config.json")
+    hint_audit = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_6/feasibility/hint_audit.json")
+    response = read_artifact_json(FORMAL_ARTIFACT, "runs/portfolio_pair_6/feasibility/response_stats.json")
+
+    assert solver_config["fixed_section_ids"] == ["AP_3D_ART_DESIGN_01", "ROCK_N_ROLL_HISTORY_01"]
+    assert solver_config["seed"] == 20260630
+    assert solver_config["workers"] == 1
+    assert solver_config["max_time_in_seconds"] == 75.0
+    assert solver_config["objective"] == "none"
+    assert solver_config["hint"] == "none"
+    assert solver_config["stop_after_first_solution"] is True
+    assert hint_audit["hint_used"] is False
+    assert hint_audit["objective_used"] is False
+    assert hint_audit["candidate_pruning"] is False
+    assert hint_audit["full_domain_preserved"] is True
+    assert response["status"] == "INFEASIBLE"
+    assert response["incumbent_found"] is False
+    assert response["assignment_available"] is False
+    assert response["branches"] == 0
+    assert response["conflicts"] == 0
+
+
 def test_formal_artifact_excludes_all_local_pairs_among_four_core_sections_without_global_k2_claim() -> None:
     aggregate = read_artifact_json(FORMAL_ARTIFACT, "aggregate_summary.json")
     completed_rows = {
-        tuple(sorted(read_artifact_json(FORMAL_ARTIFACT, f"runs/portfolio_pair_{index}/feasibility/solver_config.json")[
-            "fixed_section_ids"
-        ]))
+        tuple(
+            sorted(
+                read_artifact_json(
+                    FORMAL_ARTIFACT,
+                    f"runs/portfolio_pair_{index}/feasibility/solver_config.json",
+                )["fixed_section_ids"]
+            )
+        )
         for index in range(1, 6)
     }
     with (FORMAL_ARTIFACT / "all_pair_screening.csv").open(encoding="utf-8", newline="") as handle:
@@ -1079,12 +1132,13 @@ def test_formal_artifact_checksum_file_is_current() -> None:
     checksum_file = FORMAL_ARTIFACT / "SHA256SUMS.txt"
     entries = [line for line in checksum_file.read_text(encoding="utf-8").splitlines() if line.strip()]
 
-    assert len(entries) == 54
+    assert len(entries) == 61
     assert any(line.endswith("runs/portfolio_pair_1/feasibility/model.pb") for line in entries)
     assert any(line.endswith("runs/portfolio_pair_2/feasibility/model.pb") for line in entries)
     assert any(line.endswith("runs/portfolio_pair_3/feasibility/model.pb") for line in entries)
     assert any(line.endswith("runs/portfolio_pair_4/feasibility/model.pb") for line in entries)
     assert any(line.endswith("runs/portfolio_pair_5/feasibility/model.pb") for line in entries)
+    assert any(line.endswith("runs/portfolio_pair_6/feasibility/model.pb") for line in entries)
     for line in entries:
         expected, relative = line.split("  ", 1)
         actual = hashlib.sha256((FORMAL_ARTIFACT / relative).read_bytes()).hexdigest()

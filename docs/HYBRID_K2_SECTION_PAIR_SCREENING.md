@@ -56,23 +56,53 @@ contains six unique course pairs. The section-participation cap was relaxed to
 
 ## Safety Counters
 
-All solver and downstream validation counters are zero in this slice:
+The selected six-pair portfolio has now been exhausted with fixed-pair Run A.
+Run A forces each selected pair's two section IDs to change, keeps every other
+editable section fixed to its original placement, preserves each selected
+section's full frozen non-original destination domain, and uses no placement
+hint, assignment hint, candidate pruning, or objective.
 
-- fixed-pair Run A: `0`
+- fixed-pair Run A: `6`
 - fixed-pair Run B: `0`
-- total solver invocations: `0`
+- total solver invocations: `6`
 - production fixed-witness acceptance: `0`
 - production validation: `0`
 - global K2/K1/K3: `0`
 - other normal, stress, negative, holdout: `0`
 
 The artifact provenance records one exploratory dry run, one accepted formal
-static screening run, two total static screening executions, and zero total
+static screening run, two total static screening executions, and six total
 solver invocations.
+
+## Fixed-Pair Run A Results
+
+| pair | section IDs | Run A status | incumbent | response-hash evidence | Run B needed | scoped conclusion |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | `AP_3D_ART_DESIGN_01` + `CREATIVE_WRITING_01` | `INFEASIBLE` | no | recovery-only log evidence; response hash unavailable | no | fixed pair infeasible across full frozen destination domain |
+| 2 | `AP_JAPANESE_LANG_01` + `SOCIAL_JUSTICE_01` | `INFEASIBLE` | no | verified persisted response hash | no | fixed pair infeasible across full frozen destination domain |
+| 3 | `AP_JAPANESE_LANG_01` + `CREATIVE_WRITING_01` | `INFEASIBLE` | no | verified persisted response hash | no | fixed pair infeasible across full frozen destination domain |
+| 4 | `AP_3D_ART_DESIGN_01` + `AP_JAPANESE_LANG_01` | `INFEASIBLE` | no | verified persisted response hash | no | fixed pair infeasible across full frozen destination domain |
+| 5 | `CREATIVE_WRITING_01` + `SOCIAL_JUSTICE_01` | `INFEASIBLE` | no | verified persisted response hash | no | fixed pair infeasible across full frozen destination domain |
+| 6 | `AP_3D_ART_DESIGN_01` + `ROCK_N_ROLL_HISTORY_01` | `INFEASIBLE` | no | verified persisted response hash | no | fixed pair infeasible across full frozen destination domain |
+
+The selected portfolio is complete and exhausted with `exhausted_no_incumbent`:
+six Run A attempts, six `INFEASIBLE` statuses, zero incumbents, and zero Run B
+attempts. Run B was not required because each Run A already proved its fixed
+pair infeasible across that pair's full frozen destination domain.
 
 ## Interpretation
 
-The 1,237 survivors are only G12_0536 necessary-condition survivors. They are
-not repair witnesses, not global-feasibility evidence, and not publication-ready
-assignments. Global K2 remains unresolved. The previous K=1 lower bound of 2
-stands unchanged, and no exact minimum claim is made.
+The 1,237 survivors are only G12_0536 necessary-condition survivors. Six
+selected survivors have now been fixed-pair tested, leaving 1,231 untested
+static survivors. Together with the one previously proven infeasible pair, the
+artifact has seven specifically excluded unique section-ID pairs.
+
+Among the four sections `AP_3D_ART_DESIGN_01`, `AP_JAPANESE_LANG_01`,
+`CREATIVE_WRITING_01`, and `SOCIAL_JUSTICE_01`, all six two-section
+combinations have been excluded: five by selected Run A and one by prior
+evidence. This is a local fact about those four sections only. It is not a
+global K2 infeasibility proof, not a repair witness, not global-feasibility
+evidence, and not a publication-ready assignment. Global K2 remains unresolved.
+The previous K=1 lower bound of 2 stands unchanged, and no exact minimum claim
+is made. The next phase is not decided here and should not automatically
+continue solver runs.

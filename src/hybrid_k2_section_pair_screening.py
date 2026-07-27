@@ -1842,6 +1842,41 @@ def run_screening_audit(
         if witness_valid
         else "unresolved_no_incumbent"
     )
+    run_a_rows = [row for row in diagnostic_rows if row["run_name"] == "feasibility"]
+    run_b_rows = [row for row in diagnostic_rows if row["run_name"] == "guided"]
+    run_a_infeasible_count = sum(1 for row in run_a_rows if row["status"] == "INFEASIBLE")
+    incumbent_count = sum(1 for row in diagnostic_rows if row.get("incumbent_found"))
+    selected_portfolio_complete = len(run_a_rows) == len(portfolio)
+    selected_portfolio_exhausted = selected_portfolio_complete and incumbent_count == 0
+    tested_selected_survivors = len({row["pair_id"] for row in run_a_rows})
+    previously_proven_infeasible_unique_pair_count = int(screening_summary.get("previously_proven_infeasible_pairs", 0))
+    newly_fixed_pair_proven_infeasible_selected_pairs = run_a_infeasible_count
+    portfolio_completion = {
+        "selected_portfolio_pair_count": len(portfolio),
+        "completed_run_a_count": len(run_a_rows),
+        "run_a_infeasible_count": run_a_infeasible_count,
+        "run_b_count": len(run_b_rows),
+        "incumbent_count": incumbent_count,
+        "selected_portfolio_complete": selected_portfolio_complete,
+        "selected_portfolio_exhausted": selected_portfolio_exhausted,
+        "selected_portfolio_result": "exhausted_no_incumbent" if selected_portfolio_exhausted else result_classification,
+        "run_b_not_required_after_run_a_infeasible_count": run_a_infeasible_count,
+        "tested_selected_static_survivor_pairs": tested_selected_survivors,
+        "remaining_untested_static_survivors": max(
+            int(screening_summary.get("core_screen_survivor_count", 0)) - tested_selected_survivors,
+            0,
+        ),
+        "previously_proven_infeasible_unique_pair_count": previously_proven_infeasible_unique_pair_count,
+        "newly_fixed_pair_proven_infeasible_selected_pairs": newly_fixed_pair_proven_infeasible_selected_pairs,
+        "total_specifically_excluded_unique_section_id_pairs": (
+            previously_proven_infeasible_unique_pair_count + newly_fixed_pair_proven_infeasible_selected_pairs
+        ),
+        "global_k2_status": "unresolved",
+        "global_k2_infeasible": False,
+        "proven_lower_bound": 2,
+        "exact_minimum_claim_status": "none",
+        "repair_witness": "none",
+    }
     _write_csv(output / "diagnostic_runs.csv", diagnostic_rows)
     _write_json(output / "discovered_witness.json", discovered_witness)
     _write_json(output / "production_fixed_witness_acceptance.json", acceptance)
@@ -1871,6 +1906,7 @@ def run_screening_audit(
         **RECONSTRUCTED_SOLVER_CONFIG_PROVENANCE,
         "response_hash": None,
         "response_hash_verified": False,
+        **portfolio_completion,
         **counters,
     })
     aggregate = {
@@ -1914,6 +1950,7 @@ def run_screening_audit(
         "lower_bound_remains": 2,
         "exact_minimum_claim": False,
         "repair_witness_found": False,
+        **portfolio_completion,
         "production_acceptance_runs": counters["production_fixed_witness_acceptance_runs"],
         "production_validation_runs": counters["production_validation_runs"],
         "stress_runs": 0,
@@ -1937,6 +1974,7 @@ def run_screening_audit(
         **RECONSTRUCTED_SOLVER_CONFIG_PROVENANCE,
         "response_hash": None,
         "response_hash_verified": False,
+        **portfolio_completion,
     })
     checksum_hash = write_checksums(output)
     aggregate["sha256sums_hash"] = checksum_hash

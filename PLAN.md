@@ -555,9 +555,13 @@ The accepted formal static artifact matches the exploratory dry run: 139,415
 placement combinations, 47,278 necessary-condition failures, 1,237 survivors,
 one previously proven infeasible pair, and a six-pair portfolio with hash
 `ef83de1d2dfecaa6f55b8d074156466d96f73c5334be61d2aba856819445fd67`.
-Survivors are only G12_0536 necessary-condition survivors; they do not prove
-global or production feasibility. The same-course-pair cap was relaxed to 2,
-but the final portfolio still contains six unique course pairs. The section
-participation cap was relaxed to 3 and that relaxation was used. The lower
-bound remains 2, global K=2 remains unresolved, and no exact minimum claim is
-made.
+All six selected portfolio pairs have now completed fixed-pair Run A and
+returned `INFEASIBLE`, with zero Run B attempts, zero incumbents, zero
+production acceptance, and zero production validation. Those six results plus
+the one previously proven pair give seven specifically excluded unique
+section-ID pairs, leaving 1,231 untested static survivors. Survivors are only
+G12_0536 necessary-condition survivors; they do not prove global or production
+feasibility. The same-course-pair cap was relaxed to 2, but the final
+portfolio still contains six unique course pairs. The section participation
+cap was relaxed to 3 and that relaxation was used. The lower bound remains 2,
+global K=2 remains unresolved, and no exact minimum claim is made.

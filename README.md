@@ -448,8 +448,9 @@ section pair, never to other K=2 pairs. See
 ## Hybrid K=2 section-pair static screening
 
 The static screening pass enumerates the complete frozen `normal_dev_10`
-312-section K=2 pair universe without running fixed-pair Run A/B or any
-CP-SAT solver:
+312-section K=2 pair universe. The command below is the static-only entry
+point; the accepted artifact was later extended with selected fixed-pair Run A
+evidence:
 
 ```bash
 .venv/bin/python -m src.hybrid_k2_section_pair_screening \
@@ -460,9 +461,12 @@ CP-SAT solver:
 
 This is only a G12_0536 student-local necessary-condition screen. Its 1,237
 survivors are not global-feasibility evidence and are not production-feasible
-repairs. The accepted formal static artifact records 48,516 pairs, 139,415
-placement combinations, 47,278 necessary-condition failures, one previously
-proven infeasible pair, and six selected portfolio pairs. Fixed-pair solver
-runs, production acceptance, and production validation all remain at zero;
-global K=2 is still unresolved, the K=1 lower bound of 2 stands unchanged, and
+repairs. The accepted formal artifact records 48,516 pairs, 139,415 placement
+combinations, 47,278 necessary-condition failures, one previously proven
+infeasible pair, and six selected portfolio pairs. All six selected pairs have
+now completed fixed-pair Run A and returned `INFEASIBLE`; Run B, production
+acceptance, production validation, global K=2, K=1, and K=3 remain at zero.
+Those six Run A results plus the one prior pair yield seven specifically
+excluded unique section-ID pairs, while 1,231 static survivors remain untested.
+Global K=2 is still unresolved, the K=1 lower bound of 2 stands unchanged, and
 no exact minimum claim is made.

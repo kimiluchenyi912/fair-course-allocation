@@ -1057,7 +1057,7 @@ failure excludes a pair from the G12_0536 necessary-condition perspective,
 but survival does not prove global feasibility, production feasibility,
 teacher/room feasibility, or repair validity.
 
-The accepted formal static artifact records:
+The accepted formal artifact records:
 
 - `total_unique_pairs = 48516`
 - `raw_placement_combination_count = 139415`
@@ -1067,9 +1067,13 @@ The accepted formal static artifact records:
 - `portfolio_count = 6`
 - `portfolio_hash = ef83de1d2dfecaa6f55b8d074156466d96f73c5334be61d2aba856819445fd67`
 
-Fixed-pair Run A/B, production fixed-witness acceptance, independent
-production validation, global K2, K1, K3, stress, negative, and holdout runs
-remain disabled in this slice; all solver counters are zero. The
+The selected portfolio has since been exhausted with fixed-pair Run A: six
+selected pairs, six `INFEASIBLE` statuses, zero Run B attempts, zero
+incumbents, and zero production acceptance or validation runs. Together with
+the one previously proven infeasible pair, this yields seven specifically
+excluded unique section-ID pairs and leaves 1,231 static survivors untested.
+Production fixed-witness acceptance, independent production validation, global
+K2, K1, K3, stress, negative, and holdout runs remain disabled. The
 same-course-pair cap relaxation to 2 is recorded, but the final selected
 portfolio still has six unique course pairs. The section-participation cap
 relaxation to 3 is also recorded and used. The previous K=1 lower bound of 2
