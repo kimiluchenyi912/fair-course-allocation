@@ -470,3 +470,15 @@ Those six Run A results plus the one prior pair yield seven specifically
 excluded unique section-ID pairs, while 1,231 static survivors remain untested.
 Global K=2 is still unresolved, the K=1 lower bound of 2 stands unchanged, and
 no exact minimum claim is made.
+
+### Remaining K=2 survivor expansion audit
+
+`docs/REMAINING_K2_SURVIVOR_EXPANSION_AUDIT.md` investigates the six Run A
+failures and designs the next safe screen, ranking, storage, batching, resume,
+and stopping contracts without running a solver. It identifies a proved
+G12_0105 three-P1 necessary condition: a fixed pair must intersect
+`{CHINESE4_01, FOOTBALL_01, INTERMEDIATE_ACTING_01}`. It projects, from cached
+rows only, that 1,219 of the 1,231 untested survivors would be removed, leaving
+12. That exploratory, informal projection is not a formal screening artifact
+result and is not a new global K2 result. The audit adds no runner; global K2
+remains unresolved and no exact minimum or repair witness is claimed.

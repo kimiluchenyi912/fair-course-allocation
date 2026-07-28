@@ -229,3 +229,14 @@ not proof of a minimum section move.
   static survivors remain untested. Survivors are not global or production
   feasibility evidence; global K2 remains unresolved and no exact minimum claim
   is made.
+
+- Added the Remaining K=2 Survivor Expansion Audit v1 as a pure investigation
+  and design slice. Read-only model/input inspection proved that G12_0105's
+  three single-section P1 primaries require any viable fixed pair to intersect
+  `{CHINESE4_01, FOOTBALL_01, INTERMEDIATE_ACTING_01}` in at least one section.
+  A cached-row projection estimates that this safe condition would reduce the
+  1,231 formally untested survivors to 12; the formal artifact and its counts
+  remain unchanged. The audit also defines evidence/proof schemas,
+  deterministic ordering and deduplication, a compact Run A protocol, storage
+  estimates, and stopping rules. It invokes no solver and does not implement a
+  batch runner. See `docs/REMAINING_K2_SURVIVOR_EXPANSION_AUDIT.md`.

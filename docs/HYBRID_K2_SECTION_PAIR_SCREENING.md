@@ -106,3 +106,16 @@ evidence, and not a publication-ready assignment. Global K2 remains unresolved.
 The previous K=1 lower bound of 2 stands unchanged, and no exact minimum claim
 is made. The next phase is not decided here and should not automatically
 continue solver runs.
+
+## Read-only expansion design
+
+The separate
+`docs/REMAINING_K2_SURVIVOR_EXPANSION_AUDIT.md` reviews the six persisted Run A
+models and designs a stronger proof-backed screen plus a bounded future batch
+protocol. It runs no solver and does not change this artifact. Its cached-row
+projection estimates that the necessary condition
+`pair_section_ids ∩ {CHINESE4_01, FOOTBALL_01, INTERMEDIATE_ACTING_01} ≠ ∅`
+would reduce the 1,231 untested survivors to 12. This exploratory, informal
+projection is not a formal screening artifact result; the formal count remains
+1,231 until a separately approved implementation persists a reviewed result.
+Global K2 remains unresolved and no exact minimum claim is made.

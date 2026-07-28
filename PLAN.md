@@ -565,3 +565,22 @@ feasibility. The same-course-pair cap was relaxed to 2, but the final
 portfolio still contains six unique course pairs. The section participation
 cap was relaxed to 3 and that relaxation was used. The lower bound remains 2,
 global K=2 remains unresolved, and no exact minimum claim is made.
+
+### Remaining K=2 Survivor Expansion Audit v1
+
+The next-step audit is investigation and protocol design only. Read-only
+inspection of the six fixed-pair models found a proof-backed blind spot in the
+G12_0536-only screen: ordinary student G12_0105 has three single-section
+primaries fixed at P1, so any feasible pair must intersect the blocker set
+`{CHINESE4_01, FOOTBALL_01, INTERMEDIATE_ACTING_01}` in at least one section.
+Applying that necessary condition to cached survivor rows projects, but does
+not formally record, a reduction from 1,231 untested survivors to 12.
+
+The audit defines evidence classifications, safe-exclusion proof requirements,
+ranking-only heuristics, deterministic ordering and resume contracts, storage
+options, and objective stopping rules. It runs no solver, reruns no static
+screening, modifies no formal artifact, and creates no new feasibility result.
+Until a separately authorized implementation and execution are completed,
+global K2 remains unresolved, the lower bound remains 2, and no exact minimum
+or repair witness is claimed. See
+`docs/REMAINING_K2_SURVIVOR_EXPANSION_AUDIT.md`.
