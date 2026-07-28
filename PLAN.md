@@ -584,3 +584,19 @@ Until a separately authorized implementation and execution are completed,
 global K2 remains unresolved, the lower bound remains 2, and no exact minimum
 or repair witness is claimed. See
 `docs/REMAINING_K2_SURVIVOR_EXPANSION_AUDIT.md`.
+
+### All-Student K=2 Blocker Safe Screen v1
+
+The independently verified follow-up applied the G12_0105 blocker-set
+intersection rule to all 1,237 accepted static survivors without rerunning the
+original 48,516-pair screen or invoking a solver. It formally safe-excluded
+1,225 pairs and retained 12 pairs that are only not excluded by current safe
+necessary conditions. The previously tested six pairs are included once in
+the 1,225 safe exclusions; among the 1,231 previously untested survivors,
+1,219 are excluded and 12 remain.
+
+The full universe closes as 47,278 original static exclusions, one previously
+proven unique pair, 1,225 new blocker-safe exclusions, and 12 remaining pairs.
+Global K2 remains unresolved, the lower bound remains 2, and no exact minimum
+or feasibility claim is made for the remaining pairs. See
+`docs/ALL_STUDENT_K2_BLOCKER_SAFE_SCREEN.md`.

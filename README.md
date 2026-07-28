@@ -482,3 +482,13 @@ rows only, that 1,219 of the 1,231 untested survivors would be removed, leaving
 12. That exploratory, informal projection is not a formal screening artifact
 result and is not a new global K2 result. The audit adds no runner; global K2
 remains unresolved and no exact minimum or repair witness is claimed.
+
+### All-student K=2 blocker safe screen
+
+`docs/ALL_STUDENT_K2_BLOCKER_SAFE_SCREEN.md` records the independently
+verified formal follow-up. The safe necessary-condition screen classified all
+1,237 accepted static survivors: 1,225 disjoint pairs are formally excluded
+within the frozen fixed-pair production domain, while 12 pairs remain not
+excluded by current safe necessary conditions. Remaining does not mean
+feasible. No solver or source-screen rerun occurred; global K2 remains
+unresolved, the lower bound remains 2, and no exact minimum is claimed.

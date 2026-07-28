@@ -119,3 +119,9 @@ would reduce the 1,231 untested survivors to 12. This exploratory, informal
 projection is not a formal screening artifact result; the formal count remains
 1,231 until a separately approved implementation persists a reviewed result.
 Global K2 remains unresolved and no exact minimum claim is made.
+
+The subsequently accepted All-Student K=2 Blocker Safe Screen independently
+verified that condition and formally classified all 1,237 survivors: 1,225
+are blocker-safe excluded and 12 are not excluded by current safe necessary
+conditions. It did not modify this artifact, rerun this source screen, or run
+a solver. See `docs/ALL_STUDENT_K2_BLOCKER_SAFE_SCREEN.md`.

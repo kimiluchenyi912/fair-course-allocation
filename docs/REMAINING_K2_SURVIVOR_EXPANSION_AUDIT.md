@@ -559,3 +559,12 @@ into the formal artifact and no new feasibility result is claimed here.
 Global K2 remains unresolved, the proven lower bound remains 2, no exact
 minimum is known, and no repair witness exists. This audit ends at design; it
 does not implement or start a batch solver runner.
+
+## Formal follow-up
+
+The later All-Student K=2 Blocker Safe Screen v1 independently verified the
+proof and applied it to all 1,237 accepted static survivors. The formal result
+safe-excludes 1,225 pairs and retains 12 pairs that are only not excluded by
+current safe necessary conditions. The formal ordering hash was recomputed and
+matches this audit's informal projection hash. No solver or original-screen
+rerun occurred. See `docs/ALL_STUDENT_K2_BLOCKER_SAFE_SCREEN.md`.

@@ -240,3 +240,13 @@ not proof of a minimum section move.
   deterministic ordering and deduplication, a compact Run A protocol, storage
   estimates, and stopping rules. It invokes no solver and does not implement a
   batch runner. See `docs/REMAINING_K2_SURVIVOR_EXPANSION_AUDIT.md`.
+
+- Completed All-Student K=2 Blocker Safe Screen v1. Independent verification
+  against the frozen `normal_dev_10` inputs and production hard-policy source
+  confirmed the G12_0105 blocker proof. The accepted static-only artifact
+  classified all 1,237 prior survivors with zero duplicates, invalid pairs,
+  or errors: 1,225 are blocker-safe excluded and 12 are not excluded by the
+  current necessary conditions. Of the 1,231 previously untested survivors,
+  1,219 are excluded and 12 remain. No solver ran, the original screen was not
+  rerun, global K2 remains unresolved, and no exact minimum is claimed. See
+  `docs/ALL_STUDENT_K2_BLOCKER_SAFE_SCREEN.md`.
