@@ -1079,3 +1079,15 @@ portfolio still has six unique course pairs. The section-participation cap
 relaxation to 3 is also recorded and used. The previous K=1 lower bound of 2
 stands unchanged, global K2 remains unresolved, and no exact minimum claim is
 made.
+
+### Formal remaining K=2 batch runner v1
+
+The runner consumes only the accepted all-student safe-screen artifact. It
+freezes the exact 12-pair ordering and plans three batches of four. Future Run
+A execution is explicit, no-hint, no-objective, no-pruning, full frozen
+destination-domain feasibility search with a global 12-invocation budget.
+Checkpoint/resume fails closed on running or artifact-failure states and on
+source, manifest, config, ordering, or response drift. Ordinary evidence omits
+full model protobufs; anomaly-only escalation is recorded explicitly. The
+current slice has run only a temporary dry-run with zero solver invocations
+and therefore adds no feasibility or minimum claim.

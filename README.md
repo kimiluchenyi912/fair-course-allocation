@@ -492,3 +492,13 @@ within the frozen fixed-pair production domain, while 12 pairs remain not
 excluded by current safe necessary conditions. Remaining does not mean
 feasible. No solver or source-screen rerun occurred; global K2 remains
 unresolved, the lower bound remains 2, and no exact minimum is claimed.
+
+### Formal remaining K=2 batch runner
+
+`docs/FORMAL_REMAINING_K2_BATCH.md` defines the fail-closed runner for the 12
+safe-screen survivors. The authoritative order comes only from the accepted
+safe-screen artifact and is divided into three four-pair batches. Real
+execution requires explicit `--execute`; the implemented dry-run verifies the
+source, checkpoint and compact-evidence plans with zero solver calls. No pair
+has been run, the formal batch artifact does not yet exist, and global K2
+remains unresolved with lower bound 2 and no exact minimum claim.

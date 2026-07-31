@@ -147,3 +147,12 @@ The artifact contains 11 files and 10 checksum entries. Its
 `SHA256SUMS.txt` hash is
 `9205ad79ff3248ac578362ca113cf0e1110a4bd677859b96c73eb5122416db95`.
 It contains no solver log, model protobuf, or solver response.
+
+## Formal batch handoff
+
+`docs/FORMAL_REMAINING_K2_BATCH.md` consumes this artifact as the sole source
+of the 12-pair universe and order. Its runner verifies this artifact's complete
+checksum set, result hash, blocker proof hash, pair count, and ordering hash
+before planning three four-pair batches. The current implementation has only
+completed a solver-free temporary dry-run; none of the 12 pairs has been
+executed and this artifact remains unchanged.

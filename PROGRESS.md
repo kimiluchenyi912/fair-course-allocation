@@ -250,3 +250,11 @@ not proof of a minimum section move.
   1,219 are excluded and 12 remain. No solver ran, the original screen was not
   rerun, global K2 remains unresolved, and no exact minimum is claimed. See
   `docs/ALL_STUDENT_K2_BLOCKER_SAFE_SCREEN.md`.
+
+- Implemented Formal Remaining 12-Pair K=2 Batch Runner v1 without executing
+  a solver. The runner verifies the accepted safe-screen artifact, freezes the
+  exact 12-pair ordering, plans three batches of four, supports fail-closed
+  checkpoint/resume, and defaults to compact evidence without per-pair
+  `model.pb`. A temporary dry-run records zero solver calls and no feasibility
+  conclusions; the formal batch artifact has not been created. See
+  `docs/FORMAL_REMAINING_K2_BATCH.md`.

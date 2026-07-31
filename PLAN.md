@@ -600,3 +600,18 @@ proven unique pair, 1,225 new blocker-safe exclusions, and 12 remaining pairs.
 Global K2 remains unresolved, the lower bound remains 2, and no exact minimum
 or feasibility claim is made for the remaining pairs. See
 `docs/ALL_STUDENT_K2_BLOCKER_SAFE_SCREEN.md`.
+
+### Formal Remaining 12-Pair K=2 Batch Runner v1
+
+The next implementation freezes the accepted 12-pair order directly from the
+all-student safe-screen artifact and divides it into three deterministic
+four-pair Run A batches. The runner is fail-closed on source, manifest,
+ordering, config, response, checkpoint, or artifact drift; completed pairs are
+never rerun automatically. Ordinary evidence is compact and omits `model.pb`,
+with full-model persistence reserved for explicit anomalies.
+
+This slice has only been unit-tested and dry-run. No pair solver ran and no
+formal batch artifact was created. The 12 pairs remain merely not excluded by
+current safe necessary conditions. Global K2 remains unresolved, the lower
+bound remains 2, and no exact minimum is claimed. See
+`docs/FORMAL_REMAINING_K2_BATCH.md`.
