@@ -16,6 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from src.model_proto_serialization import deterministic_model_proto_bytes
+
 
 SCHEMA_VERSION = 1
 COMPACT_EVIDENCE_SCHEMA_VERSION = 1
@@ -672,7 +674,7 @@ def _real_solver_runner(run: Mapping[str, Any], manifest: Mapping[str, Any]) -> 
         seed=int(manifest["seed"]),
         time_limit_seconds=float(manifest["per_pair_time_limit_seconds"]),
     )
-    proto_bytes = build.model.Proto().SerializeToString(deterministic=True)
+    proto_bytes = deterministic_model_proto_bytes(build.model)
     model_fingerprint = {
         "sha256": hashlib.sha256(proto_bytes).hexdigest(),
         "binary_proto_bytes": len(proto_bytes),

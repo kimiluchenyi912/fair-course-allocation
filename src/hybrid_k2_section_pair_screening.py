@@ -24,7 +24,6 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from ortools.sat.python import cp_model
-from ortools.sat import cp_model_pb2
 
 from src.allocation import canonicalize_allocation_input, math_course_ids_from_catalog, run_constrained_first_baseline
 from src.allocation.cp_sat_solver import _VariableKey
@@ -54,6 +53,7 @@ from src.joint_period_edit_stage1_pilot import (
     production_fixed_witness_acceptance,
     verify_checksums,
 )
+from src.model_proto_serialization import deterministic_model_proto_bytes
 from src.period_placement_repair_probe import (
     DEFAULT_AUDIT_ROOT,
     DEFAULT_OUTPUT as DEFAULT_PREVIEW_OUTPUT,
@@ -1325,12 +1325,11 @@ def _model_size(build: Any, *, export_path: Path | None = None) -> dict[str, Any
         temp_path = Path(handle.name)
         export_path = temp_path
     export_path.parent.mkdir(parents=True, exist_ok=True)
-    if not build.model.ExportToFile(str(export_path)):
-        raise ScreeningError(f"failed to export model proto: {export_path}")
+    try:
+        serialized_bytes = deterministic_model_proto_bytes(build.model, export_path=export_path)
+    except ValueError as exc:
+        raise ScreeningError(str(exc)) from exc
     exported_bytes = export_path.read_bytes()
-    parsed = cp_model_pb2.CpModelProto()
-    parsed.ParseFromString(exported_bytes)
-    serialized_bytes = parsed.SerializeToString(deterministic=True)
     if temp_path is not None:
         temp_path.unlink(missing_ok=True)
     return {

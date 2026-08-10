@@ -5,8 +5,10 @@ import shutil
 from pathlib import Path
 
 import pytest
+from ortools.sat.python import cp_model
 
 from src import formal_remaining_k2_batch as batch
+from src.model_proto_serialization import deterministic_model_proto_bytes
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -352,6 +354,17 @@ def test_compact_evidence_omits_model_by_default(tmp_path: Path) -> None:
     assert (run_dir / "provenance.json").is_file()
 
 
+def test_current_ortools_model_proto_uses_compatible_deterministic_serialization() -> None:
+    model = cp_model.CpModel()
+    value = model.new_bool_var("value")
+    model.add(value == 1)
+
+    assert not hasattr(model.Proto(), "SerializeToString")
+    first = deterministic_model_proto_bytes(model)
+    second = deterministic_model_proto_bytes(model)
+
+    assert first
+    assert first == second
 def test_model_proto_is_saved_only_for_allowed_anomaly(tmp_path: Path) -> None:
     output = tmp_path / "run"
     batch.run_batch(

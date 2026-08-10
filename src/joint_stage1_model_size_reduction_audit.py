@@ -19,7 +19,6 @@ from typing import Any, Iterable, Mapping
 
 import pandas as pd
 from ortools.sat.python import cp_model
-from ortools.sat import cp_model_pb2
 
 from src.allocation.cp_sat_solver import _VariableKey
 from src.experiment_manifest import canonical_input_fingerprint
@@ -52,6 +51,7 @@ from src.period_placement_repair_probe import DEFAULT_AUDIT_ROOT, load_scenario_
 from src.section_plan_feasibility_audit import load_section_plan_audit_manifest
 from src.benchmark_runner import _load_math_fallback_rules
 from src.allocation import math_course_ids_from_catalog
+from src.model_proto_serialization import deterministic_model_proto_bytes
 
 
 DEFAULT_MANIFEST = Path("data/scenarios/joint_stage1_model_size_reduction_audit_v1.json")
@@ -119,14 +119,15 @@ def _proto_sizes(model: cp_model.CpModel) -> dict[str, Any]:
     and avoids treating ``str(proto)`` as the binary cost-gate measurement.
     """
     with tempfile.NamedTemporaryFile(suffix=".pb") as binary, tempfile.NamedTemporaryFile(suffix=".pbtxt") as text:
-        if not model.ExportToFile(binary.name) or not model.ExportToFile(text.name):
+        try:
+            direct = deterministic_model_proto_bytes(model, export_path=binary.name)
+        except ValueError as exc:
+            raise ModelSizeAuditError(str(exc)) from exc
+        if not model.ExportToFile(text.name):
             raise ModelSizeAuditError("OR-Tools failed to export ModelProto")
         binary.flush()
         text.flush()
         exported = Path(binary.name).read_bytes()
-        parsed = cp_model_pb2.CpModelProto()
-        parsed.ParseFromString(exported)
-        direct = parsed.SerializeToString(deterministic=True)
         return {
             "serialized_binary_proto_bytes": len(direct),
             "exported_binary_proto_file_bytes": len(exported),
