@@ -603,15 +603,15 @@ or feasibility claim is made for the remaining pairs. See
 
 ### Formal Remaining 12-Pair K=2 Batch Runner v1
 
-The next implementation freezes the accepted 12-pair order directly from the
-all-student safe-screen artifact and divides it into three deterministic
-four-pair Run A batches. The runner is fail-closed on source, manifest,
-ordering, config, response, checkpoint, or artifact drift; completed pairs are
-never rerun automatically. Ordinary evidence is compact and omits `model.pb`,
-with full-model persistence reserved for explicit anomalies.
+The runner freezes the accepted 12-pair order directly from the all-student
+safe-screen artifact and uses compact, fail-closed Run A evidence. Order 1
+consumed one invocation, but its evidence writer failed before a verifiable
+response was persisted, so it permanently remains `artifact_failure` and may
+not be rerun by this batch.
 
-This slice has only been unit-tested and dry-run. No pair solver ran and no
-formal batch artifact was created. The 12 pairs remain merely not excluded by
-current safe necessary conditions. Global K2 remains unresolved, the lower
-bound remains 2, and no exact minimum is claimed. See
+Failure Continuation Protocol v1 adds an explicit, checksummed authorization
+that may skip Order 1 only for future execution and begin with Order 2. It does
+not recover a solver result or close the proof gap. The global budget remains
+12 with 11 calls left; global K2 remains unresolved, the lower bound remains
+2, and no exact minimum is claimed. See
 `docs/FORMAL_REMAINING_K2_BATCH.md`.

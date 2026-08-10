@@ -27,6 +27,10 @@ EXPECTED_PAIR_IDS = [
     "AP_JAPANESE_LANG_01__CHINESE4_01",
     "CHINESE4_01__CREATIVE_WRITING_01",
 ]
+ORIGINAL_ARTIFACT_FAILURE = (
+    "AttributeError: 'ortools.sat.python.cp_model_helper.CpModelProto' "
+    "object has no attribute 'SerializeToString'"
+)
 
 
 def load_inputs() -> tuple[dict[str, object], str, dict[str, object], list[dict[str, object]]]:
@@ -80,6 +84,46 @@ def copy_source_and_manifest(tmp_path: Path) -> tuple[Path, Path]:
     manifest_path = tmp_path / "manifest.json"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     return source, manifest_path
+
+
+def failed_order_one_artifact(tmp_path: Path) -> Path:
+    output = tmp_path / "failed"
+    batch.run_batch(manifest_path=MANIFEST, output_dir=output, dry_run=True)
+    checkpoint = batch.read_json(output / "checkpoint.json")
+    checkpoint["total_solver_invocations"] = 1
+    checkpoint["pair_states"][0].update({
+        "state": "artifact_failure",
+        "result_classification": "artifact_failure",
+        "failure": ORIGINAL_ARTIFACT_FAILURE,
+        "response_hash": None,
+    })
+    batch.write_json(output / "checkpoint.json", checkpoint)
+    batch.write_json(
+        output / "failures.json",
+        {"failures": [ORIGINAL_ARTIFACT_FAILURE], "failure_count": 1},
+    )
+    batch.write_checksums(output)
+    return output
+
+
+def authorize_failed_order_one(tmp_path: Path) -> Path:
+    output = failed_order_one_artifact(tmp_path)
+    result = batch.create_failure_continuation_authorization(output_dir=output)
+    assert result["new_solver_invocations"] == 0
+    return output
+
+
+def rewrite_authorization(output: Path, **updates: object) -> None:
+    path = output / batch.FAILURE_CONTINUATION_FILE
+    authorization = batch.read_json(path)
+    authorization.update(updates)
+    unsigned = {key: value for key, value in authorization.items() if key != "authorization_hash"}
+    authorization["authorization_hash"] = batch.json_hash(unsigned)
+    batch.write_json(path, authorization)
+    checkpoint = batch.read_json(output / "checkpoint.json")
+    checkpoint["failure_continuation"]["authorization_hash"] = authorization["authorization_hash"]
+    batch.write_json(output / "checkpoint.json", checkpoint)
+    batch.write_checksums(output)
 
 
 def test_formal_input_artifact_identity_and_hashes() -> None:
@@ -278,6 +322,204 @@ def test_interrupted_or_artifact_failure_checkpoint_never_reruns(tmp_path: Path,
             resume=True,
             solver_runner=lambda *args: pytest.fail("must not rerun"),
         )
+
+
+def test_failure_continuation_requires_explicit_authorization(tmp_path: Path) -> None:
+    output = failed_order_one_artifact(tmp_path)
+    with pytest.raises(batch.FormalK2BatchError, match="authorization is missing"):
+        batch.run_batch(
+            manifest_path=MANIFEST,
+            output_dir=output,
+            execute=True,
+            resume=True,
+            continue_after_approved_failure=True,
+            solver_runner=lambda *args: pytest.fail("solver must not run"),
+        )
+
+
+def test_continuation_flag_requires_execute_and_resume(tmp_path: Path) -> None:
+    with pytest.raises(batch.FormalK2BatchError, match="requires --execute and --resume"):
+        batch.run_batch(
+            manifest_path=MANIFEST,
+            output_dir=tmp_path / "unused",
+            dry_run=True,
+            continue_after_approved_failure=True,
+        )
+
+
+def test_authorization_creation_is_solver_free_and_preserves_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    output = failed_order_one_artifact(tmp_path)
+    monkeypatch.setattr(batch, "_real_solver_runner", lambda *args: pytest.fail("solver called"))
+    result = batch.run_batch(
+        manifest_path=MANIFEST,
+        output_dir=output,
+        resume=True,
+        authorize_failure_continuation=True,
+    )
+    checkpoint = batch.read_json(output / "checkpoint.json")
+    authorization = result["authorization"]
+    assert checkpoint["total_solver_invocations"] == 1
+    assert checkpoint["pair_states"][0]["state"] == "artifact_failure"
+    assert checkpoint["pair_states"][0]["excluded_from_global_k2_proof"] is True
+    assert authorization["solver_rerun_authorized"] is False
+    assert authorization["failed_pair_may_be_used_as_feasibility_evidence"] is False
+    assert authorization["remaining_invocation_budget"] == 11
+    assert batch.verify_checksums(output)["passed"] is True
+
+
+def test_malformed_authorization_hash_fails_closed(tmp_path: Path) -> None:
+    output = authorize_failed_order_one(tmp_path)
+    path = output / batch.FAILURE_CONTINUATION_FILE
+    authorization = batch.read_json(path)
+    authorization["authorization_reason"] = "tampered"
+    batch.write_json(path, authorization)
+    batch.write_checksums(output)
+    with pytest.raises(batch.FormalK2BatchError, match="authorization hash mismatch"):
+        batch.run_batch(
+            manifest_path=MANIFEST,
+            output_dir=output,
+            execute=True,
+            resume=True,
+            continue_after_approved_failure=True,
+            solver_runner=lambda *args: pytest.fail("solver must not run"),
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("failed_pair_order", 2, "authorization drift"),
+        ("manifest_hash", "0" * 64, "authorization drift"),
+        ("solver_rerun_authorized", True, "authorization drift"),
+    ],
+)
+def test_authorization_semantic_drift_fails_closed(
+    tmp_path: Path, field: str, value: object, message: str
+) -> None:
+    output = authorize_failed_order_one(tmp_path)
+    rewrite_authorization(output, **{field: value})
+    with pytest.raises(batch.FormalK2BatchError, match=message):
+        batch.run_batch(
+            manifest_path=MANIFEST,
+            output_dir=output,
+            execute=True,
+            resume=True,
+            continue_after_approved_failure=True,
+            solver_runner=lambda *args: pytest.fail("solver must not run"),
+        )
+
+
+def test_continuation_invocation_count_mismatch_fails_closed(tmp_path: Path) -> None:
+    output = authorize_failed_order_one(tmp_path)
+    checkpoint = batch.read_json(output / "checkpoint.json")
+    checkpoint["total_solver_invocations"] = 2
+    batch.write_json(output / "checkpoint.json", checkpoint)
+    batch.write_checksums(output)
+    with pytest.raises(batch.FormalK2BatchError, match="invocation count mismatch"):
+        batch.run_batch(
+            manifest_path=MANIFEST,
+            output_dir=output,
+            execute=True,
+            resume=True,
+            continue_after_approved_failure=True,
+            solver_runner=lambda *args: pytest.fail("solver must not run"),
+        )
+
+
+def test_continuation_rejects_response_evidence_for_failed_order(tmp_path: Path) -> None:
+    output = authorize_failed_order_one(tmp_path)
+    checkpoint = batch.read_json(output / "checkpoint.json")
+    checkpoint["pair_states"][0]["response_hash"] = "fabricated"
+    batch.write_json(output / "checkpoint.json", checkpoint)
+    batch.write_checksums(output)
+    with pytest.raises(batch.FormalK2BatchError, match="checkpoint drift"):
+        batch.run_batch(
+            manifest_path=MANIFEST,
+            output_dir=output,
+            execute=True,
+            resume=True,
+            continue_after_approved_failure=True,
+            solver_runner=lambda *args: pytest.fail("solver must not run"),
+        )
+
+
+def test_continuation_rejects_rewritten_failure_history(tmp_path: Path) -> None:
+    output = authorize_failed_order_one(tmp_path)
+    batch.write_json(
+        output / "failures.json",
+        {"failures": ["rewritten"], "failure_count": 1},
+    )
+    batch.write_checksums(output)
+    with pytest.raises(batch.FormalK2BatchError, match="failure history drift"):
+        batch.run_batch(
+            manifest_path=MANIFEST,
+            output_dir=output,
+            execute=True,
+            resume=True,
+            continue_after_approved_failure=True,
+            solver_runner=lambda *args: pytest.fail("solver must not run"),
+        )
+
+
+def test_approved_continuation_skips_order_one_and_obeys_new_run_limit(tmp_path: Path) -> None:
+    output = authorize_failed_order_one(tmp_path)
+    calls: list[str] = []
+
+    def fake(run: dict[str, object], manifest: dict[str, object]) -> dict[str, object]:
+        calls.append(str(run["pair_id"]))
+        return fake_result(run, manifest)
+
+    result = batch.run_batch(
+        manifest_path=MANIFEST,
+        output_dir=output,
+        execute=True,
+        resume=True,
+        continue_after_approved_failure=True,
+        max_new_solver_runs=1,
+        solver_runner=fake,
+    )
+    checkpoint = batch.read_json(output / "checkpoint.json")
+    assert calls == [EXPECTED_PAIR_IDS[1]]
+    assert result["new_solver_invocations_this_call"] == 1
+    assert result["solver_invocations"] == 2
+    assert checkpoint["pair_states"][0]["state"] == "artifact_failure"
+    assert checkpoint["pair_states"][1]["state"] == "completed"
+
+
+def test_all_remaining_infeasible_cannot_close_global_k2_proof(tmp_path: Path) -> None:
+    output = authorize_failed_order_one(tmp_path)
+    calls: list[str] = []
+
+    def fake(run: dict[str, object], manifest: dict[str, object]) -> dict[str, object]:
+        calls.append(str(run["pair_id"]))
+        return fake_result(run, manifest)
+
+    result = batch.run_batch(
+        manifest_path=MANIFEST,
+        output_dir=output,
+        execute=True,
+        resume=True,
+        continue_after_approved_failure=True,
+        max_new_solver_runs=11,
+        solver_runner=fake,
+    )
+    assert calls == EXPECTED_PAIR_IDS[1:]
+    assert result["solver_invocations"] == 12
+    assert result["pair_result_counts"]["fixed_pair_infeasible"] == 11
+    assert result["pair_result_counts"]["artifact_failure"] == 1
+    assert result["global_k2_status"] == "unresolved"
+    assert result["global_proof_closure_blocked"] is True
+    assert result["proof_blockers"] == [{
+        "formal_order": 1,
+        "pair_id": EXPECTED_PAIR_IDS[0],
+        "classification": "artifact_failure",
+        "excluded_from_global_k2_proof": True,
+    }]
+    assert result["proven_lower_bound"] == 2
+    assert result["exact_minimum_claim"] is None
+    assert result["stop_reason"] == "all_executable_pairs_completed_with_proof_blocker"
 
 
 def test_manifest_hash_drift_stops_resume(tmp_path: Path) -> None:

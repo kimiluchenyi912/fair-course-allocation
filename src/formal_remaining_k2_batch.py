@@ -12,6 +12,7 @@ import csv
 import hashlib
 import json
 import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -21,6 +22,7 @@ from src.model_proto_serialization import deterministic_model_proto_bytes
 
 SCHEMA_VERSION = 1
 COMPACT_EVIDENCE_SCHEMA_VERSION = 1
+FAILURE_CONTINUATION_SCHEMA_VERSION = 1
 PAIR_COUNT = 12
 BATCH_SIZE = 4
 CHECKPOINT_FREQUENCY = 4
@@ -43,6 +45,9 @@ FORMAL_OUTPUT = Path(
     "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
     "formal-remaining-k2-batch-v1"
 )
+FAILURE_CONTINUATION_FILE = "failure_continuation_authorization.json"
+CONTINUATION_PROVENANCE_FILE = "failure_continuation_provenance.json"
+CONTINUATION_CHUNKS = ((2, 3, 4, 5), (6, 7, 8, 9), (10, 11, 12))
 ALLOWED_PAIR_RESULTS = {
     "fixed_pair_infeasible",
     "incumbent_pending_validation",
@@ -76,6 +81,15 @@ def json_hash(value: Any) -> str:
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
+
+
+def _git_head() -> str:
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 def read_json(path: Path) -> Any:
@@ -388,7 +402,13 @@ def _initial_checkpoint(
 
 
 def _validate_checkpoint(
-    checkpoint: Mapping[str, Any], runs: Sequence[Mapping[str, Any]], manifest_hash: str, source: Mapping[str, Any], output: Path
+    checkpoint: Mapping[str, Any],
+    runs: Sequence[Mapping[str, Any]],
+    manifest_hash: str,
+    source: Mapping[str, Any],
+    output: Path,
+    *,
+    approved_failure_orders: frozenset[int] = frozenset(),
 ) -> None:
     expected = {
         "manifest_hash": manifest_hash,
@@ -408,7 +428,10 @@ def _validate_checkpoint(
         if state.get("state") == "running":
             raise FormalK2BatchError(f"interrupted run requires manual recovery: {run['pair_id']}")
         if state.get("state") == "artifact_failure":
-            raise FormalK2BatchError(f"artifact failure forbids automatic rerun: {run['pair_id']}")
+            if int(run["formal_order"]) not in approved_failure_orders:
+                raise FormalK2BatchError(f"artifact failure forbids automatic rerun: {run['pair_id']}")
+            if state.get("response_hash") is not None or (output / "runs" / run["pair_id"]).exists():
+                raise FormalK2BatchError("approved artifact failure gained response evidence")
         if state.get("state") == "completed":
             run_dir = output / "runs" / run["pair_id"]
             result = read_json(run_dir / "run_result.json")
@@ -425,12 +448,235 @@ def _validate_checkpoint(
         raise FormalK2BatchError("total invocation budget drift")
 
 
+def _proof_blockers(checkpoint: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "formal_order": int(state["formal_order"]),
+            "pair_id": state["pair_id"],
+            "classification": "artifact_failure",
+            "excluded_from_global_k2_proof": True,
+        }
+        for state in checkpoint["pair_states"]
+        if state["result_classification"] == "artifact_failure"
+    ]
+
+
+def _validate_failure_continuation_authorization(
+    output: Path,
+    checkpoint: Mapping[str, Any],
+    runs: Sequence[Mapping[str, Any]],
+    manifest_hash: str,
+    source: Mapping[str, Any],
+) -> dict[str, Any]:
+    path = output / FAILURE_CONTINUATION_FILE
+    if not path.is_file():
+        raise FormalK2BatchError("approved failure continuation authorization is missing")
+    authorization = read_json(path)
+    observed_hash = authorization.get("authorization_hash")
+    unsigned = {key: value for key, value in authorization.items() if key != "authorization_hash"}
+    if not observed_hash or observed_hash != json_hash(unsigned):
+        raise FormalK2BatchError("failure continuation authorization hash mismatch")
+    failed_run = runs[0]
+    failed_state = checkpoint["pair_states"][0]
+    expected = {
+        "schema_version": FAILURE_CONTINUATION_SCHEMA_VERSION,
+        "artifact_path": str(output.resolve()),
+        "manifest_hash": manifest_hash,
+        "ordering_hash": source["ordering_hash"],
+        "failed_pair_order": 1,
+        "failed_pair_id": failed_run["pair_id"],
+        "failed_pair_section_ids": [failed_run["section_id_a"], failed_run["section_id_b"]],
+        "original_classification": "artifact_failure",
+        "original_failure_reason": failed_state.get("failure"),
+        "original_invocation_consumed": True,
+        "total_solver_invocations_before_continuation": 1,
+        "solver_rerun_authorized": False,
+        "failed_pair_may_be_skipped_for_execution": True,
+        "failed_pair_may_be_used_as_feasibility_evidence": False,
+        "failed_pair_excluded_from_global_proof": True,
+        "next_executable_order": 2,
+        "remaining_executable_orders": list(range(2, PAIR_COUNT + 1)),
+        "remaining_invocation_budget": GLOBAL_INVOCATION_BUDGET - 1,
+        "continuation_chunks": [list(chunk) for chunk in CONTINUATION_CHUNKS],
+        "global_k2_status": "unresolved",
+        "proven_lower_bound": 2,
+        "exact_minimum_claim": None,
+        "source_hashes": {
+            "sha256sums": source["verification"]["sha256sums_sha256"],
+            "ordering": source["ordering_hash"],
+            "result": source["result_hash"],
+            "proof": source["proof_hash"],
+            "pair_rows": source["pair_rows_hash"],
+        },
+    }
+    drift = [key for key, value in expected.items() if authorization.get(key) != value]
+    if drift:
+        raise FormalK2BatchError(f"failure continuation authorization drift: {drift}")
+    if failed_state.get("state") != "artifact_failure" or failed_state.get("response_hash") is not None:
+        raise FormalK2BatchError("authorized failed pair checkpoint drift")
+    failures_path = output / "failures.json"
+    failures = read_json(failures_path)
+    if (
+        authorization.get("original_failures_sha256") != sha256_file(failures_path)
+        or failed_state.get("failure") not in failures.get("failures", [])
+    ):
+        raise FormalK2BatchError("original artifact failure history drift")
+    if authorization.get("authorization_reason") in (None, "") or not authorization.get("created_at_utc"):
+        raise FormalK2BatchError("failure continuation authorization provenance is incomplete")
+    repo_commit_hash = str(authorization.get("repo_commit_hash", ""))
+    if len(repo_commit_hash) != 40 or any(character not in "0123456789abcdef" for character in repo_commit_hash):
+        raise FormalK2BatchError("failure continuation repository commit is invalid")
+    checkpoint_metadata = checkpoint.get("failure_continuation", {})
+    if checkpoint_metadata.get("authorization_hash") != observed_hash:
+        raise FormalK2BatchError("checkpoint continuation authorization hash mismatch")
+    completed_after_failure = [
+        state
+        for state in checkpoint["pair_states"][1:]
+        if state["state"] == "completed"
+    ]
+    expected_invocations = 1 + len(completed_after_failure)
+    if int(checkpoint.get("total_solver_invocations", -1)) != expected_invocations:
+        raise FormalK2BatchError("continuation invocation count mismatch")
+    terminal = [
+        state
+        for state in completed_after_failure
+        if state["result_classification"] != "fixed_pair_infeasible"
+    ]
+    if terminal:
+        raise FormalK2BatchError("terminal pair result forbids further continuation")
+    return authorization
+
+
+def create_failure_continuation_authorization(
+    *,
+    manifest_path: str | Path = DEFAULT_MANIFEST,
+    output_dir: str | Path = FORMAL_OUTPUT,
+) -> dict[str, Any]:
+    output = Path(output_dir)
+    if not output.exists() or not any(output.iterdir()):
+        raise FormalK2BatchError("continuation authorization requires an existing artifact")
+    verify_checksums(output)
+    if (output / FAILURE_CONTINUATION_FILE).exists():
+        raise FormalK2BatchError("failure continuation authorization already exists")
+    manifest, manifest_hash = load_manifest(manifest_path)
+    source = verify_formal_input(manifest)
+    runs = planned_runs(source, manifest)
+    checkpoint = read_json(output / "checkpoint.json")
+    _validate_checkpoint(
+        checkpoint,
+        runs,
+        manifest_hash,
+        source,
+        output,
+        approved_failure_orders=frozenset({1}),
+    )
+    failed_state = checkpoint["pair_states"][0]
+    failed_run = runs[0]
+    failure_reason = failed_state.get("failure")
+    failures = read_json(output / "failures.json")
+    if (
+        int(checkpoint["total_solver_invocations"]) != 1
+        or failed_state.get("state") != "artifact_failure"
+        or failed_state.get("result_classification") != "artifact_failure"
+        or failed_state.get("response_hash") is not None
+        or not failure_reason
+        or failure_reason not in failures.get("failures", [])
+    ):
+        raise FormalK2BatchError("failed Order 1 evidence is not eligible for continuation")
+    if any(state["state"] != "planned" for state in checkpoint["pair_states"][1:]):
+        raise FormalK2BatchError("continuation authorization requires Orders 2-12 planned_not_run")
+    before = verify_checksums(output)
+    authorization = {
+        "schema_version": FAILURE_CONTINUATION_SCHEMA_VERSION,
+        "artifact_path": str(output.resolve()),
+        "manifest_hash": manifest_hash,
+        "ordering_hash": source["ordering_hash"],
+        "source_hashes": {
+            "sha256sums": source["verification"]["sha256sums_sha256"],
+            "ordering": source["ordering_hash"],
+            "result": source["result_hash"],
+            "proof": source["proof_hash"],
+            "pair_rows": source["pair_rows_hash"],
+        },
+        "failed_pair_order": 1,
+        "failed_pair_id": failed_run["pair_id"],
+        "failed_pair_section_ids": [failed_run["section_id_a"], failed_run["section_id_b"]],
+        "original_classification": "artifact_failure",
+        "original_failure_reason": failure_reason,
+        "original_invocation_consumed": True,
+        "total_solver_invocations_before_continuation": 1,
+        "solver_rerun_authorized": False,
+        "failed_pair_may_be_skipped_for_execution": True,
+        "failed_pair_may_be_used_as_feasibility_evidence": False,
+        "failed_pair_excluded_from_global_proof": True,
+        "next_executable_order": 2,
+        "remaining_executable_orders": list(range(2, PAIR_COUNT + 1)),
+        "remaining_invocation_budget": GLOBAL_INVOCATION_BUDGET - 1,
+        "continuation_chunks": [list(chunk) for chunk in CONTINUATION_CHUNKS],
+        "global_k2_status": "unresolved",
+        "proven_lower_bound": 2,
+        "exact_minimum_claim": None,
+        "authorization_reason": (
+            "Allow evidence collection for Orders 2-12 without rerunning or using "
+            "the failed Order 1 as feasibility evidence."
+        ),
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "repo_commit_hash": _git_head(),
+        "original_checkpoint_sha256": sha256_file(output / "checkpoint.json"),
+        "original_failures_sha256": sha256_file(output / "failures.json"),
+        "original_sha256sums_hash": before["sha256sums_sha256"],
+    }
+    authorization["authorization_hash"] = json_hash(authorization)
+    failed_state.update({
+        "original_solver_invocation_consumed": True,
+        "solver_rerun_authorized": False,
+        "excluded_from_global_k2_proof": True,
+        "may_be_skipped_for_execution": True,
+        "may_be_used_as_feasibility_evidence": False,
+    })
+    checkpoint["failure_continuation"] = {
+        "schema_version": FAILURE_CONTINUATION_SCHEMA_VERSION,
+        "authorization_file": FAILURE_CONTINUATION_FILE,
+        "authorization_hash": authorization["authorization_hash"],
+        "approved_failed_orders": [1],
+        "next_executable_order": 2,
+        "remaining_invocation_budget": GLOBAL_INVOCATION_BUDGET - 1,
+    }
+    write_json(output / FAILURE_CONTINUATION_FILE, authorization)
+    write_json(output / "checkpoint.json", checkpoint)
+    write_json(output / CONTINUATION_PROVENANCE_FILE, {
+        "schema_version": FAILURE_CONTINUATION_SCHEMA_VERSION,
+        "created_at_utc": authorization["created_at_utc"],
+        "repo_commit_hash": authorization["repo_commit_hash"],
+        "authorization_hash": authorization["authorization_hash"],
+        "mode": "explicit_manual_failure_continuation_authorization",
+        "artifact_recovery": False,
+        "solver_result_recovery": False,
+        "solver_rerun": False,
+        "new_solver_invocations": 0,
+        "original_artifact_failure_preserved": True,
+        "original_failure_reason": failure_reason,
+    })
+    checksum_hash = write_checksums(output)
+    verification = verify_checksums(output)
+    _validate_failure_continuation_authorization(
+        output, checkpoint, runs, manifest_hash, source
+    )
+    return {
+        "authorization": authorization,
+        "verification": verification,
+        "sha256sums_hash": checksum_hash,
+        "new_solver_invocations": 0,
+    }
+
+
 def _summary(
     *, dry_run: bool, runs: Sequence[Mapping[str, Any]], checkpoint: Mapping[str, Any], source: Mapping[str, Any], manifest_hash: str
 ) -> dict[str, Any]:
     counts = {classification: 0 for classification in ALLOWED_PAIR_RESULTS}
     for state in checkpoint["pair_states"]:
         counts[state["result_classification"]] += 1
+    blockers = _proof_blockers(checkpoint)
     return {
         "schema_version": SCHEMA_VERSION,
         "experiment_name": "formal_remaining_k2_batch",
@@ -446,6 +692,8 @@ def _summary(
         "global_k2_status": "unresolved",
         "proven_lower_bound": 2,
         "exact_minimum_claim": None,
+        "proof_blockers": blockers,
+        "global_proof_closure_blocked": bool(blockers),
         "new_feasibility_results": counts["fixed_pair_infeasible"] + counts["incumbent_pending_validation"],
         "dry_run_produces_feasibility_result": False,
     }
@@ -493,7 +741,9 @@ def _write_base_artifact(
         manifest_hash=manifest_hash,
     )
     write_json(output / "aggregate_summary.json", summary)
-    write_json(output / "provenance.json", {
+    provenance_path = output / "provenance.json"
+    provenance = read_json(provenance_path) if provenance_path.is_file() else {}
+    provenance.update({
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "mode": summary["mode"],
         "formal_input_artifact": source["artifact_root"],
@@ -503,7 +753,11 @@ def _write_base_artifact(
         "anomaly_model_proto_escalation_enabled": True,
         "real_solver_invocations": checkpoint["total_solver_invocations"],
     })
-    write_json(output / "failures.json", {"failures": [], "failure_count": 0})
+    if checkpoint.get("failure_continuation"):
+        provenance["failure_continuation"] = checkpoint["failure_continuation"]
+    write_json(provenance_path, provenance)
+    if not (output / "failures.json").exists():
+        write_json(output / "failures.json", {"failures": [], "failure_count": 0})
     write_checksums(output)
     return summary
 
@@ -715,12 +969,28 @@ def run_batch(
     output_dir: str | Path,
     dry_run: bool = False,
     execute: bool = False,
+    authorize_failure_continuation: bool = False,
+    continue_after_approved_failure: bool = False,
     resume: bool = False,
     max_new_solver_runs: int | None = None,
     solver_runner: Callable[[Mapping[str, Any], Mapping[str, Any]], Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    if dry_run == execute:
-        raise FormalK2BatchError("choose exactly one explicit mode: --dry-run or --execute")
+    if sum(bool(value) for value in (dry_run, execute, authorize_failure_continuation)) != 1:
+        raise FormalK2BatchError(
+            "choose exactly one explicit mode: --dry-run, --execute, or "
+            "--authorize-failure-continuation"
+        )
+    if authorize_failure_continuation:
+        if not resume or continue_after_approved_failure:
+            raise FormalK2BatchError("authorization creation requires --resume only")
+        return create_failure_continuation_authorization(
+            manifest_path=manifest_path,
+            output_dir=output_dir,
+        )
+    if continue_after_approved_failure and (not execute or not resume):
+        raise FormalK2BatchError(
+            "--continue-after-approved-failure requires --execute and --resume"
+        )
     if max_new_solver_runs is not None and max_new_solver_runs < 0:
         raise FormalK2BatchError("max-new-solver-runs must be nonnegative")
     output = Path(output_dir)
@@ -733,10 +1003,23 @@ def run_batch(
     if nonempty and not resume:
         raise FormalK2BatchError(f"output is non-empty; use --resume: {output}")
     output.mkdir(parents=True, exist_ok=True)
+    approved_failure_orders: frozenset[int] = frozenset()
     if nonempty:
         verify_checksums(output)
         checkpoint = read_json(output / "checkpoint.json")
-        _validate_checkpoint(checkpoint, runs, manifest_hash, source, output)
+        if continue_after_approved_failure:
+            _validate_failure_continuation_authorization(
+                output, checkpoint, runs, manifest_hash, source
+            )
+            approved_failure_orders = frozenset({1})
+        _validate_checkpoint(
+            checkpoint,
+            runs,
+            manifest_hash,
+            source,
+            output,
+            approved_failure_orders=approved_failure_orders,
+        )
     else:
         checkpoint = _initial_checkpoint(runs, manifest_hash, source)
     if dry_run:
@@ -757,6 +1040,8 @@ def run_batch(
     states = checkpoint["pair_states"]
     for state, run in zip(states, runs):
         if state["state"] == "completed":
+            continue
+        if state["state"] == "artifact_failure" and int(run["formal_order"]) in approved_failure_orders:
             continue
         if max_new_solver_runs is not None and new_invocations >= max_new_solver_runs:
             break
@@ -791,21 +1076,30 @@ def run_batch(
                 "failure": f"{type(exc).__name__}: {exc}",
             })
             write_json(output / "checkpoint.json", checkpoint)
-            write_json(output / "failures.json", {"failures": [state["failure"]], "failure_count": 1})
+            failures_path = output / "failures.json"
+            failures = read_json(failures_path) if failures_path.is_file() else {"failures": []}
+            history = list(failures.get("failures", []))
+            if state["failure"] not in history:
+                history.append(state["failure"])
+            write_json(failures_path, {"failures": history, "failure_count": len(history)})
             write_checksums(output)
             raise FormalK2BatchError(f"run failed closed: {run['pair_id']}: {exc}") from exc
-        completed = sum(1 for item in states if item["state"] == "completed")
-        if completed % CHECKPOINT_FREQUENCY == 0:
-            batch_index = completed // CHECKPOINT_FREQUENCY
-            if batch_index not in checkpoint["completed_batch_indices"]:
-                checkpoint["completed_batch_indices"].append(batch_index)
+        for batch_index in range(1, len(runs) // BATCH_SIZE + 1):
+            batch_states = states[(batch_index - 1) * BATCH_SIZE : batch_index * BATCH_SIZE]
+            if all(item["state"] == "completed" for item in batch_states):
+                if batch_index not in checkpoint["completed_batch_indices"]:
+                    checkpoint["completed_batch_indices"].append(batch_index)
         write_json(output / "checkpoint.json", checkpoint)
         write_checksums(output)
         if must_stop:
             stop_reason = classification
             break
     else:
-        stop_reason = "all_pairs_completed"
+        stop_reason = (
+            "all_executable_pairs_completed_with_proof_blocker"
+            if _proof_blockers(checkpoint)
+            else "all_pairs_completed"
+        )
     summary = _write_base_artifact(
         output, manifest, manifest_hash, source, runs, checkpoint, dry_run=False
     )
@@ -820,10 +1114,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--manifest", default=str(DEFAULT_MANIFEST))
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--continue-after-approved-failure", action="store_true")
     parser.add_argument("--max-new-solver-runs", type=int, default=None)
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--execute", action="store_true")
+    mode.add_argument("--authorize-failure-continuation", action="store_true")
     args = parser.parse_args(argv)
     try:
         summary = run_batch(
@@ -831,6 +1127,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_dir=args.output_dir,
             dry_run=args.dry_run,
             execute=args.execute,
+            authorize_failure_continuation=args.authorize_failure_continuation,
+            continue_after_approved_failure=args.continue_after_approved_failure,
             resume=args.resume,
             max_new_solver_runs=args.max_new_solver_runs,
         )

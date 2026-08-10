@@ -251,10 +251,12 @@ not proof of a minimum section move.
   rerun, global K2 remains unresolved, and no exact minimum is claimed. See
   `docs/ALL_STUDENT_K2_BLOCKER_SAFE_SCREEN.md`.
 
-- Implemented Formal Remaining 12-Pair K=2 Batch Runner v1 without executing
-  a solver. The runner verifies the accepted safe-screen artifact, freezes the
-  exact 12-pair ordering, plans three batches of four, supports fail-closed
-  checkpoint/resume, and defaults to compact evidence without per-pair
-  `model.pb`. A temporary dry-run records zero solver calls and no feasibility
-  conclusions; the formal batch artifact has not been created. See
-  `docs/FORMAL_REMAINING_K2_BATCH.md`.
+- Implemented Formal Remaining 12-Pair K=2 Batch Runner v1 and Failure
+  Continuation Protocol v1. Order 1 consumed one solver invocation, but its
+  compact-evidence writer failed before verifiable response persistence; its
+  formal classification remains `artifact_failure` and it cannot be rerun by
+  this batch. A separately checksummed, explicit authorization may allow future
+  collection from Orders 2--12 while preserving the 12-call budget and the
+  permanent Order 1 proof blocker. No solver result was recovered, global K2
+  remains unresolved, the lower bound remains 2, and no exact minimum is
+  claimed. See `docs/FORMAL_REMAINING_K2_BATCH.md`.

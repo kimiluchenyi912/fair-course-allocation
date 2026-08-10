@@ -2,10 +2,12 @@
 
 ## Scope
 
-This slice implements and dry-runs a fail-closed Run A batch protocol for the
-12 section pairs retained by the accepted All-Student K=2 Blocker Safe Screen.
-It does not execute CP-SAT, test a pair, create the formal batch artifact, or
-produce a feasibility result.
+This slice implements a fail-closed Run A batch protocol for the 12 section
+pairs retained by the accepted All-Student K=2 Blocker Safe Screen. Order 1
+consumed one solver invocation, but compact-evidence persistence failed before
+a verifiable response record was stored. Its formal classification therefore
+remains `artifact_failure`; it is not a verified `UNKNOWN` or `INFEASIBLE`
+result and must never be rerun by this batch.
 
 The 12 pairs are only **not excluded by current safe necessary conditions**.
 They are not known feasible. Global K=2 remains unresolved, the proven lower
@@ -66,6 +68,34 @@ and completed batches. Completed pairs and batches are skipped on resume.
 `artifact_failure` requires manual review and cannot be automatically rerun.
 Manifest, source, ordering, config, or response drift stops fail-closed.
 
+## Approved failure continuation
+
+The default `--resume` behavior still rejects every `artifact_failure`. A
+continuation requires two separate explicit actions:
+
+```bash
+python -m src.formal_remaining_k2_batch \
+  --manifest data/scenarios/formal_remaining_k2_batch_v1.json \
+  --output-dir <formal-artifact> \
+  --resume --authorize-failure-continuation
+
+python -m src.formal_remaining_k2_batch \
+  --manifest data/scenarios/formal_remaining_k2_batch_v1.json \
+  --output-dir <formal-artifact> \
+  --execute --resume --continue-after-approved-failure \
+  --max-new-solver-runs 4
+```
+
+Authorization is not artifact recovery, solver-result recovery, or rerun
+permission. It binds the artifact, source, manifest, ordering, failed pair,
+failure reason, invocation accounting, repository commit, and authorization
+hash. Order 1 remains `artifact_failure`, has no response hash, is excluded
+from feasibility evidence, and permanently blocks global K=2 proof closure.
+The first continuation may execute Orders 2--5; later chunks are Orders 6--9
+and 10--12. The original batch/order fields do not change. Because Order 1
+already consumed one call, at most 11 of the original 12-call global budget
+remain.
+
 Pair classifications are limited to:
 
 - `fixed_pair_infeasible`: scoped Run A `INFEASIBLE`; continue;
@@ -79,6 +109,11 @@ Partial runs always retain `global_k2_status = unresolved`,
 `proven_lower_bound = 2`, and `exact_minimum_claim = null`. This runner does
 not publish global K=2 infeasibility even if all 12 scoped runs later return
 `INFEASIBLE`; that decision belongs to an independent finalizer.
+
+More strongly, an `artifact_failure` is emitted in `proof_blockers`. Even if
+all other 11 pairs later return scoped `INFEASIBLE`, global K=2 remains
+unresolved, the lower bound remains 2, and no exact minimum claim is allowed.
+Resolving Order 1 would require a separate supplemental experiment protocol.
 
 ## Compact evidence
 
