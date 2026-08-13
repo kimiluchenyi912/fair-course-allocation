@@ -260,3 +260,11 @@ not proof of a minimum section move.
   permanent Order 1 proof blocker. No solver result was recovered, global K2
   remains unresolved, the lower bound remains 2, and no exact minimum is
   claimed. See `docs/FORMAL_REMAINING_K2_BATCH.md`.
+
+- Implemented Supplemental K=2 Unresolved-Pair Protocol v1 for formal Orders
+  1--2 only. It validates the current formal artifact, permanently preserves
+  the original `artifact_failure` and `UNKNOWN` classifications, and writes an
+  independent two-pair dry-run plan. Orders 3--12 remain not yet run. The
+  extended budget is intentionally unapproved, so real execution fails closed;
+  this slice adds zero solver invocations and no global K2 or minimum claim.
+  See `docs/SUPPLEMENTAL_K2_UNRESOLVED_PAIRS.md`.

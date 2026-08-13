@@ -615,3 +615,17 @@ not recover a solver result or close the proof gap. The global budget remains
 12 with 11 calls left; global K2 remains unresolved, the lower bound remains
 2, and no exact minimum is claimed. See
 `docs/FORMAL_REMAINING_K2_BATCH.md`.
+
+### Supplemental K=2 Unresolved-Pair Protocol v1
+
+An independent supplemental framework now binds the current formal artifact
+and isolates the two pairs without verified scoped conclusions: Order 1's
+`artifact_failure` and Order 2's `UNKNOWN` without an incumbent. It preserves
+the original formal classifications and invocation accounting and uses a
+separate artifact, checkpoint, provenance, and response-hash namespace.
+
+Orders 3--12 remain not-yet-run formal pairs and are not part of this
+supplemental set. The checked-in extended-budget policy is pending explicit
+approval, so execution fails closed and only solver-free dry-runs are enabled.
+Global K2 remains unresolved, the lower bound remains 2, and finalization is a
+separate future decision. See `docs/SUPPLEMENTAL_K2_UNRESOLVED_PAIRS.md`.

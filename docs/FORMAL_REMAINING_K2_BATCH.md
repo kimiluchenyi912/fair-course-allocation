@@ -142,3 +142,20 @@ It verifies the source, writes 12 planned records, three four-pair batches,
 checkpoint and compact-evidence plans, and records zero solver invocations. It
 does not write `solver.log`, `CpSolverResponse`, or `model.pb` and does not
 touch the future formal artifact directory.
+
+## Current unresolved results and supplemental boundary
+
+The approved continuation later ran Order 2 once. It returned `UNKNOWN`
+without an incumbent and therefore stopped before Orders 3--12. The formal
+artifact now permanently contains two distinct proof gaps:
+
+- Order 1 remains `artifact_failure`; its consumed invocation has no verified
+  feasibility response.
+- Order 2 remains `unresolved_unknown_no_incumbent`; `UNKNOWN` is not
+  `INFEASIBLE`.
+
+Neither result may be overwritten or reclassified. A separate supplemental
+protocol may collect additional independent evidence for these two pairs only;
+it is not recovery and is not an original-batch rerun. Orders 3--12 are simply
+not yet run and are outside the supplemental unresolved set. See
+`docs/SUPPLEMENTAL_K2_UNRESOLVED_PAIRS.md`.

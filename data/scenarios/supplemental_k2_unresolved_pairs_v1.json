@@ -1,0 +1,74 @@
+{
+  "assignment_hint": false,
+  "both_selected_sections_forced_changed": true,
+  "candidate_pruning": false,
+  "complete_frozen_non_original_destination_domains": true,
+  "experiment_name": "supplemental_k2_unresolved_pairs",
+  "experiment_version": "v1",
+  "extended_budget_policy": {
+    "approval_reference": null,
+    "approval_status": "pending_explicit_approval",
+    "approved": false,
+    "per_pair_time_limit_seconds": null
+  },
+  "feasibility_only": true,
+  "hint": false,
+  "manifest_schema_version": 1,
+  "no_automatic_rerun": true,
+  "objective": false,
+  "original_invocation_not_reclassified": true,
+  "original_result_not_overwritten": true,
+  "original_run_preserved": true,
+  "other_editable_sections_fixed_original": true,
+  "run_b_allowed": false,
+  "same_production_model_semantics": true,
+  "seed": 20260630,
+  "source_formal_artifact": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/formal-remaining-k2-batch-v1",
+  "source_formal_artifact_checksum_entry_count": 21,
+  "source_formal_artifact_file_count": 22,
+  "source_formal_artifact_sha256sums_hash": "ee8eaf6fc6a5e1bb4744b051aabc311929b4a8b8d22e0e68269addad8bb71f4a",
+  "source_formal_manifest_hash": "0e1a59fa10f718a36d8a5ca56a7bdc331a4f74d82e63d56b8003bbda43c14ec9",
+  "source_formal_ordering_hash": "f1246ec8582d6925e26fcc9ee53583a7ac275d6063781b2f59865af788573927",
+  "source_formal_pair_rows_hash": "03c72ef0489cb332fe59a33ce91230764379dec9f0273c4dfc80d86a5c51da0c",
+  "stop_after_first_solution": true,
+  "supplemental_experiment": true,
+  "supplemental_pairs": [
+    {
+      "frozen_non_original_destination_domains": {
+        "AP_3D_ART_DESIGN_01": [["P1"], ["P2"], ["P4"], ["P5"], ["P6"]],
+        "INTERMEDIATE_ACTING_01": [["P3"], ["P7"]]
+      },
+      "original_classification": "artifact_failure",
+      "original_formal_order": 1,
+      "original_placements": {
+        "AP_3D_ART_DESIGN_01": ["P7"],
+        "INTERMEDIATE_ACTING_01": ["P1"]
+      },
+      "pair_id": "AP_3D_ART_DESIGN_01__INTERMEDIATE_ACTING_01",
+      "reason": "original_artifact_failure",
+      "section_ids": [
+        "AP_3D_ART_DESIGN_01",
+        "INTERMEDIATE_ACTING_01"
+      ]
+    },
+    {
+      "frozen_non_original_destination_domains": {
+        "AP_3D_ART_DESIGN_01": [["P1"], ["P2"], ["P4"], ["P5"], ["P6"]],
+        "FOOTBALL_01": [["P3"], ["P7"]]
+      },
+      "original_classification": "unresolved_unknown_no_incumbent",
+      "original_formal_order": 2,
+      "original_placements": {
+        "AP_3D_ART_DESIGN_01": ["P7"],
+        "FOOTBALL_01": ["P1"]
+      },
+      "pair_id": "AP_3D_ART_DESIGN_01__FOOTBALL_01",
+      "reason": "original_unknown_no_incumbent",
+      "section_ids": [
+        "AP_3D_ART_DESIGN_01",
+        "FOOTBALL_01"
+      ]
+    }
+  ],
+  "workers": 1
+}

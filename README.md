@@ -1,5 +1,22 @@
 # Fair Course Allocation
 
+## Supplemental unresolved K=2 pairs
+
+Inspect the two formal pairs without verified scoped conclusions using the
+solver-free supplemental dry-run:
+
+```bash
+python -m src.supplemental_k2_unresolved_pairs \
+  --manifest data/scenarios/supplemental_k2_unresolved_pairs_v1.json \
+  --output-dir /tmp/supplemental-k2-unresolved-pairs-dryrun \
+  --dry-run
+```
+
+The checked-in extended budget is not approved, so `--execute` fails closed.
+The protocol preserves the original formal evidence and does not include the
+not-yet-run formal Orders 3--12. See
+`docs/SUPPLEMENTAL_K2_UNRESOLVED_PAIRS.md`.
+
 ## CP-SAT cold-start recovery
 
 Run the development-only internal constrained-first recovery gate. It uses
