@@ -8,6 +8,12 @@
 - Configurations carry a confidence/source label.
 - All random generation uses a saved seed.
 
+School-specific values are modeling inputs, not official school records.
+`student_estimate` means a TPHS-inspired synthetic assumption, and
+`student_provided_form` means a course name or structure was transcribed from a
+user-provided form whose public-source status has not been independently
+verified. Neither label is evidence of publication or school endorsement.
+
 ## Configuration tables
 
 ### `grade_profiles.csv`
@@ -22,7 +28,7 @@ Controls school size and target schedule loads.
 | share_6_classes | probability of requesting six scheduled classes |
 | share_7_classes | probability of requesting seven scheduled classes |
 | allowed_free_periods | semicolon-separated allowed free periods, currently P1;P6;P7 |
-| source_type | student estimate, public source, or model assumption |
+| source_type | modeling provenance; estimates remain synthetic unless separately cited |
 | notes | clarification |
 
 Shares must sum to 1 within each grade.
@@ -59,7 +65,8 @@ Important columns:
 - `demand_tier`: core, mainstream, popular, niche, or fixed_limited;
 - `protected_core`: core requests should be served by opening adequate sections;
 - `known_capacity_risk`: identifies initial bottleneck calibration courses;
-- `source_type` and `confidence` distinguish observation from assumption.
+- `source_type` and `confidence` distinguish modeling provenance from
+  assumption strength; they do not establish a verified public source.
 
 ### `grade_request_rules.csv`
 
@@ -71,7 +78,7 @@ before elective fill and are not used by the solver.
 | grade | 9, 10, 11, or 12 |
 | rule_key | named rule such as english_weights, math_weights, or language_probability |
 | rule_value | probability value or semicolon-separated `course_id:weight` map |
-| source_type | student estimate, public source, or model assumption |
+| source_type | modeling provenance; estimates remain synthetic unless separately cited |
 | notes | clarification |
 
 ### `course_choice_weights.csv`

@@ -10,6 +10,17 @@ import src.all_student_k2_blocker_safe_screen as screen
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+pytestmark = pytest.mark.skipif(
+    not all(
+        (path / "SHA256SUMS.txt").is_file()
+        for path in (
+            screen.DEFAULT_SOURCE_SUITE,
+            screen.DEFAULT_SOURCE_SCREEN,
+            screen.DEFAULT_OUTPUT,
+        )
+    ),
+    reason="external frozen K2 artifacts are not distributed with the repository",
+)
 
 
 def survivor_row(section_a: str, section_b: str) -> dict[str, str]:

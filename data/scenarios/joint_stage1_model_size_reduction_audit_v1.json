@@ -21,10 +21,10 @@
   "negative_execution_allowed": false,
   "holdout_execution_allowed": false,
   "source_artifacts": {
-    "stage1_cost_gate": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-period-edit-stage1-pilot-v1",
-    "candidate_preview": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/period-placement-repair-probe-v1",
-    "control_audit": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-model-control-performance-audit-v1-audited",
-    "section_audit_raw": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1",
-    "section_audit_audited": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1-audited"
+    "stage1_cost_gate": "../fair-course-allocation-artifacts/robustness-v1/joint-period-edit-stage1-pilot-v1",
+    "candidate_preview": "../fair-course-allocation-artifacts/robustness-v1/period-placement-repair-probe-v1",
+    "control_audit": "../fair-course-allocation-artifacts/robustness-v1/joint-model-control-performance-audit-v1-audited",
+    "section_audit_raw": "../fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1",
+    "section_audit_audited": "../fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1-audited"
   }
 }

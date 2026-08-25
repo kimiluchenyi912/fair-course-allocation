@@ -3,7 +3,7 @@
   "evaluation_version": "v1",
   "baseline_evaluation": "cp_sat_development_evaluation_v1",
   "source_normal_suite": {
-    "artifact_dir": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/normal-development-v1",
+    "artifact_dir": "../fair-course-allocation-artifacts/robustness-v1/normal-development-v1",
     "manifest_sha256": "9e4cc9ddf6e6b4f367f139048319c09a74c8e993aa8c8a44678c10ef45e1f095",
     "sha256sums_sha256": "9e24470e55e85f005b35c347ceaeaa15082b1da84c58af16e5fe75704be73b6d"
   },

@@ -45,8 +45,8 @@ from src.section_plan_feasibility_audit import load_section_plan_audit_manifest
 
 
 DEFAULT_MANIFEST = Path("data/scenarios/hybrid_joint_period_edit_stage1_execution_v1.json")
-DEFAULT_OUTPUT = Path("/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/hybrid-joint-period-edit-stage1-execution-v1")
-DEFAULT_SIZE_ARTIFACT = Path("/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-stage1-model-size-reduction-audit-v1")
+DEFAULT_OUTPUT = Path("../fair-course-allocation-artifacts/robustness-v1/hybrid-joint-period-edit-stage1-execution-v1")
+DEFAULT_SIZE_ARTIFACT = Path("../fair-course-allocation-artifacts/robustness-v1/joint-stage1-model-size-reduction-audit-v1")
 
 
 class HybridExecutionError(ValueError):

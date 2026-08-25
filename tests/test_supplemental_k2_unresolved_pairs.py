@@ -11,6 +11,10 @@ from src import supplemental_k2_unresolved_pairs as supplemental
 
 MANIFEST = Path("data/scenarios/supplemental_k2_unresolved_pairs_v1.json")
 EXPECTED_PAIR_IDS = [pair["pair_id"] for pair in supplemental.EXPECTED_PAIRS]
+pytestmark = pytest.mark.skipif(
+    not (supplemental.DEFAULT_SOURCE_ARTIFACT / "SHA256SUMS.txt").is_file(),
+    reason="external formal K2 artifact is not distributed with the repository",
+)
 
 
 def load_inputs() -> tuple[dict[str, object], str, dict[str, object], list[dict[str, object]]]:

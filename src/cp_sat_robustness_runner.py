@@ -61,7 +61,7 @@ from src.final_schedule_policy import evaluate_final_schedule_policy
 EVALUATION_SCHEMA_VERSION = 1
 DEFAULT_MANIFEST = Path("data/scenarios/cp_sat_development_evaluation_v1.json")
 DEFAULT_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1"
+    "../fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1"
 )
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ALLOWED_GROUPS = ("normal", "stress", "negative", "all")
@@ -1523,7 +1523,7 @@ class CpSatRobustnessRunner:
 
 DEFAULT_RECOVERY_MANIFEST = Path("data/scenarios/cp_sat_cold_start_recovery_v1.json")
 DEFAULT_RECOVERY_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-recovery-v1"
+    "../fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-recovery-v1"
 )
 STABLE_FINGERPRINT = {
     "students": 2630,

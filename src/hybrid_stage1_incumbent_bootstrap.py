@@ -68,15 +68,15 @@ FIXED_WITNESS_BUDGET_SECONDS = 30.0
 PRODUCTION_BUDGET_SECONDS = 300.0
 DEFAULT_MANIFEST = Path("data/scenarios/hybrid_stage1_incumbent_bootstrap_v1.json")
 DEFAULT_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "hybrid-stage1-incumbent-bootstrap-v1"
 )
 DEFAULT_PREVIOUS_STAGE1 = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "hybrid-joint-period-edit-stage1-execution-v1"
 )
 DEFAULT_SIZE_AUDIT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "joint-stage1-model-size-reduction-audit-v1"
 )
 

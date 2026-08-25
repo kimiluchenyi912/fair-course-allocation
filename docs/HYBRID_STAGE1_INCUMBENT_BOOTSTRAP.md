@@ -37,7 +37,7 @@ Run only when the frozen experiment has been approved:
 
 ```bash
 .venv/bin/python -m src.hybrid_stage1_incumbent_bootstrap \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/hybrid-stage1-incumbent-bootstrap-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/hybrid-stage1-incumbent-bootstrap-v1
 ```
 
 This is a bounded diagnostic, not a section planner, allocation result, global

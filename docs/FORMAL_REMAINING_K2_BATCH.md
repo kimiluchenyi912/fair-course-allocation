@@ -18,7 +18,7 @@ bound remains 2, and the exact minimum claim remains none.
 The runner reads the pair universe and order only from:
 
 ```text
-/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/
+$FCA_ARTIFACT_ROOT/robustness-v1/
 all-student-k2-blocker-safe-screen-v1
 ```
 

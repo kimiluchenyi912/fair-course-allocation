@@ -22,7 +22,7 @@ not yet run and require a separate future formal execution decision.
 The manifest binds the checksummed formal artifact at:
 
 ```text
-/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/
+$FCA_ARTIFACT_ROOT/robustness-v1/
 formal-remaining-k2-batch-v1
 ```
 

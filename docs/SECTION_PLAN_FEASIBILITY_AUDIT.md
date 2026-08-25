@@ -3,8 +3,8 @@
 ## Purpose
 
 The frozen 12-normal Cold-Start Feasibility Recovery evaluation (Phase C)
-proved 7 of 12 normal development scenarios globally INFEASIBLE under the
-unchanged production full hard model. This audit is a **development-only,
+proved 7 of 12 normal development scenarios infeasible under their frozen
+section plans and the unchanged production full hard model. This audit is a **development-only,
 read-only diagnostic slice** that explains *why*, without changing the
 production section planner, generator, CP-SAT hard constraints, objective, or
 Final Schedule Policy. It answers:
@@ -29,7 +29,8 @@ No diagnostic relaxation witness is ever a publishable assignment.
 - Control: `normal_dev_reference_2026` (must remain FEASIBLE/OPTIMAL in the
   diagnostic model; INFEASIBLE here is a correctness failure that stops the
   audit immediately).
-- Targets: the 7 scenarios Phase C proved globally INFEASIBLE --
+- Targets: the 7 scenarios Phase C proved infeasible under their frozen
+  section plans and the current hard model --
   `normal_dev_01, 03, 04, 05, 07, 09, 10`.
 - No stress, negative, or holdout scenario is included.
 - Frozen solver seed `20260630`, one worker.
@@ -221,7 +222,7 @@ not a formal secondary classification.
 
 ## Output artifact
 
-`/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1/`
+`$FCA_ARTIFACT_ROOT/robustness-v1/section-plan-feasibility-audit-v1/`
 (outside the repository, never committed):
 
 - `audit_manifest_snapshot.json`, `run_manifest.json`, `failures.json`,

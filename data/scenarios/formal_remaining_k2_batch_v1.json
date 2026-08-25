@@ -10,7 +10,7 @@
   "experiment_name": "formal_remaining_k2_batch",
   "experiment_version": "v1",
   "feasibility_only": true,
-  "formal_input_artifact": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/all-student-k2-blocker-safe-screen-v1",
+  "formal_input_artifact": "../fair-course-allocation-artifacts/robustness-v1/all-student-k2-blocker-safe-screen-v1",
   "full_model_proto_default": false,
   "global_invocation_budget": 12,
   "hint": false,

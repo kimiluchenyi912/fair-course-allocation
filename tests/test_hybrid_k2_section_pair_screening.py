@@ -810,7 +810,7 @@ def test_invalid_pair_domain_is_classified_without_solver() -> None:
 
 
 FORMAL_ARTIFACT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "hybrid-k2-section-pair-screening-v1"
 )
 DRY_RUN_ARTIFACT = Path("/tmp/hybrid-k2-section-pair-screening-dryrun-20260724-105148")

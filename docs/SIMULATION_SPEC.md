@@ -6,10 +6,17 @@ Build a synthetic, Torrey Pines–inspired high-school scheduling environment th
 
 The simulation is not presented as an exact copy of TPHS. It combines:
 
-- public course information;
-- student-informed estimates;
+- course names transcribed from a user-provided course form whose public-source
+  status has not been independently verified;
+- student-informed estimates used only as TPHS-inspired synthetic assumptions;
 - explicit model assumptions;
 - randomized yearly demand.
+
+No school-specific count, demand split, capacity, bottleneck estimate, or
+course-form entry in this repository should be treated as an official TPHS or
+SDUHSD publication unless a separate public citation is supplied. The
+`student_estimate` and `student_provided_form` labels describe modeling
+provenance, not public-source verification.
 
 Anonymous school data should be able to replace the synthetic inputs without changing the solver.
 
@@ -43,7 +50,8 @@ The solver does:
 | 12 | 640 |
 | **Total** | **2,630** |
 
-These are simulation parameters, not claims of exact current enrollment.
+These are TPHS-inspired synthetic simulation parameters, not claims of exact
+current enrollment.
 
 ## 4. Target number of scheduled classes
 
@@ -182,8 +190,8 @@ explicit mandatory fallback attempt to `MATH2` after all primary requests and
 before ordinary ranked alternates. The fallback does not erase the original
 Math 2/3 primary unmet and does not increase primary satisfaction. If assigned,
 it satisfies math coverage and consumes one period unit; if it fails, the
-baseline returns a reported math coverage violation rather than treating the
-case as globally infeasible.
+baseline returns a reported math coverage violation rather than claiming
+infeasibility under the current hard model.
 
 ### Sequential semester block sharing one period
 
@@ -759,8 +767,9 @@ statistics while the raw value is preserved for audit.
 ### Section-Plan Feasibility Alignment Audit v1
 
 `data/scenarios/section_plan_feasibility_audit_v1.json` defines a read-only
-diagnostic slice over the 7 Phase C scenarios proven globally INFEASIBLE,
-plus the stable feasible reference as a control. It does not modify the
+diagnostic slice over the 7 Phase C scenarios proven infeasible under their
+frozen section plans and the current hard model, plus the stable feasible
+reference as a control. It does not modify the
 production section planner, generator, CP-SAT hard constraints, objective, or
 Final Schedule Policy. An independent diagnostic CP-SAT model reuses the
 production canonical input, candidate index, mandatory fallback injection,

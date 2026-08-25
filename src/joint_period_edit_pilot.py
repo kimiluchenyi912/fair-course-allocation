@@ -69,7 +69,7 @@ PILOT_SCENARIO_IDS = (CONTROL_SCENARIO_ID, "normal_dev_10")
 AUTHORITATIVE_STUDENT_ID = "G12_0536"
 DEFAULT_PILOT_MANIFEST = Path("data/scenarios/joint_period_edit_pilot_v1.json")
 DEFAULT_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "joint-period-edit-pilot-v1"
 )
 SCHEMA_VERSION = 1

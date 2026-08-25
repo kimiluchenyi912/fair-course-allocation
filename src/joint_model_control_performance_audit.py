@@ -44,11 +44,11 @@ from src.joint_period_edit_pilot import build_joint_model
 
 MANIFEST_PATH = Path("data/scenarios/joint_model_control_performance_audit_v1.json")
 DEFAULT_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "joint-model-control-performance-audit-v1"
 )
 DEFAULT_ORACLE = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/repair-footprint-v1/cpsat-oracle"
+    "../fair-course-allocation-artifacts/repair-footprint-v1/cpsat-oracle"
 )
 VARIANTS = ("production_native", "joint_fixed_native_conflicts", "joint_fixed_optional_intervals")
 REFERENCE_ID = "normal_dev_reference_2026"

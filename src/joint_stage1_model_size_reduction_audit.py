@@ -55,7 +55,7 @@ from src.model_proto_serialization import deterministic_model_proto_bytes
 
 
 DEFAULT_MANIFEST = Path("data/scenarios/joint_stage1_model_size_reduction_audit_v1.json")
-DEFAULT_OUTPUT = Path("/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-stage1-model-size-reduction-audit-v1")
+DEFAULT_OUTPUT = Path("../fair-course-allocation-artifacts/robustness-v1/joint-stage1-model-size-reduction-audit-v1")
 MAX_PROTO_BYTES = 250_000_000
 
 

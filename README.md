@@ -1,5 +1,110 @@
 # Fair Course Allocation
 
+Fair Course Allocation is a research-engineering project for assigning
+counselor-approved high-school course requests to sections with fixed periods
+and capacities. It compares transparent Greedy baselines with an OR-Tools
+CP-SAT model while keeping hard schedule rules, fairness policies, and
+optimization objectives explicit and separately testable.
+
+This repository uses synthetic data only. Its reference evaluation models
+2,630 synthetic students across Grades 9-12, 25,106 logical requests, and 463
+logical sections. The configuration is **TPHS-inspired**, but it is not an
+official Torrey Pines High School dataset, policy publication, or operational
+schedule.
+
+## Current evidence
+
+The stable reference input has 17,216 logical primaries, 7,890 alternates,
+482 section rows, and 165,481 request-section candidate edges. A controlled
+CP-SAT run found a `FEASIBLE` final assignment with zero recorded policy or
+consistency violations. Development robustness results are mixed and remain
+explicitly scoped: holdout scenarios have not been run, global K=2 repair is
+unresolved, and no exact minimum repair is claimed. The repository has more
+than 1,300 deterministic automated tests covering validation, generation,
+planning, allocation policies, reporting, and experiment guardrails.
+
+## Quickstart
+
+Python 3.12 is the supported environment for the checked-in dependency set.
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+python -m src.validation
+python -m src.validation --strict-policy
+python -m pytest -q
+```
+
+Generate the stable synthetic requests and section plan without running an
+allocator:
+
+```bash
+python -m src.generation \
+  --scenario stable_year \
+  --seed 2026 \
+  --output-dir data/generated/stable_2026
+
+python -m src.section_planning \
+  --input-dir data/generated/stable_2026 \
+  --scenario stable_year \
+  --seed 2026 \
+  --output-dir data/generated/stable_2026_sections
+```
+
+Generated files under `data/generated/` are ignored by Git. Expensive
+development artifacts are also excluded and are not distributed with this
+repository. Commands below use a configurable external location:
+
+```bash
+export FCA_ARTIFACT_ROOT="${FCA_ARTIFACT_ROOT:-../fair-course-allocation-artifacts}"
+```
+
+Checked-in scenario manifests use the same repository-relative sibling
+directory by default. Run commands from the repository root, or provide the
+relevant CLI path explicitly for a different artifact location.
+
+## Architecture
+
+| Layer | Responsibility |
+| --- | --- |
+| `src/validation/` | Validate configuration, templates, references, and baseline-policy assumptions. |
+| `src/generation/` | Generate deterministic synthetic students and approved requests. |
+| `src/section_planning/` | Plan section counts and period layouts; it does not assign students. |
+| `src/allocation/` | Canonicalize inputs and run Greedy or CP-SAT allocation methods. |
+| `src/benchmark_runner.py` | Compare algorithms with manifest and fingerprint guardrails. |
+| `src/final_schedule_policy.py` | Evaluate whether a final assignment satisfies publication policy. |
+
+Hard constraints are not silently relaxed to obtain a solution. Solver states
+retain their OR-Tools meaning: `FEASIBLE` is not `OPTIMAL`, and `UNKNOWN` is
+not `INFEASIBLE`.
+
+## Data and limitations
+
+- Student records and requests are synthetic; IDs such as `G12_0105` are
+  deterministic simulation identifiers, not school-issued IDs.
+- Course names and some structural inputs came from a user-provided course
+  form. Their public-source status has not been independently verified.
+- Counts, demand splits, capacities, and bottleneck estimates labeled
+  `student_estimate` or `model_assumption` are **TPHS-inspired synthetic assumptions**,
+  not official school facts.
+- Version 1 allocates against fixed sections, periods, and capacities. It does
+  not schedule teachers or rooms, verify prerequisites, or build a real master
+  schedule.
+- Development scenarios are not evidence of generalization to every school.
+  Holdout evaluation and global K=2 repair closure remain unfinished.
+- External solver artifacts and historical experiment outputs are not shipped;
+  artifact-dependent audit commands require separately retained inputs.
+
+## License status
+
+No open-source license has been selected yet. The repository remains private;
+adding a license is an explicit release decision outside this cleanup.
+
+## Research workflows
+
 ## Supplemental unresolved K=2 pairs
 
 Inspect the two formal pairs without verified scoped conclusions using the
@@ -26,7 +131,7 @@ artifacts outside the repository:
 ```bash
 python -m src.cp_sat_robustness_runner \
   --recovery-manifest data/scenarios/cp_sat_cold_start_recovery_v1.json \
-  --recovery-output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-recovery-v1
+  --recovery-output-dir $FCA_ARTIFACT_ROOT/robustness-v1/cp-sat-cold-start-recovery-v1
 ```
 
 The internal Greedy result is a hint only. The recovery runner does not run
@@ -177,7 +282,7 @@ Run the development-only stress suite against persistent Phase A artifacts:
 ```bash
 python -m src.stress_robustness_runner \
   --split development \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/stress-development-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/stress-development-v1
 ```
 
 Phase B contains 12 ordinary stress scenarios and 3 deliberately structural
@@ -203,7 +308,7 @@ seconds total, and no external persisted seed.
 ```bash
 python -m src.cp_sat_robustness_runner \
   --group all \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/cp-sat-development-v1
 ```
 
 Use `--dry-run` to inspect development IDs or `--verify-only` to validate
@@ -218,9 +323,13 @@ audited summary directory:
 
 ```bash
 python -m src.cp_sat_robustness_runner \
+  --evaluation-manifest /path/to/cp-sat-development-v1/evaluation_manifest_snapshot.json \
   --audit-source-dir /path/to/cp-sat-development-v1 \
   --audit-output-dir /path/to/cp-sat-development-v1-audited
 ```
+
+Using the artifact's manifest snapshot preserves the original fail-closed
+manifest-hash check when auditing historical runs.
 
 The audit distinguishes full-model infeasibility proof, fixed-objective-stage
 infeasibility, bootstrap/core-stage results without a global proof, and
@@ -237,7 +346,7 @@ overwrite a non-empty output directory:
 ```bash
 python -m src.cp_sat_repair_probe \
   --manifest data/scenarios/cp_sat_cold_start_repair_probe_v1.json \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-repair-probe-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/cp-sat-cold-start-repair-probe-v1
 ```
 
 The probe uses data seed `2026`, section seed `2026`, solver seed `20260630`,
@@ -260,7 +369,7 @@ configuration:
 ```bash
 python -m src.cp_sat_normal_evaluation_runner \
   --evaluation-manifest data/scenarios/cp_sat_cold_start_normal_evaluation_v1.json \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-normal-development-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/cp-sat-cold-start-normal-development-v1
 ```
 
 To rebuild a corrected reporting layer from an existing raw Phase C artifact
@@ -279,14 +388,15 @@ false. See `docs/CP_SAT_ROBUSTNESS_EVALUATION.md`.
 ## Section-plan feasibility alignment audit
 
 Run the read-only diagnostic slice that explains why the 7 INFEASIBLE normal
-scenarios above are globally infeasible, using the stable reference as a
-control. It never modifies the production section planner, generator, hard
+scenarios above are infeasible under their frozen section plans and the
+current hard model, using the stable reference as a control. It never modifies
+the production section planner, generator, hard
 constraints, objective, or policy, and never re-solves the Phase C evaluation:
 
 ```bash
 python -m src.section_plan_feasibility_audit \
   --audit-manifest data/scenarios/section_plan_feasibility_audit_v1.json \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/section-plan-feasibility-audit-v1
 ```
 
 It reports, per scenario: static feasibility descriptors (capacity, course
@@ -307,8 +417,8 @@ running a solver:
 
 ```bash
 python -m src.section_plan_feasibility_audit \
-  --rebuild-reporting-source-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1 \
-  --rebuild-reporting-output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1-audited
+  --rebuild-reporting-source-dir $FCA_ARTIFACT_ROOT/robustness-v1/section-plan-feasibility-audit-v1 \
+  --rebuild-reporting-output-dir $FCA_ARTIFACT_ROOT/robustness-v1/section-plan-feasibility-audit-v1-audited
 ```
 
 ## Period-placement repair probe
@@ -320,7 +430,7 @@ artifact directory:
 
 ```bash
 .venv/bin/python -m src.period_placement_repair_probe \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/period-placement-repair-probe-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/period-placement-repair-probe-v1
 ```
 
 It uses only authoritative fine-core evidence, keeps capacities and policy
@@ -338,7 +448,7 @@ independently validated production repair:
 
 ```bash
 .venv/bin/python -m src.joint_period_edit_pilot \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-period-edit-pilot-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/joint-period-edit-pilot-v1
 ```
 
 The pilot excludes `G12_0105`, does not use an external persisted seed, and
@@ -360,7 +470,7 @@ approved:
 ```bash
 .venv/bin/python -m src.joint_model_control_performance_audit
 .venv/bin/python -m src.joint_model_control_performance_audit --run-performance \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-model-control-performance-audit-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/joint-model-control-performance-audit-v1
 ```
 
 This is a single deterministic reference-control comparison, not a broad
@@ -394,7 +504,7 @@ one independent production cold-start validation:
 
 ```bash
 .venv/bin/python -m src.joint_period_edit_stage1_pilot \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-period-edit-stage1-pilot-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/joint-period-edit-stage1-pilot-v1
 ```
 
 The command refuses to overwrite a non-empty artifact directory and supports
@@ -426,7 +536,7 @@ recorded candidates:
 
 ```bash
 .venv/bin/python -m src.hybrid_stage1_incumbent_bootstrap \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/hybrid-stage1-incumbent-bootstrap-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/hybrid-stage1-incumbent-bootstrap-v1
 ```
 
 This command is not a production allocator or section planner. `UNKNOWN` is
@@ -446,7 +556,7 @@ regenerating them, to distinguish why both bootstrap K=2 searches returned
 
 ```bash
 .venv/bin/python -m src.hybrid_k2_search_bottleneck_diagnostic \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/hybrid-k2-search-bottleneck-diagnostic-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/hybrid-k2-search-bottleneck-diagnostic-v1
 ```
 
 For each pair, in order and only as needed: Diagnostic A fixes the exact
@@ -472,7 +582,7 @@ evidence:
 ```bash
 .venv/bin/python -m src.hybrid_k2_section_pair_screening \
   --manifest data/scenarios/hybrid_k2_section_pair_screening_v1.json \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/hybrid-k2-section-pair-screening-v1 \
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/hybrid-k2-section-pair-screening-v1 \
   --screening-only
 ```
 

@@ -52,7 +52,7 @@ from src.final_schedule_policy import evaluate_final_schedule_policy
 
 DEFAULT_MANIFEST = Path("data/scenarios/cp_sat_cold_start_repair_probe_v1.json")
 DEFAULT_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "cp-sat-cold-start-repair-probe-v1"
 )
 

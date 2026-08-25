@@ -10,7 +10,7 @@ or solve a CP-SAT model.
 The accepted artifact is:
 
 ```text
-/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/
+$FCA_ARTIFACT_ROOT/robustness-v1/
 all-student-k2-blocker-safe-screen-v1
 ```
 

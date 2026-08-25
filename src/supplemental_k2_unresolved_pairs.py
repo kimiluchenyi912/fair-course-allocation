@@ -31,11 +31,11 @@ SOURCE_PAIR_ROWS_HASH = "03c72ef0489cb332fe59a33ce91230764379dec9f0273c4dfc80d86
 RESPONSE_HASH_NAMESPACE = "supplemental_k2_unresolved_pairs_v1"
 DEFAULT_MANIFEST = Path("data/scenarios/supplemental_k2_unresolved_pairs_v1.json")
 DEFAULT_SOURCE_ARTIFACT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "formal-remaining-k2-batch-v1"
 )
 SUPPLEMENTAL_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "supplemental-k2-unresolved-pairs-v1"
 )
 EXPECTED_PAIRS = (

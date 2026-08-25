@@ -36,15 +36,15 @@ INFORMAL_PROJECTION_ORDERING_HASH = (
     "f1246ec8582d6925e26fcc9ee53583a7ac275d6063781b2f59865af788573927"
 )
 DEFAULT_SOURCE_SUITE = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "normal-development-v1"
 )
 DEFAULT_SOURCE_SCREEN = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "hybrid-k2-section-pair-screening-v1"
 )
 DEFAULT_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "all-student-k2-blocker-safe-screen-v1"
 )
 

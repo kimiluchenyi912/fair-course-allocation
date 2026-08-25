@@ -268,3 +268,10 @@ not proof of a minimum section move.
   extended budget is intentionally unapproved, so real execution fails closed;
   this slice adds zero solver invocations and no global K2 or minimum claim.
   See `docs/SUPPLEMENTAL_K2_UNRESOLVED_PAIRS.md`.
+
+- Implemented Public Readiness Cleanup v1 without changing model semantics or
+  experiment results. The repository now has a public-facing overview and
+  Python 3.12 quickstart, explicit TPHS-inspired synthetic-data disclaimers,
+  portable tracked artifact paths, scoped frozen-plan infeasibility wording,
+  and a minimal CI workflow for pytest plus normal/strict validation. A license
+  remains intentionally undecided and no Git history was rewritten.

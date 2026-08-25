@@ -71,19 +71,19 @@ FIXED_WITNESS_BUDGET_SECONDS = 30.0
 PRODUCTION_BUDGET_SECONDS = 300.0
 DEFAULT_MANIFEST = Path("data/scenarios/joint_period_edit_stage1_pilot_v1.json")
 DEFAULT_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "joint-period-edit-stage1-pilot-v1"
 )
 DEFAULT_CONTROL_AUDIT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "joint-model-control-performance-audit-v1"
 )
 DEFAULT_CONTROL_AUDITED = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "joint-model-control-performance-audit-v1-audited"
 )
 DEFAULT_JOINT_PILOT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "joint-period-edit-pilot-v1"
 )
 

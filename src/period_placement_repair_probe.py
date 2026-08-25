@@ -56,11 +56,11 @@ TARGET_SCENARIO_IDS = (
 SCENARIO_ORDER = (CONTROL_SCENARIO_ID, *TARGET_SCENARIO_IDS)
 DEFAULT_MANIFEST = Path("data/scenarios/period_placement_repair_probe_v1.json")
 DEFAULT_AUDIT_ROOT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "section-plan-feasibility-audit-v1"
 )
 DEFAULT_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "period-placement-repair-probe-v1"
 )
 SCHEMA_VERSION = 1

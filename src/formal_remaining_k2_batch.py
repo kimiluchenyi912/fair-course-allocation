@@ -38,11 +38,11 @@ SOURCE_FILE_COUNT = 11
 SOURCE_CHECKSUM_ENTRIES = 10
 DEFAULT_MANIFEST = Path("data/scenarios/formal_remaining_k2_batch_v1.json")
 DEFAULT_SOURCE_ARTIFACT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "all-student-k2-blocker-safe-screen-v1"
 )
 FORMAL_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "formal-remaining-k2-batch-v1"
 )
 FAILURE_CONTINUATION_FILE = "failure_continuation_authorization.json"

@@ -363,8 +363,9 @@ solver-timing statistics while the raw value is preserved for audit.
 ### Section-Plan Feasibility Alignment Audit v1
 
 A read-only diagnostic slice explaining *why* the 7 Phase C scenarios above
-are globally INFEASIBLE, without changing the production section planner,
-generator, CP-SAT hard constraints, objective, or Final Schedule Policy. It
+are infeasible under their frozen section plans and the current hard model,
+without changing the production section planner, generator, CP-SAT hard
+constraints, objective, or Final Schedule Policy. It
 builds an independent diagnostic CP-SAT model that reuses the production
 canonical input, candidate index, mandatory-fallback injection, and policy
 threshold constants; the seven diagnosable hard-policy families
@@ -629,3 +630,14 @@ supplemental set. The checked-in extended-budget policy is pending explicit
 approval, so execution fails closed and only solver-free dry-runs are enabled.
 Global K2 remains unresolved, the lower bound remains 2, and finalization is a
 separate future decision. See `docs/SUPPLEMENTAL_K2_UNRESOLVED_PAIRS.md`.
+
+### Public Readiness Cleanup v1
+
+The public-readiness slice is documentation and repository hygiene only. It
+scopes infeasibility claims to frozen section plans and the current hard model,
+removes tracked machine-specific home paths, documents the 2,630-student
+synthetic evaluation and unverified school-source assumptions, and adds a
+Python 3.12 CI gate for pytest plus normal and strict validation. It does not
+change allocation, fairness, section planning, solver settings, or any frozen
+experiment result. Repository licensing and Git-history author metadata remain
+separate release decisions.

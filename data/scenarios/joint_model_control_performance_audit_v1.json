@@ -21,9 +21,9 @@
     "joint_fixed_optional_intervals"
   ],
   "source_artifacts": {
-    "joint_period_edit_pilot": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/joint-period-edit-pilot-v1",
-    "period_placement_repair_probe": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/period-placement-repair-probe-v1",
-    "stable_reference_assignment": "/Users/klu/Projects/fair-course-allocation-artifacts/repair-footprint-v1/cpsat-oracle"
+    "joint_period_edit_pilot": "../fair-course-allocation-artifacts/robustness-v1/joint-period-edit-pilot-v1",
+    "period_placement_repair_probe": "../fair-course-allocation-artifacts/robustness-v1/period-placement-repair-probe-v1",
+    "stable_reference_assignment": "../fair-course-allocation-artifacts/repair-footprint-v1/cpsat-oracle"
   },
   "notes": [
     "Known witness is used for correctness acceptance only, never as a performance hint.",

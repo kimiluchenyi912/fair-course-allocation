@@ -64,10 +64,10 @@ from src.cp_sat_robustness_runner import (
 
 DEFAULT_MANIFEST = Path("data/scenarios/cp_sat_cold_start_normal_evaluation_v1.json")
 DEFAULT_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-normal-development-v1"
+    "../fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-normal-development-v1"
 )
 DEFAULT_STABLE_PROBE_ARTIFACT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-repair-probe-v1"
+    "../fair-course-allocation-artifacts/robustness-v1/cp-sat-cold-start-repair-probe-v1"
 )
 STABLE_SCENARIO_ID = "normal_dev_reference_2026"
 

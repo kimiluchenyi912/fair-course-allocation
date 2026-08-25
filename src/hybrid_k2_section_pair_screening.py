@@ -98,10 +98,10 @@ RECONSTRUCTED_SOLVER_CONFIG_PROVENANCE = {
 
 DEFAULT_MANIFEST = Path("data/scenarios/hybrid_k2_section_pair_screening_v1.json")
 DEFAULT_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/"
+    "../fair-course-allocation-artifacts/robustness-v1/"
     "hybrid-k2-section-pair-screening-v1"
 )
-ROBUSTNESS_ROOT = Path("/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1")
+ROBUSTNESS_ROOT = Path("../fair-course-allocation-artifacts/robustness-v1")
 DEFAULT_K2_DIAGNOSTIC = ROBUSTNESS_ROOT / "hybrid-k2-search-bottleneck-diagnostic-v1"
 DEFAULT_BOOTSTRAP = ROBUSTNESS_ROOT / "hybrid-stage1-incumbent-bootstrap-v1"
 DEFAULT_SIZE_AUDIT = ROBUSTNESS_ROOT / "joint-stage1-model-size-reduction-audit-v1"

@@ -11,7 +11,7 @@ necessary condition.
 ```bash
 .venv/bin/python -m src.hybrid_k2_section_pair_screening \
   --manifest data/scenarios/hybrid_k2_section_pair_screening_v1.json \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/hybrid-k2-section-pair-screening-v1 \
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/hybrid-k2-section-pair-screening-v1 \
   --screening-only
 ```
 

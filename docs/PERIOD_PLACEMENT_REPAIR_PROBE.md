@@ -40,7 +40,8 @@ reporting a false change to `candidate_index` edge membership.
 
 ## Minimum claims
 
-The probe starts from the audited zero-edit global infeasibility proof. A
+The probe starts from the audited zero-edit infeasibility proof for the frozen
+section plan under the current hard model. A
 validated one-edit result may therefore be reported as
 `minimum_edit_count_within_frozen_admissible_universe = 1`. It is not a global
 minimum section-plan repair and is not unique. UNKNOWN candidates prevent a
@@ -54,7 +55,7 @@ Run the candidate preview first:
 
 ```bash
 .venv/bin/python -m src.period_placement_repair_probe \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/period-placement-repair-probe-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/period-placement-repair-probe-v1
 ```
 
 The preview writes candidate and static-analysis artifacts only and performs

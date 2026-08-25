@@ -55,7 +55,7 @@ Run the frozen development evaluation into the external artifact directory:
 ```bash
 python -m src.cp_sat_robustness_runner \
   --group all \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/cp-sat-development-v1
 ```
 
 The output includes scenario summaries, stage traces, normal/stress/negative
@@ -71,8 +71,8 @@ Existing raw Phase C results can be audited without invoking CP-SAT:
 
 ```bash
 python -m src.cp_sat_robustness_runner \
-  --audit-source-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1 \
-  --audit-output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1-audited
+  --audit-source-dir $FCA_ARTIFACT_ROOT/robustness-v1/cp-sat-development-v1 \
+  --audit-output-dir $FCA_ARTIFACT_ROOT/robustness-v1/cp-sat-development-v1-audited
 ```
 
 The audit preserves raw terminal statuses and stage traces, then adds an

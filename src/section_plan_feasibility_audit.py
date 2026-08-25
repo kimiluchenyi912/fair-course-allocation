@@ -3,8 +3,8 @@
 A read-only-of-production, write-only-to-a-new-artifact diagnostic slice
 that explains *why* the frozen distance-guided full-hard-model repair
 (``src/cp_sat_normal_evaluation_runner.py``) proved seven normal development
-scenarios globally INFEASIBLE, using the stable feasible reference scenario
-as a control.
+scenarios infeasible under their frozen section plans and the current hard
+model, using the stable feasible reference scenario as a control.
 
 This module never modifies the production section planner, generator,
 CP-SAT hard constraints, objective, or Final Schedule Policy. It builds an
@@ -76,7 +76,7 @@ from src.cp_sat_robustness_runner import (
 
 DEFAULT_MANIFEST = Path("data/scenarios/section_plan_feasibility_audit_v1.json")
 DEFAULT_OUTPUT = Path(
-    "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1"
+    "../fair-course-allocation-artifacts/robustness-v1/section-plan-feasibility-audit-v1"
 )
 SCHEMA_VERSION = 1
 CONTROL_SCENARIO_ID = "normal_dev_reference_2026"
@@ -172,7 +172,7 @@ def load_section_plan_audit_manifest(path: str | Path = DEFAULT_MANIFEST) -> dic
             if role != "feasible_control" or outcome != "feasible_control":
                 raise SectionPlanAuditError("control scenario role/outcome mismatch")
         else:
-            if role != "infeasible_target" or outcome != "globally_infeasible":
+            if role != "infeasible_target" or outcome != "frozen_plan_hard_model_infeasible":
                 raise SectionPlanAuditError(f"target scenario role/outcome mismatch: {scenario_id}")
         if scenario_id in parsed_ids:
             raise SectionPlanAuditError(f"duplicate audit scenario: {scenario_id}")
@@ -1389,7 +1389,7 @@ def rebuild_section_plan_audit_reporting(
         "stress_runs": 0,
         "holdout_runs": 0,
         "control_scenarios": 1,
-        "globally_infeasible_targets": 7,
+        "frozen_plan_hard_model_infeasible_targets": 7,
         "scenarios_attempted": 8,
         "group_core_counts": dict(sorted(core_counts.items())),
         "section_capacity_core_count": core_counts.get("SECTION_CAPACITY", 0),

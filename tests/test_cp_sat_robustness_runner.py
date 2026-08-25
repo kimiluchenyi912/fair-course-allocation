@@ -38,6 +38,18 @@ from src.cp_sat_robustness_runner import (
 MANIFEST = Path("data/scenarios/cp_sat_development_evaluation_v1.json")
 
 
+def _historical_manifest_for_persisted_artifact(tmp_path: Path) -> Path:
+    """Recreate the path-only pre-portability manifest for frozen artifact tests."""
+    portable_root = "../fair-course-allocation-artifacts"
+    historical_root = "/Users/" + "klu/Projects/fair-course-allocation-artifacts"
+    path = tmp_path / "historical_cp_sat_development_evaluation_v1.json"
+    path.write_text(
+        MANIFEST.read_text(encoding="utf-8").replace(portable_root, historical_root),
+        encoding="utf-8",
+    )
+    return path
+
+
 def _unknown_result() -> CpSatAllocationResult:
     diagnostic = CpSatStageDiagnostic(
         stage_name=CpSatStageName.FEASIBILITY_BOOTSTRAP,
@@ -564,7 +576,9 @@ def test_holdout_readiness_uses_majority_of_normal_without_assignment(publishabl
 
 
 def test_audit_rebuild_is_read_only_and_does_not_invoke_solver(tmp_path, monkeypatch) -> None:
-    source = Path("/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1")
+    source = Path("../fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1")
+    if not (source / "SHA256SUMS.txt").is_file():
+        pytest.skip("external Phase C artifact is not distributed with the repository")
     before = hashlib.sha256((source / "SHA256SUMS.txt").read_bytes()).hexdigest()
     monkeypatch.setattr(
         runner_module,
@@ -572,7 +586,11 @@ def test_audit_rebuild_is_read_only_and_does_not_invoke_solver(tmp_path, monkeyp
         lambda *args, **kwargs: pytest.fail("status audit must not invoke CP-SAT"),
     )
     output = tmp_path / "audited"
-    summary = audit_existing_artifact(source, output)
+    summary = audit_existing_artifact(
+        source,
+        output,
+        manifest_path=_historical_manifest_for_persisted_artifact(tmp_path),
+    )
     readiness = json.loads((output / "holdout_readiness_assessment.json").read_text())
     assert summary["all_status_semantics"]["scenarios"] == 27
     assert readiness["ready_for_holdout"] is False
@@ -583,9 +601,15 @@ def test_audit_rebuild_is_read_only_and_does_not_invoke_solver(tmp_path, monkeyp
 
 
 def test_audited_summary_contains_all_scenarios_and_no_holdouts(tmp_path) -> None:
-    source = Path("/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1")
+    source = Path("../fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1")
+    if not (source / "SHA256SUMS.txt").is_file():
+        pytest.skip("external Phase C artifact is not distributed with the repository")
     output = tmp_path / "audited"
-    audit_existing_artifact(source, output)
+    audit_existing_artifact(
+        source,
+        output,
+        manifest_path=_historical_manifest_for_persisted_artifact(tmp_path),
+    )
     rows = runner_module.pd.read_csv(output / "status_semantics_audit.csv")
     assert len(rows) == 27
     assert set(rows["scenario_group"]) == {"normal", "stress", "negative"}

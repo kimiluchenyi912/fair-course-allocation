@@ -135,7 +135,7 @@ this module both fail closed if that artifact's checksum has drifted:
 
 ```bash
 .venv/bin/python -m src.hybrid_k2_search_bottleneck_diagnostic \
-  --output-dir /Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/hybrid-k2-search-bottleneck-diagnostic-v1
+  --output-dir $FCA_ARTIFACT_ROOT/robustness-v1/hybrid-k2-search-bottleneck-diagnostic-v1
 ```
 
 The command refuses to overwrite a non-empty, unrecognized output directory

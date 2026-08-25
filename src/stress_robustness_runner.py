@@ -43,8 +43,8 @@ from src.scenario_transforms import (
 STRESS_SCHEMA_VERSION = 1
 DEFAULT_STRESS_SUITE_PATH = Path("data/scenarios/stress_robustness_v1.json")
 DEFAULT_NORMAL_SUITE_PATH = Path("data/scenarios/normal_year_robustness_v1.json")
-DEFAULT_NORMAL_ARTIFACT_DIR = Path("/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/normal-development-v1")
-DEFAULT_STRESS_ARTIFACT_DIR = Path("/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/stress-development-v1")
+DEFAULT_NORMAL_ARTIFACT_DIR = Path("../fair-course-allocation-artifacts/robustness-v1/normal-development-v1")
+DEFAULT_STRESS_ARTIFACT_DIR = Path("../fair-course-allocation-artifacts/robustness-v1/stress-development-v1")
 ALLOWED_TRANSFORMS = {
     "enrollment_surge",
     "popular_course_surge",

@@ -23,7 +23,7 @@
   "run_b_allowed": false,
   "same_production_model_semantics": true,
   "seed": 20260630,
-  "source_formal_artifact": "/Users/klu/Projects/fair-course-allocation-artifacts/robustness-v1/formal-remaining-k2-batch-v1",
+  "source_formal_artifact": "../fair-course-allocation-artifacts/robustness-v1/formal-remaining-k2-batch-v1",
   "source_formal_artifact_checksum_entry_count": 21,
   "source_formal_artifact_file_count": 22,
   "source_formal_artifact_sha256sums_hash": "ee8eaf6fc6a5e1bb4744b051aabc311929b4a8b8d22e0e68269addad8bb71f4a",
