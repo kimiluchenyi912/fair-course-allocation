@@ -369,7 +369,7 @@ def _validate_calc_d_linalg(indexed: pd.DataFrame, report: ValidationReport) -> 
         report.add_error(
             "CALC_D_LINALG_STRUCTURE",
             "course_catalog.csv",
-            "CALC_D_LINALG must be a TPHS daytime one-period dual-enrollment block.",
+            "CALC_D_LINALG must be a daytime one-period dual-enrollment block.",
             identifier="CALC_D_LINALG",
         )
 

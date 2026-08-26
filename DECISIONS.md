@@ -113,7 +113,8 @@ AP European History is Grade 12 only. AP Art History is available to Grades
 11 and 12.
 
 Calculus III and Linear Algebra style dual-enrollment courses are not treated
-as ordinary TPHS in-school courses.
+as ordinary in-school courses under the
+synthetic assumptions inspired by a U.S. public high-school setting.
 
 Known capacity-risk courses include Computer Programming, AP CSP, AP CSA, AP
 Statistics, AP Physics C, and Calc D + Linear Algebra.

@@ -10,7 +10,7 @@ INTRO_CALC,Introduction to Calculus,Mathematics,normal_academic,11;12,1,True,sta
 AP_CALC_AB,AP Calculus AB,Mathematics,most_ap,10;11;12,1,True,standard,,,mainstream,False,False,student_estimate,medium,Grade 10 demand base is small.
 AP_CALC_BC,AP Calculus BC,Mathematics,most_ap,10;11;12,1,True,standard,,,mainstream,False,False,student_estimate,medium,Grade 10 demand base is about 20 students.
 AP_STATS,AP Statistics,Mathematics,most_ap,11;12,1,True,standard,,,popular,False,True,student_estimate,medium,Known capacity-risk course.
-CALC_D_LINALG,Calc D + Linear Algebra,Mathematics,dual_enrollment,11;12,1,True,semester_block,40,,fixed_limited,False,True,student_estimate,medium,TPHS daytime dual-enrollment bottleneck; occupies one normal period; normal capacity 40 with possible exception overload to 45 and about five unmet requests.
+CALC_D_LINALG,Calc D + Linear Algebra,Mathematics,dual_enrollment,11;12,1,True,semester_block,40,,fixed_limited,False,True,student_estimate,medium,Modeling provenance: synthetic assumptions inspired by a U.S. public high-school setting; daytime dual-enrollment bottleneck; occupies one normal period; normal capacity 40 with possible exception overload to 45 and about five unmet requests.
 BIO,Biology: The Living Earth,Science,normal_academic,9,1,True,standard,,,core,True,False,student_provided_form,medium,Typical Grade 9 science; course name from confirmed course list.
 CHEM,Chemistry,Science,normal_academic,10;11;12,1,True,standard,,,core,True,False,model_assumption,medium,Grade 10 chemistry option.
 CHEM_H,Honors Chemistry,Science,normal_academic,10;11;12,1,True,standard,,,core,True,False,model_assumption,medium,Grade 10 honors chemistry option.

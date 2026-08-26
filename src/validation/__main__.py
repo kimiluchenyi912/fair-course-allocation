@@ -12,7 +12,7 @@ def main() -> int:
     parser.add_argument(
         "--strict-policy",
         action="store_true",
-        help="Treat current TPHS baseline deviations as errors instead of warnings.",
+        help="Treat current reference-baseline deviations as errors instead of warnings.",
     )
     args = parser.parse_args()
 

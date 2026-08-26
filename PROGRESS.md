@@ -14,7 +14,7 @@
 - Adopted the new request, section, assignment, and metrics data structure.
 - Added initial configuration and template CSVs for the new simulation model.
 - Implemented the Version 1 configuration validator and pytest coverage.
-- Split structural/model validation errors from current TPHS baseline policy
+- Split structural/model validation errors from current reference-baseline policy
   warnings, with an optional strict-policy mode.
 - Implemented the Version 1 synthetic student and course-request generator,
   including deterministic load apportionment, grade rules, elective weights,
@@ -271,7 +271,7 @@ not proof of a minimum section move.
 
 - Implemented Public Readiness Cleanup v1 without changing model semantics or
   experiment results. The repository now has a public-facing overview and
-  Python 3.12 quickstart, explicit TPHS-inspired synthetic-data disclaimers,
+  Python 3.12 quickstart, explicit synthetic-data disclaimers,
   portable tracked artifact paths, scoped frozen-plan infeasibility wording,
-  and a minimal CI workflow for pytest plus normal/strict validation. A license
-  remains intentionally undecided and no Git history was rewritten.
+  and a minimal CI workflow for pytest plus normal/strict validation. That
+  checkpoint did not select a license or rewrite Git history.

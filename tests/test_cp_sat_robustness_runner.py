@@ -38,10 +38,11 @@ from src.cp_sat_robustness_runner import (
 MANIFEST = Path("data/scenarios/cp_sat_development_evaluation_v1.json")
 
 
-def _historical_manifest_for_persisted_artifact(tmp_path: Path) -> Path:
+def _historical_manifest_for_persisted_artifact(tmp_path: Path, source: Path) -> Path:
     """Recreate the path-only pre-portability manifest for frozen artifact tests."""
     portable_root = "../fair-course-allocation-artifacts"
-    historical_root = "/Users/" + "klu/Projects/fair-course-allocation-artifacts"
+    snapshot = json.loads((source / "evaluation_manifest_snapshot.json").read_text(encoding="utf-8"))
+    historical_root = str(Path(snapshot["source_normal_suite"]["artifact_dir"]).parents[1])
     path = tmp_path / "historical_cp_sat_development_evaluation_v1.json"
     path.write_text(
         MANIFEST.read_text(encoding="utf-8").replace(portable_root, historical_root),
@@ -589,7 +590,7 @@ def test_audit_rebuild_is_read_only_and_does_not_invoke_solver(tmp_path, monkeyp
     summary = audit_existing_artifact(
         source,
         output,
-        manifest_path=_historical_manifest_for_persisted_artifact(tmp_path),
+        manifest_path=_historical_manifest_for_persisted_artifact(tmp_path, source),
     )
     readiness = json.loads((output / "holdout_readiness_assessment.json").read_text())
     assert summary["all_status_semantics"]["scenarios"] == 27
@@ -608,7 +609,7 @@ def test_audited_summary_contains_all_scenarios_and_no_holdouts(tmp_path) -> Non
     audit_existing_artifact(
         source,
         output,
-        manifest_path=_historical_manifest_for_persisted_artifact(tmp_path),
+        manifest_path=_historical_manifest_for_persisted_artifact(tmp_path, source),
     )
     rows = runner_module.pd.read_csv(output / "status_semantics_audit.csv")
     assert len(rows) == 27

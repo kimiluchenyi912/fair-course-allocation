@@ -11,7 +11,7 @@ TEXT_SUFFIXES = {"", ".csv", ".gitignore", ".json", ".md", ".py", ".txt", ".yml"
 def repository_text_files() -> list[Path]:
     files = [
         REPO_ROOT / name
-        for name in ("AGENTS.md", "DECISIONS.md", "PLAN.md", "PROGRESS.md", "README.md", "requirements.txt")
+        for name in ("AGENTS.md", "DECISIONS.md", "LICENSE", "PLAN.md", "PROGRESS.md", "README.md", "requirements.txt")
     ]
     for directory in (".github", "data", "docs", "src", "tests"):
         files.extend(
@@ -49,22 +49,38 @@ def test_public_readme_has_required_release_context() -> None:
         "## Quickstart",
         "## Architecture",
         "## Data and limitations",
-        "## License status",
+        "## License",
     ):
         assert heading in readme
     assert "2,630 synthetic students" in readme
     assert "Python 3.12" in readme
-    assert "TPHS-inspired synthetic assumptions" in readme
-    assert "No open-source license has been selected yet" in readme
+    assert "synthetic assumptions inspired" in readme
+    assert "[MIT License](LICENSE)" in readme
 
 
 def test_school_specific_inputs_have_a_clear_synthetic_disclaimer() -> None:
     config_notice = (REPO_ROOT / "data" / "config" / "README.md").read_text(encoding="utf-8")
     specification = (REPO_ROOT / "docs" / "SIMULATION_SPEC.md").read_text(encoding="utf-8")
-    assert "TPHS-inspired synthetic model" in config_notice
+    assert "synthetic assumptions inspired by a U.S. public" in config_notice
     assert "not official" in config_notice
     assert "public-source status has not been independently verified" in config_notice
-    assert "TPHS-inspired synthetic assumptions" in specification
+    assert "synthetic assumptions inspired by a U.S." in specification
+
+
+def test_tracked_content_has_no_school_identifiers() -> None:
+    forbidden = (
+        "T" + "PHS",
+        "SDU" + "HSD",
+        "Torrey " + "Pines",
+        "San " + "Dieguito",
+        "sdu" + "hsd.net",
+    )
+    offenders = [
+        str(path.relative_to(REPO_ROOT))
+        for path in repository_text_files()
+        if any(value.lower() in path.read_text(encoding="utf-8").lower() for value in forbidden)
+    ]
+    assert offenders == []
 
 
 def test_infeasibility_claims_are_scoped_to_the_frozen_model() -> None:

@@ -2,19 +2,23 @@
 
 ## 1. Purpose
 
-Build a synthetic, Torrey Pines–inspired high-school scheduling environment that can test whether different allocation algorithms produce complete, fair, and stable student schedules.
+Build a scheduling environment from
+synthetic assumptions inspired by a U.S. public high-school setting that can
+test whether different allocation algorithms produce complete, fair, and
+stable student schedules.
 
-The simulation is not presented as an exact copy of TPHS. It combines:
+The simulation is not presented as an exact copy of any school. It combines:
 
 - course names transcribed from a user-provided course form whose public-source
   status has not been independently verified;
-- student-informed estimates used only as TPHS-inspired synthetic assumptions;
+- student-informed estimates used only as
+  synthetic assumptions inspired by a U.S. public high-school setting;
 - explicit model assumptions;
 - randomized yearly demand.
 
 No school-specific count, demand split, capacity, bottleneck estimate, or
-course-form entry in this repository should be treated as an official TPHS or
-SDUHSD publication unless a separate public citation is supplied. The
+course-form entry in this repository should be treated as an official school
+publication unless a separate public citation is supplied. The
 `student_estimate` and `student_provided_form` labels describe modeling
 provenance, not public-source verification.
 
@@ -50,8 +54,8 @@ The solver does:
 | 12 | 640 |
 | **Total** | **2,630** |
 
-These are TPHS-inspired synthetic simulation parameters, not claims of exact
-current enrollment.
+These are synthetic assumptions inspired by a U.S. public high-school setting,
+not claims of exact current enrollment.
 
 ## 4. Target number of scheduled classes
 

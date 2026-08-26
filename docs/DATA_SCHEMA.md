@@ -9,7 +9,8 @@
 - All random generation uses a saved seed.
 
 School-specific values are modeling inputs, not official school records.
-`student_estimate` means a TPHS-inspired synthetic assumption, and
+`student_estimate` means
+synthetic assumptions inspired by a U.S. public high-school setting, and
 `student_provided_form` means a course name or structure was transcribed from a
 user-provided form whose public-source status has not been independently
 verified. Neither label is evidence of publication or school endorsement.

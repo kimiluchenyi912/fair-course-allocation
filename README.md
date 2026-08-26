@@ -8,9 +8,9 @@ optimization objectives explicit and separately testable.
 
 This repository uses synthetic data only. Its reference evaluation models
 2,630 synthetic students across Grades 9-12, 25,106 logical requests, and 463
-logical sections. The configuration is **TPHS-inspired**, but it is not an
-official Torrey Pines High School dataset, policy publication, or operational
-schedule.
+logical sections. The configuration uses
+**synthetic assumptions inspired by a U.S. public high-school setting**; it is
+not an official school dataset, policy publication, or operational schedule.
 
 ## Current evidence
 
@@ -88,8 +88,9 @@ not `INFEASIBLE`.
 - Course names and some structural inputs came from a user-provided course
   form. Their public-source status has not been independently verified.
 - Counts, demand splits, capacities, and bottleneck estimates labeled
-  `student_estimate` or `model_assumption` are **TPHS-inspired synthetic assumptions**,
-  not official school facts.
+  `student_estimate` or `model_assumption` are
+  **synthetic assumptions inspired by a U.S. public high-school setting**, not
+  official school facts.
 - Version 1 allocates against fixed sections, periods, and capacities. It does
   not schedule teachers or rooms, verify prerequisites, or build a real master
   schedule.
@@ -98,10 +99,9 @@ not `INFEASIBLE`.
 - External solver artifacts and historical experiment outputs are not shipped;
   artifact-dependent audit commands require separately retained inputs.
 
-## License status
+## License
 
-No open-source license has been selected yet. The repository remains private;
-adding a license is an explicit release decision outside this cleanup.
+This project is available under the [MIT License](LICENSE).
 
 ## Research workflows
 
@@ -148,7 +148,7 @@ python -m src.validation
 The validator checks `data/config/` and `data/templates/` before synthetic
 request generation or allocation algorithms are run.
 
-To treat current TPHS baseline deviations as errors instead of warnings:
+To treat current reference-baseline deviations as errors instead of warnings:
 
 ```bash
 python -m src.validation --strict-policy

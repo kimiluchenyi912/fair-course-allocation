@@ -48,7 +48,7 @@ def _check_grade_profile_baseline(
             report.add_policy_issue(
                 "BASELINE_GRADE_PROFILE_MISMATCH",
                 filename,
-                f"Current TPHS baseline is {expected}, found {actual}.",
+                f"Current reference baseline is {expected}, found {actual}.",
                 strict_policy,
                 line_number(idx),
                 str(grade),
@@ -69,7 +69,7 @@ def _check_capacity_rule_baseline(
             report.add_policy_issue(
                 "BASELINE_CAPACITY_RULE_MISSING",
                 filename,
-                f"Current TPHS baseline includes rule '{rule_id}'.",
+                f"Current reference baseline includes rule '{rule_id}'.",
                 strict_policy,
                 identifier=rule_id,
             )
@@ -101,7 +101,7 @@ def _check_course_grade_baseline(
             report.add_policy_issue(
                 "BASELINE_COURSE_MISSING",
                 filename,
-                f"Current TPHS baseline includes course '{course_id}'.",
+                f"Current reference baseline includes course '{course_id}'.",
                 strict_policy,
                 identifier=course_id,
             )
@@ -136,7 +136,7 @@ def _check_fixed_target_baseline(
             report.add_policy_issue(
                 "BASELINE_FIXED_TARGET_MISSING",
                 filename,
-                f"Current TPHS baseline includes fixed target {identifier}.",
+                f"Current reference baseline includes fixed target {identifier}.",
                 strict_policy,
                 identifier=identifier,
             )
