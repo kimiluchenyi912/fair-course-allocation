@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,91 @@ ORIGINAL_ARTIFACT_FAILURE = (
     "AttributeError: 'ortools.sat.python.cp_model_helper.CpModelProto' "
     "object has no attribute 'SerializeToString'"
 )
+
+
+def _synthetic_pair_rows() -> list[dict[str, str]]:
+    rows = []
+    for order, pair_id in enumerate(EXPECTED_PAIR_IDS, start=1):
+        section_a, section_b = pair_id.split("__")
+        rows.append({
+            "formal_order": str(order),
+            "pair_id": pair_id,
+            "section_id_a": section_a,
+            "section_id_b": section_b,
+            "course_id_a": section_a.rsplit("_", 1)[0],
+            "course_id_b": section_b.rsplit("_", 1)[0],
+            "original_placement_a": "P1",
+            "original_placement_b": "P2",
+            "destination_domain_size_a": "2",
+            "destination_domain_size_b": "2",
+            "total_placement_combinations": "4",
+            "core_feasible_placement_combinations": "4",
+            "affected_student_union_count": str(order),
+            "changed_candidate_period_relationships": "1",
+            "total_absolute_period_displacement": str(order),
+            "classification": "blocker_screen_survivor",
+            "feasibility_claim": "none",
+        })
+    return rows
+
+
+@pytest.fixture(autouse=True)
+def synthetic_formal_input(request, tmp_path: Path, monkeypatch) -> None:
+    if request.node.get_closest_marker("external_artifact"):
+        return
+
+    source = tmp_path / "synthetic-formal-input"
+    source.mkdir()
+    rows = _synthetic_pair_rows()
+    ordering_hash = batch._ordering_hash(rows)
+    result_hash = "a" * 64
+    proof_hash = "b" * 64
+    batch.write_csv(source / "blocker_screen_survivors.csv", rows)
+    batch.write_json(source / "aggregate_summary.json", {
+        "formal_remaining_pair_ordering_hash": ordering_hash,
+        "screening_diagnostics": {"result_hash": result_hash},
+    })
+    batch.write_json(source / "proof_audit.json", {
+        "proof_hash": proof_hash,
+        "proof_verified": True,
+    })
+    batch.write_json(source / "provenance.json", {"fixture": "synthetic"})
+    for index in range(6):
+        batch.write_json(source / f"fixture_{index}.json", {"index": index})
+    batch.write_checksums(source)
+    checksum_hash = batch.sha256_file(source / "SHA256SUMS.txt")
+
+    payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    payload.update({
+        "formal_input_artifact": str(source),
+        "source_artifact_sha256sums_hash": checksum_hash,
+        "source_proof_hash": proof_hash,
+        "result_hash": result_hash,
+        "ordering_hash": ordering_hash,
+    })
+    manifest_path = tmp_path / "synthetic-formal-manifest.json"
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    monkeypatch.setattr(batch, "DEFAULT_SOURCE_ARTIFACT", source)
+    monkeypatch.setattr(batch, "SOURCE_SHA256SUMS_HASH", checksum_hash)
+    monkeypatch.setattr(batch, "ORDERING_HASH", ordering_hash)
+    monkeypatch.setattr(batch, "RESULT_HASH", result_hash)
+    monkeypatch.setattr(batch, "PROOF_HASH", proof_hash)
+    monkeypatch.setattr(sys.modules[__name__], "MANIFEST", manifest_path)
+
+
+@pytest.fixture
+def formal_external_artifact(tmp_path: Path, monkeypatch, require_external_artifact) -> Path:
+    source = require_external_artifact(
+        "robustness-v1/all-student-k2-blocker-safe-screen-v1"
+    )
+    payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    payload["formal_input_artifact"] = str(source)
+    manifest_path = tmp_path / "external-formal-manifest.json"
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(batch, "DEFAULT_SOURCE_ARTIFACT", source)
+    monkeypatch.setattr(sys.modules[__name__], "MANIFEST", manifest_path)
+    return source
 
 
 def load_inputs() -> tuple[dict[str, object], str, dict[str, object], list[dict[str, object]]]:
@@ -108,7 +194,9 @@ def failed_order_one_artifact(tmp_path: Path) -> Path:
 
 def authorize_failed_order_one(tmp_path: Path) -> Path:
     output = failed_order_one_artifact(tmp_path)
-    result = batch.create_failure_continuation_authorization(output_dir=output)
+    result = batch.create_failure_continuation_authorization(
+        manifest_path=MANIFEST, output_dir=output
+    )
     assert result["new_solver_invocations"] == 0
     return output
 
@@ -126,7 +214,8 @@ def rewrite_authorization(output: Path, **updates: object) -> None:
     batch.write_checksums(output)
 
 
-def test_formal_input_artifact_identity_and_hashes() -> None:
+@pytest.mark.external_artifact
+def test_formal_input_artifact_identity_and_hashes(formal_external_artifact: Path) -> None:
     manifest, _, source, _ = load_inputs()
     assert source["verification"] == {
         "passed": True,
@@ -139,13 +228,15 @@ def test_formal_input_artifact_identity_and_hashes() -> None:
     assert Path(manifest["formal_input_artifact"]).name == "all-student-k2-blocker-safe-screen-v1"
 
 
-def test_exact_twelve_pair_order_is_authoritative() -> None:
+@pytest.mark.external_artifact
+def test_exact_twelve_pair_order_is_authoritative(formal_external_artifact: Path) -> None:
     _, _, source, runs = load_inputs()
     assert source["pair_count"] == 12
     assert [run["pair_id"] for run in runs] == EXPECTED_PAIR_IDS
 
 
-def test_ordering_hash_guard_matches_formal_artifact() -> None:
+@pytest.mark.external_artifact
+def test_ordering_hash_guard_matches_formal_artifact(formal_external_artifact: Path) -> None:
     _, _, source, _ = load_inputs()
     assert source["ordering_hash"] == batch.ORDERING_HASH
 
@@ -171,6 +262,25 @@ def test_source_checksum_hash_drift_fails_closed(
     batch.write_checksums(source)
     manifest, _ = batch.load_manifest(manifest_path)
     with pytest.raises(batch.FormalK2BatchError, match="identity drift"):
+        batch.verify_formal_input(manifest)
+
+
+def test_source_schema_drift_fails_closed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    source, manifest_path = copy_source_and_manifest(tmp_path)
+    monkeypatch.setattr(batch, "DEFAULT_SOURCE_ARTIFACT", source)
+    rows = batch.read_csv(source / "blocker_screen_survivors.csv")
+    rows[0]["classification"] = "unexpected"
+    batch.write_csv(source / "blocker_screen_survivors.csv", rows)
+    batch.write_checksums(source)
+    checksum_hash = batch.sha256_file(source / "SHA256SUMS.txt")
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload["source_artifact_sha256sums_hash"] = checksum_hash
+    manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(batch, "SOURCE_SHA256SUMS_HASH", checksum_hash)
+    manifest, _ = batch.load_manifest(manifest_path)
+    with pytest.raises(batch.FormalK2BatchError, match="claim drift"):
         batch.verify_formal_input(manifest)
 
 

@@ -125,9 +125,17 @@ def _runner() -> CpSatNormalEvaluationRunner:
     return CpSatNormalEvaluationRunner()
 
 
-def test_stable_reference_imports_when_configuration_matches() -> None:
+@pytest.fixture
+def stable_probe_artifact(require_external_artifact) -> Path:
+    return require_external_artifact(
+        "robustness-v1/cp-sat-cold-start-repair-probe-v1"
+    )
+
+
+@pytest.mark.external_artifact
+def test_stable_reference_imports_when_configuration_matches(stable_probe_artifact: Path) -> None:
     runner = _runner()
-    imported = _import_stable_reference(runner.manifest, runner.config_dir, runner.stable_probe_artifact_dir)
+    imported = _import_stable_reference(runner.manifest, runner.config_dir, stable_probe_artifact)
     row = imported["row"]
     assert row["result_origin"] == "imported_frozen_probe"
     assert row["solver_rerun"] is False
@@ -136,10 +144,11 @@ def test_stable_reference_imports_when_configuration_matches() -> None:
     assert row["final_schedule_policy_pass"] is True
     assert row["consistency_issue_count"] == 0
     assert row["source_response_hash"]
-    assert row["source_artifact_path"] == str(runner.stable_probe_artifact_dir)
+    assert row["source_artifact_path"] == str(stable_probe_artifact)
 
 
-def test_stable_reference_import_does_not_trigger_a_solve(monkeypatch) -> None:
+@pytest.mark.external_artifact
+def test_stable_reference_import_does_not_trigger_a_solve(monkeypatch, stable_probe_artifact: Path) -> None:
     import src.cp_sat_normal_evaluation_runner as mod
 
     def _boom(*_args, **_kwargs):
@@ -147,16 +156,17 @@ def test_stable_reference_import_does_not_trigger_a_solve(monkeypatch) -> None:
 
     monkeypatch.setattr(mod, "run_fair_cp_sat_solver", _boom)
     runner = _runner()
-    imported = mod._import_stable_reference(runner.manifest, runner.config_dir, runner.stable_probe_artifact_dir)
+    imported = mod._import_stable_reference(runner.manifest, runner.config_dir, stable_probe_artifact)
     assert imported["row"]["status"] == "FEASIBLE"
 
 
-def test_stable_reference_import_fails_closed_on_solver_seed_mismatch() -> None:
+@pytest.mark.external_artifact
+def test_stable_reference_import_fails_closed_on_solver_seed_mismatch(stable_probe_artifact: Path) -> None:
     runner = _runner()
     tampered = json.loads(json.dumps(runner.manifest))
     tampered["solver_configuration"]["solver_seed"] = 1
     with pytest.raises(CpSatEvaluationError, match="solver configuration mismatch"):
-        _import_stable_reference(tampered, runner.config_dir, runner.stable_probe_artifact_dir)
+        _import_stable_reference(tampered, runner.config_dir, stable_probe_artifact)
 
 
 def test_stable_reference_import_fails_closed_on_missing_artifact(tmp_path) -> None:
@@ -165,23 +175,25 @@ def test_stable_reference_import_fails_closed_on_missing_artifact(tmp_path) -> N
         _import_stable_reference(runner.manifest, runner.config_dir, tmp_path / "does-not-exist")
 
 
-def test_stable_reference_import_reports_mandatory_fallback_candidate_count() -> None:
+@pytest.mark.external_artifact
+def test_stable_reference_import_reports_mandatory_fallback_candidate_count(stable_probe_artifact: Path) -> None:
     runner = _runner()
-    imported = _import_stable_reference(runner.manifest, runner.config_dir, runner.stable_probe_artifact_dir)
+    imported = _import_stable_reference(runner.manifest, runner.config_dir, stable_probe_artifact)
     row = imported["row"]
     assert row["canonical_input_candidate_edges"] == 165481
     assert row["model_candidate_variables"] == 167120
     assert row["mandatory_fallback_candidate_variables"] == 1639
 
 
-def test_stable_reference_import_does_not_modify_the_source_artifact() -> None:
+@pytest.mark.external_artifact
+def test_stable_reference_import_does_not_modify_the_source_artifact(stable_probe_artifact: Path) -> None:
     runner = _runner()
-    before = sorted((runner.stable_probe_artifact_dir / "SHA256SUMS.txt").read_text(encoding="utf-8").splitlines())
-    _import_stable_reference(runner.manifest, runner.config_dir, runner.stable_probe_artifact_dir)
-    after = sorted((runner.stable_probe_artifact_dir / "SHA256SUMS.txt").read_text(encoding="utf-8").splitlines())
+    before = sorted((stable_probe_artifact / "SHA256SUMS.txt").read_text(encoding="utf-8").splitlines())
+    _import_stable_reference(runner.manifest, runner.config_dir, stable_probe_artifact)
+    after = sorted((stable_probe_artifact / "SHA256SUMS.txt").read_text(encoding="utf-8").splitlines())
     assert before == after
     # the checksum manifest itself must still verify cleanly
-    _verify_sha256_manifest(runner.stable_probe_artifact_dir)
+    _verify_sha256_manifest(stable_probe_artifact)
 
 
 # ---------------------------------------------------------------------------
@@ -314,6 +326,13 @@ def test_unknown_metrics_are_null_via_result_metrics() -> None:
 
 def test_resume_does_not_resolve_a_completed_scenario(tmp_path, monkeypatch) -> None:
     runner = _runner()
+    source_info = {"synthetic": True}
+    monkeypatch.setattr(runner, "verify_sources", lambda scenarios: source_info)
+    monkeypatch.setattr(
+        normal_evaluation_runner_module,
+        "_verify_source_suite",
+        lambda manifest, suite: source_info,
+    )
 
     def _fail_solve(*_a, **_k):
         raise AssertionError("a completed scenario must not be re-solved on resume")
@@ -522,9 +541,10 @@ def test_critical_correctness_failure_forces_fail_gate() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_imported_stable_row_has_publishable_fields_true() -> None:
+@pytest.mark.external_artifact
+def test_imported_stable_row_has_publishable_fields_true(stable_probe_artifact: Path) -> None:
     runner = _runner()
-    imported = _import_stable_reference(runner.manifest, runner.config_dir, runner.stable_probe_artifact_dir)
+    imported = _import_stable_reference(runner.manifest, runner.config_dir, stable_probe_artifact)
     row = imported["row"]
     assert row["publishable_assignment_available"] is True
     assert row["publishable_recovery"] is True
@@ -535,9 +555,10 @@ def test_imported_stable_row_has_publishable_fields_true() -> None:
     assert row["solver_rerun"] is False
 
 
-def test_imported_and_solved_rows_share_the_required_field_set() -> None:
+@pytest.mark.external_artifact
+def test_imported_and_solved_rows_share_the_required_field_set(stable_probe_artifact: Path) -> None:
     runner = _runner()
-    imported = _import_stable_reference(runner.manifest, runner.config_dir, runner.stable_probe_artifact_dir)
+    imported = _import_stable_reference(runner.manifest, runner.config_dir, stable_probe_artifact)
     imported_row = imported["row"]
 
     result = run_fair_cp_sat_solver(

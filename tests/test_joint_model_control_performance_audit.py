@@ -84,13 +84,25 @@ def test_source_artifact_paths_are_external() -> None:
     assert all("fair-course-allocation-artifacts" in value for value in manifest["source_artifacts"].values())
 
 
-def test_source_artifact_hashes_are_verified() -> None:
-    result = verify_source_artifacts(load_audit_manifest())
+@pytest.fixture
+def external_audit_manifest(require_external_artifact) -> dict[str, object]:
+    manifest = load_audit_manifest()
+    manifest["source_artifacts"] = {
+        name: str(require_external_artifact(Path(raw).relative_to("../fair-course-allocation-artifacts")))
+        for name, raw in manifest["source_artifacts"].items()
+    }
+    return manifest
+
+
+@pytest.mark.external_artifact
+def test_source_artifact_hashes_are_verified(external_audit_manifest) -> None:
+    result = verify_source_artifacts(external_audit_manifest)
     assert all(item["checksum"]["passed"] for item in result.values())
 
 
-def test_source_artifact_verification_is_read_only() -> None:
-    result = verify_source_artifacts(load_audit_manifest())
+@pytest.mark.external_artifact
+def test_source_artifact_verification_is_read_only(external_audit_manifest) -> None:
+    result = verify_source_artifacts(external_audit_manifest)
     assert all(item["read_only"] for item in result.values())
 
 

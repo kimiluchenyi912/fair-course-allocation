@@ -38,6 +38,19 @@ from src.cp_sat_robustness_runner import (
 MANIFEST = Path("data/scenarios/cp_sat_development_evaluation_v1.json")
 
 
+@pytest.fixture
+def external_manifest(tmp_path: Path, require_external_artifact) -> Path:
+    root = require_external_artifact()
+    path = tmp_path / "external_cp_sat_development_evaluation_v1.json"
+    path.write_text(
+        MANIFEST.read_text(encoding="utf-8").replace(
+            "../fair-course-allocation-artifacts", str(root)
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def _historical_manifest_for_persisted_artifact(tmp_path: Path, source: Path) -> Path:
     """Recreate the path-only pre-portability manifest for frozen artifact tests."""
     portable_root = "../fair-course-allocation-artifacts"
@@ -159,16 +172,18 @@ def test_malformed_manifest_configuration_fails_closed(tmp_path) -> None:
         CpSatRobustnessRunner(path)
 
 
-def test_dry_run_verifies_source_without_creating_output(tmp_path) -> None:
-    runner = CpSatRobustnessRunner(MANIFEST)
+@pytest.mark.external_artifact
+def test_dry_run_verifies_source_without_creating_output(tmp_path, external_manifest: Path) -> None:
+    runner = CpSatRobustnessRunner(external_manifest)
     output = tmp_path / "dry-run-output"
     selected = runner.dry_run("normal", max_scenarios=1)
     assert selected == ["normal_dev_reference_2026"]
     assert not output.exists()
 
 
-def test_source_verification_does_not_change_persisted_artifact(tmp_path) -> None:
-    runner = CpSatRobustnessRunner(MANIFEST)
+@pytest.mark.external_artifact
+def test_source_verification_does_not_change_persisted_artifact(tmp_path, external_manifest: Path) -> None:
+    runner = CpSatRobustnessRunner(external_manifest)
     source = Path(runner.manifest["source_normal_suite"]["artifact_dir"]) / "SHA256SUMS.txt"
     before = source.read_bytes()
     runner.verify_sources(runner.select("normal", max_scenarios=1))
@@ -270,6 +285,7 @@ def test_negative_certificate_is_checked_before_solver(tmp_path, monkeypatch) ->
         lambda *args: (_fake_input(), fingerprint, {"input_fingerprint": fingerprint}),
     )
     monkeypatch.setattr(runner_module, "validate_certificate", lambda *args: (False, "invalid fixture"))
+    monkeypatch.setattr(runner_module, "_read_json", lambda path: {})
 
     def should_not_run(*args, **kwargs):
         nonlocal called
@@ -460,8 +476,12 @@ def test_resume_rejects_changed_scenario_selection(tmp_path, monkeypatch) -> Non
         runner.run(output, group="normal", max_scenarios=1, resume=True)
 
 
-def test_cli_dry_run_is_development_only(capsys) -> None:
-    assert runner_module.main(["--dry-run", "--group", "normal", "--max-scenarios", "1"]) == 0
+@pytest.mark.external_artifact
+def test_cli_dry_run_is_development_only(capsys, external_manifest: Path) -> None:
+    assert runner_module.main([
+        "--evaluation-manifest", str(external_manifest),
+        "--dry-run", "--group", "normal", "--max-scenarios", "1",
+    ]) == 0
     assert "normal_dev_reference_2026" in capsys.readouterr().out
 
 
@@ -576,10 +596,11 @@ def test_holdout_readiness_uses_majority_of_normal_without_assignment(publishabl
     assert result["ready_for_holdout"] is ready
 
 
-def test_audit_rebuild_is_read_only_and_does_not_invoke_solver(tmp_path, monkeypatch) -> None:
-    source = Path("../fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1")
-    if not (source / "SHA256SUMS.txt").is_file():
-        pytest.skip("external Phase C artifact is not distributed with the repository")
+@pytest.mark.external_artifact
+def test_audit_rebuild_is_read_only_and_does_not_invoke_solver(
+    tmp_path, monkeypatch, require_external_artifact
+) -> None:
+    source = require_external_artifact("robustness-v1/cp-sat-development-v1")
     before = hashlib.sha256((source / "SHA256SUMS.txt").read_bytes()).hexdigest()
     monkeypatch.setattr(
         runner_module,
@@ -601,10 +622,11 @@ def test_audit_rebuild_is_read_only_and_does_not_invoke_solver(tmp_path, monkeyp
     assert (output / "status_semantics_audit.csv").is_file()
 
 
-def test_audited_summary_contains_all_scenarios_and_no_holdouts(tmp_path) -> None:
-    source = Path("../fair-course-allocation-artifacts/robustness-v1/cp-sat-development-v1")
-    if not (source / "SHA256SUMS.txt").is_file():
-        pytest.skip("external Phase C artifact is not distributed with the repository")
+@pytest.mark.external_artifact
+def test_audited_summary_contains_all_scenarios_and_no_holdouts(
+    tmp_path, require_external_artifact
+) -> None:
+    source = require_external_artifact("robustness-v1/cp-sat-development-v1")
     output = tmp_path / "audited"
     audit_existing_artifact(
         source,

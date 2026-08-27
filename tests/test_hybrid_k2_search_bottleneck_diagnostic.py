@@ -218,9 +218,30 @@ def test_manifest_missing_field_fails_closed(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_pair_portfolio_loaded_from_real_bootstrap_source() -> None:
+@pytest.fixture
+def bootstrap_artifact(require_external_artifact) -> Path:
+    return require_external_artifact(
+        "robustness-v1/hybrid-stage1-incumbent-bootstrap-v1"
+    )
+
+
+@pytest.fixture
+def verified_source_artifacts(require_external_artifact, monkeypatch):
+    remapped = {
+        name: (
+            require_external_artifact(f"robustness-v1/{root.name}"),
+            expected_hash,
+        )
+        for name, (root, expected_hash) in diag.EXPECTED_SOURCE_ARTIFACT_HASHES.items()
+    }
+    monkeypatch.setattr(diag, "EXPECTED_SOURCE_ARTIFACT_HASHES", remapped)
+    return remapped
+
+
+@pytest.mark.external_artifact
+def test_pair_portfolio_loaded_from_real_bootstrap_source(bootstrap_artifact: Path) -> None:
     manifest = diag.load_diagnostic_manifest()
-    pairs = diag.load_frozen_pairs(manifest)
+    pairs = diag.load_frozen_pairs(manifest, bootstrap_artifact)
     assert len(pairs) == 2
     for candidate in pairs:
         assert candidate.edit_type == "bootstrap_pair"
@@ -354,10 +375,11 @@ def test_log_parser_does_not_report_hint_infeasible_from_incomplete_message() ->
     assert result["hint_infeasible_message_seen"] is False
 
 
-def test_analyze_previous_k2_runs_against_real_bootstrap_artifact() -> None:
+@pytest.mark.external_artifact
+def test_analyze_previous_k2_runs_against_real_bootstrap_artifact(bootstrap_artifact: Path) -> None:
     # Read-only regression check against the already-verified bootstrap
     # artifact; no new solver run occurs here.
-    analysis = diag.analyze_previous_k2_runs()
+    analysis = diag.analyze_previous_k2_runs(bootstrap_artifact)
     assert analysis["k2_01"]["structured_response"]["status"] == "UNKNOWN"
     assert analysis["k2_01"]["structured_response"]["incumbent_found"] is False
     assert analysis["k2_02"]["structured_response"]["status"] == "UNKNOWN"
@@ -367,8 +389,11 @@ def test_analyze_previous_k2_runs_against_real_bootstrap_artifact() -> None:
     assert analysis["comparison"]["both_hints_reported_incomplete_not_infeasible"] is True
 
 
-def test_analyze_previous_k2_runs_does_not_call_raw_log_objective_an_incumbent() -> None:
-    analysis = diag.analyze_previous_k2_runs()
+@pytest.mark.external_artifact
+def test_analyze_previous_k2_runs_does_not_call_raw_log_objective_an_incumbent(
+    bootstrap_artifact: Path,
+) -> None:
+    analysis = diag.analyze_previous_k2_runs(bootstrap_artifact)
     note = analysis["comparison"]["raw_log_values_are_not_a_valid_incumbent"]
     assert "not a found feasible solution" in note or "NOT a found feasible" in note
 
@@ -724,7 +749,8 @@ def test_write_checksums_is_stable(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------
 
 
-def test_source_artifacts_are_verified_read_only() -> None:
+@pytest.mark.external_artifact
+def test_source_artifacts_are_verified_read_only(verified_source_artifacts) -> None:
     manifest = diag.load_diagnostic_manifest()
     result = diag.verify_source_artifacts(manifest)
     assert set(result) == set(diag.EXPECTED_SOURCE_ARTIFACT_HASHES)
@@ -733,7 +759,8 @@ def test_source_artifacts_are_verified_read_only() -> None:
         assert check["read_only"] is True
 
 
-def test_source_artifact_hash_mismatch_fails_closed() -> None:
+@pytest.mark.external_artifact
+def test_source_artifact_hash_mismatch_fails_closed(verified_source_artifacts) -> None:
     bad_manifest = dict(diag.load_diagnostic_manifest())
     bad_manifest["source_bootstrap_artifact_hash"] = "0" * 64
     with pytest.raises(diag.DiagnosticError):
@@ -751,9 +778,10 @@ def test_diagnostic_c_hint_uses_apply_bootstrap_hints_fail_closed_paths() -> Non
         diag.apply_bootstrap_hints(build, _single_candidate("S1"), [unknown])
 
 
-def test_frozen_domain_verification_recorded_without_pruning() -> None:
+@pytest.mark.external_artifact
+def test_frozen_domain_verification_recorded_without_pruning(bootstrap_artifact: Path) -> None:
     manifest = diag.load_diagnostic_manifest()
-    pairs = diag.load_frozen_pairs(manifest)
+    pairs = diag.load_frozen_pairs(manifest, bootstrap_artifact)
     for candidate in pairs:
         # A pair candidate must always carry both of its original sections'
         # legal domain intact; this diagnostic never removes candidate

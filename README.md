@@ -66,6 +66,13 @@ Checked-in scenario manifests use the same repository-relative sibling
 directory by default. Run commands from the repository root, or provide the
 relevant CLI path explicitly for a different artifact location.
 
+A clean clone contains the complete unit-test suite and does not require
+external experiment artifacts. Tests that specifically audit retained
+historical artifacts are marked `external_artifact` and report an explicit
+skip when the configured artifact root does not exist. That skip does not mean
+the artifact passed verification. If the root exists, missing files, checksum
+or schema errors, and content drift remain fail-closed test failures.
+
 ## Architecture
 
 | Layer | Responsibility |
